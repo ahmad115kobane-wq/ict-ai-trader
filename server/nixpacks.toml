@@ -8,7 +8,6 @@ nixPkgs = [
   "giflib",
   "librsvg",
   "pixman",
-  # Puppeteer dependencies
   "glib",
   "nss",
   "nspr",
@@ -18,15 +17,13 @@ nixPkgs = [
   "dbus",
   "libdrm",
   "gtk3",
-  "xorg.libxkbcommon",
   "xorg.libXcomposite",
   "xorg.libXdamage",
   "xorg.libXfixes",
   "xorg.libXrandr",
   "mesa",
   "expat",
-  "alsa-lib",
-  "libgbm"
+  "alsa-lib"
 ]
 
 [phases.install]
