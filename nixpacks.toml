@@ -23,7 +23,13 @@ nixPkgs = [
   "xorg.libXrandr",
   "mesa",
   "expat",
-  "alsa-lib"
+  "alsa-lib",
+  "pango",
+  "libX11",
+  "libXext",
+  "libXrender",
+  "fontconfig",
+  "freetype"
 ]
 
 [phases.install]
@@ -34,3 +40,8 @@ cmds = ["cd server && npm run build"]
 
 [start]
 cmd = "cd server && node dist/index.js"
+
+[variables]
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "false"
+PUPPETEER_EXECUTABLE_PATH = ""
+LD_LIBRARY_PATH = "/nix/store/*-glib-*/lib:/nix/store/*-nss-*/lib:/nix/store/*-nspr-*/lib:/nix/store/*-atk-*/lib:/nix/store/*-cups-*/lib:/nix/store/*-dbus-*/lib:/nix/store/*-libdrm-*/lib:/nix/store/*-gtk3-*/lib:/nix/store/*-mesa-*/lib:/nix/store/*-expat-*/lib:/nix/store/*-alsa-lib-*/lib:/nix/store/*-pango-*/lib:/nix/store/*-cairo-*/lib"
