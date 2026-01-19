@@ -1,5 +1,33 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "python3", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman"]
+nixPkgs = [
+  "nodejs_20",
+  "python3",
+  "cairo",
+  "pango",
+  "libjpeg",
+  "giflib",
+  "librsvg",
+  "pixman",
+  # Puppeteer dependencies
+  "glib",
+  "nss",
+  "nspr",
+  "atk",
+  "at-spi2-atk",
+  "cups",
+  "dbus",
+  "libdrm",
+  "gtk3",
+  "libxkbcommon",
+  "libxcomposite",
+  "libxdamage",
+  "libxfixes",
+  "libxrandr",
+  "mesa",
+  "expat",
+  "alsa-lib",
+  "libgbm"
+]
 
 [phases.install]
 cmds = ["npm ci --include=dev"]
