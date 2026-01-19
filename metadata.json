@@ -1,0 +1,5 @@
+{
+  "name": "ICT AI Trader Pro",
+  "description": "An AI-powered trading assistant utilizing Gemini 2.5 Flash to analyze MT4 charts using advanced ICT concepts (FVG, Order Blocks) and simulate pending order placements.",
+  "requestFramePermissions": []
+}
