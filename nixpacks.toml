@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "python3", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman"]
+
+[phases.install]
+cmds = ["cd server && npm ci --include=dev"]
+
+[phases.build]
+cmds = ["cd server && npm run build"]
+
+[start]
+cmd = "cd server && node dist/index.js"
