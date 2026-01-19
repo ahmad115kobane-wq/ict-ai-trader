@@ -33,12 +33,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
-WORKDIR /app/server
+WORKDIR /app
 
 # Copy package files
-COPY server/package*.json ./
+COPY server/package*.json ./server/
 
 # Install dependencies
+WORKDIR /app/server
 RUN npm ci --include=dev
 
 # Copy source code
