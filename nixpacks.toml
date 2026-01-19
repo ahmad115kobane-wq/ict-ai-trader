@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_20", "python3", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman"]
 
 [phases.install]
-cmds = ["cd server && npm ci --include=dev"]
+cmds = ["cd server && npm install"]
 
 [phases.build]
 cmds = ["cd server && npm run build"]
