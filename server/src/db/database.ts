@@ -10,6 +10,10 @@ let db: SqlJsDatabase | null = null;
 const dataDir = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDir, 'ict_trader.db');
 
+console.log('📂 Database path:', dbPath);
+console.log('📂 Data directory:', dataDir);
+console.log('📂 Current working directory:', process.cwd());
+
 // تحديث هيكل قاعدة البيانات للنسخة الجديدة
 const updateDatabaseSchema = async (): Promise<void> => {
   if (!db) return;
@@ -153,20 +157,34 @@ const updateDatabaseSchema = async (): Promise<void> => {
 };
 // تهيئة قاعدة البيانات
 export const initDatabase = async (): Promise<void> => {
-  // إنشاء مجلد البيانات
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
+  try {
+    console.log('🔄 Initializing database...');
+    console.log('📂 Data directory:', dataDir);
+    console.log('📂 Database path:', dbPath);
+    
+    // إنشاء مجلد البيانات
+    if (!fs.existsSync(dataDir)) {
+      console.log('📁 Creating data directory...');
+      fs.mkdirSync(dataDir, { recursive: true });
+      console.log('✅ Data directory created');
+    } else {
+      console.log('✅ Data directory exists');
+    }
 
-  const SQL = await initSqlJs();
-  
-  // تحميل قاعدة البيانات الموجودة أو إنشاء جديدة
-  if (fs.existsSync(dbPath)) {
-    const buffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
-  }
+    const SQL = await initSqlJs();
+    console.log('✅ SQL.js initialized');
+    
+    // تحميل قاعدة البيانات الموجودة أو إنشاء جديدة
+    if (fs.existsSync(dbPath)) {
+      console.log('📖 Loading existing database...');
+      const buffer = fs.readFileSync(dbPath);
+      db = new SQL.Database(buffer);
+      console.log('✅ Database loaded');
+    } else {
+      console.log('🆕 Creating new database...');
+      db = new SQL.Database();
+      console.log('✅ New database created');
+    }
 
   // إنشاء الجداول الأساسية (النسخة القديمة للتوافق)
   db.run(`
@@ -246,7 +264,11 @@ export const initDatabase = async (): Promise<void> => {
   await updateDatabaseSchema();
 
   saveDatabase();
-  console.log('✅ Database initialized');
+  console.log('✅ Database initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize database:', error);
+    throw error;
+  }
 };
 
 // حفظ قاعدة البيانات
