@@ -325,10 +325,10 @@ export const processAnalysisRequest = async (userId: string): Promise<AnalysisPe
 // ===================== Subscription Expiry Management =====================
 
 // فحص وإنهاء الاشتراكات المنتهية الصلاحية
-export const checkAndExpireSubscriptions = (): {
+export const checkAndExpireSubscriptions = async (): Promise<{
   expiredCount: number;
   expiredUsers: string[];
-} => {
+}> => {
   console.log('🕐 Checking for expired subscriptions...');
   
   try {

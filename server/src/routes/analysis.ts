@@ -415,7 +415,7 @@ router.post('/toggle-auto', authMiddleware, async (req: AuthRequest, res: Respon
     // إذا كان المستخدم يريد تفعيل التحليل التلقائي، نتحقق من الاشتراك
     if (enabled) {
       const { getUserSubscriptionStatus } = await import('../services/subscriptionService');
-      const subscriptionCheck = getUserSubscriptionStatus(userId);
+      const subscriptionCheck = await getUserSubscriptionStatus(userId);
       
       if (!subscriptionCheck.hasActiveSubscription) {
         return res.status(403).json({

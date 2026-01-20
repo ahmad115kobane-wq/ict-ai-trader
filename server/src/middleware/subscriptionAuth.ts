@@ -211,7 +211,7 @@ export const activeSubscriptionMiddleware = async (req: AuthRequest, res: Respon
 
 // Middleware للتحقق من رصيد العملات (للمستخدمين المجانيين)
 export const coinsBalanceMiddleware = (requiredCoins: number) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+  return async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const userId = req.userId;
       
@@ -223,7 +223,7 @@ export const coinsBalanceMiddleware = (requiredCoins: number) => {
         });
       }
 
-      const subscriptionStatus = getUserSubscriptionStatus(userId);
+      const subscriptionStatus = await getUserSubscriptionStatus(userId);
       
       // إذا كان لديه اشتراك نشط، لا نحتاج للتحقق من العملات
       if (subscriptionStatus.hasActiveSubscription) {
@@ -260,7 +260,7 @@ export const coinsBalanceMiddleware = (requiredCoins: number) => {
 
 // Middleware للتحقق من نوع الاشتراك المطلوب
 export const subscriptionTypeMiddleware = (requiredTypes: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+  return async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const userId = req.userId;
       
@@ -272,7 +272,7 @@ export const subscriptionTypeMiddleware = (requiredTypes: string[]) => {
         });
       }
 
-      const subscriptionStatus = getUserSubscriptionStatus(userId);
+      const subscriptionStatus = await getUserSubscriptionStatus(userId);
       
       if (!subscriptionStatus.hasActiveSubscription) {
         return res.status(403).json({

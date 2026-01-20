@@ -956,9 +956,9 @@ app.get('/test-subscription', (req, res) => {
 });
 
 // Manual subscription expiry check endpoint
-app.get('/check-expired-subscriptions', (req, res) => {
+app.get('/check-expired-subscriptions', async (req, res) => {
   try {
-    const result = checkAndExpireSubscriptions();
+    const result = await checkAndExpireSubscriptions();
     
     res.json({
       success: true,
@@ -1078,7 +1078,7 @@ cron.schedule('0 0 * * *', async () => {
   console.log('🕐 Daily subscription expiry check started at 12:00 AM...');
   
   try {
-    const result = checkAndExpireSubscriptions();
+    const result = await checkAndExpireSubscriptions();
     
     if (result.expiredCount > 0) {
       console.log(`⏰ Expired ${result.expiredCount} subscriptions:`);
@@ -1104,7 +1104,7 @@ cron.schedule('0 */6 * * *', async () => {
   console.log('🔄 Additional subscription check (every 6 hours)...');
   
   try {
-    const result = checkAndExpireSubscriptions();
+    const result = await checkAndExpireSubscriptions();
     if (result.expiredCount > 0) {
       console.log(`⚠️ Found ${result.expiredCount} expired subscriptions during additional check`);
     }
@@ -1367,7 +1367,7 @@ const startServer = async () => {
     
     // فحص الاشتراكات المنتهية عند بدء التشغيل
     console.log('🔄 Checking for expired subscriptions on startup...');
-    const initialCheck = checkAndExpireSubscriptions();
+    const initialCheck = await checkAndExpireSubscriptions();
     if (initialCheck.expiredCount > 0) {
       console.log(`⚠️ Found and processed ${initialCheck.expiredCount} expired subscriptions on startup`);
     }
