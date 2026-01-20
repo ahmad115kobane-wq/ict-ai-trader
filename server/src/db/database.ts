@@ -359,6 +359,65 @@ export const getUsersWithAutoAnalysisEnabled = (): any[] => {
   }
 };
 
+// ===================== Push Token Operations =====================
+export const setUserPushToken = (userId: string, pushToken: string): boolean => {
+  if (!db) return false;
+  try {
+    db.run(
+      'UPDATE users SET push_token = ?, push_token_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [pushToken, userId]
+    );
+    saveDatabase();
+    console.log(`✅ Push token updated for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error setting push token:', error);
+    return false;
+  }
+};
+
+export const getUserPushToken = (userId: string): string | null => {
+  if (!db) return null;
+  try {
+    const result = db.exec('SELECT push_token FROM users WHERE id = ?', [userId]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return result[0].values[0][0] as string || null;
+  } catch (error) {
+    console.error('Error getting push token:', error);
+    return null;
+  }
+};
+
+export const getUsersWithPushTokens = (): any[] => {
+  if (!db) return [];
+  try {
+    const result = db.exec(
+      "SELECT id, email, push_token FROM users WHERE push_token IS NOT NULL AND push_token != '' AND auto_analysis_enabled = 1"
+    );
+    if (result.length === 0 || result[0].values.length === 0) return [];
+    return result[0].values.map(row => rowToObject(result[0].columns, row));
+  } catch (error) {
+    console.error('Error getting users with push tokens:', error);
+    return [];
+  }
+};
+
+export const removeUserPushToken = (userId: string): boolean => {
+  if (!db) return false;
+  try {
+    db.run(
+      'UPDATE users SET push_token = NULL, push_token_updated_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [userId]
+    );
+    saveDatabase();
+    console.log(`✅ Push token removed for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error removing push token:', error);
+    return false;
+  }
+};
+
 // ===================== Analysis Operations =====================
 export const saveAnalysis = (
   id: string,

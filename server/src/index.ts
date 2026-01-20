@@ -1323,9 +1323,32 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       try {
         const { notifyTradeOpportunity } = await import('./services/notificationService');
         await notifyTradeOpportunity(analysis, currentPrice);
-        console.log('📱 Trade notification sent to subscribers');
+        console.log('📱 Telegram notification sent to subscribers');
       } catch (notificationError) {
-        console.error('❌ Failed to send trade notification:', notificationError);
+        console.error('❌ Failed to send Telegram notification:', notificationError);
+      }
+      
+      // إرسال Push Notifications للتطبيق
+      try {
+        const { getUsersWithPushTokens } = await import('./db/index');
+        const { sendTradeNotification } = await import('./services/expoPushService');
+        
+        const usersWithTokens = await getUsersWithPushTokens();
+        const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
+        
+        if (pushTokens.length > 0) {
+          await sendTradeNotification(
+            pushTokens,
+            analysis.suggestedTrade,
+            analysis.score,
+            currentPrice
+          );
+          console.log(`📱 Push notifications sent to ${pushTokens.length} devices`);
+        } else {
+          console.log('📱 No push tokens registered for notifications');
+        }
+      } catch (pushError) {
+        console.error('❌ Failed to send push notifications:', pushError);
       }
       
     } else {

@@ -54,9 +54,22 @@ const createTables = async (client: PoolClient): Promise<void> => {
         subscription_expiry TEXT,
         auto_analysis_enabled BOOLEAN DEFAULT FALSE,
         auto_analysis_enabled_at TIMESTAMP,
+        push_token TEXT,
+        push_token_updated_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    
+    // إضافة حقول push_token إذا لم تكن موجودة (للتوافق مع الجداول القديمة)
+    await client.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='push_token') THEN
+          ALTER TABLE users ADD COLUMN push_token TEXT;
+          ALTER TABLE users ADD COLUMN push_token_updated_at TIMESTAMP;
+        END IF;
+      END $$;
     `);
 
     // جدول تاريخ التحليلات (القديم - للتوافق)

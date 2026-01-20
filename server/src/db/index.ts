@@ -28,6 +28,12 @@ export const addCoins = isProduction ? postgresDb.addCoins : wrapSync(sqliteDb.a
 export const setUserAutoAnalysis = isProduction ? postgresDb.setUserAutoAnalysis : wrapSync(sqliteDb.setUserAutoAnalysis);
 export const getUsersWithAutoAnalysisEnabled = isProduction ? postgresDb.getUsersWithAutoAnalysisEnabled : wrapSync(sqliteDb.getUsersWithAutoAnalysisEnabled);
 
+// Push token operations
+export const setUserPushToken = isProduction ? postgresDb.setUserPushToken : wrapSync(sqliteDb.setUserPushToken);
+export const getUserPushToken = isProduction ? postgresDb.getUserPushToken : wrapSync(sqliteDb.getUserPushToken);
+export const getUsersWithPushTokens = isProduction ? postgresDb.getUsersWithPushTokens : wrapSync(sqliteDb.getUsersWithPushTokens);
+export const removeUserPushToken = isProduction ? postgresDb.removeUserPushToken : wrapSync(sqliteDb.removeUserPushToken);
+
 // Analysis operations
 export const saveAnalysis = isProduction ? postgresDb.saveAnalysis : wrapSync(sqliteDb.saveAnalysis);
 export const getAnalysisHistory = isProduction ? postgresDb.getAnalysisHistory : wrapSync(sqliteDb.getAnalysisHistory);

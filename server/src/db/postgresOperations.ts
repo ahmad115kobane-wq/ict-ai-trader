@@ -73,6 +73,57 @@ export const getUsersWithAutoAnalysisEnabled = async (): Promise<any[]> => {
   }
 };
 
+// ===================== Push Token Operations =====================
+export const setUserPushToken = async (userId: string, pushToken: string): Promise<boolean> => {
+  try {
+    await query(
+      'UPDATE users SET push_token = $1, push_token_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [pushToken, userId]
+    );
+    console.log(`✅ Push token updated for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error setting push token:', error);
+    return false;
+  }
+};
+
+export const getUserPushToken = async (userId: string): Promise<string | null> => {
+  try {
+    const result = await query('SELECT push_token FROM users WHERE id = $1', [userId]);
+    return result.rows[0]?.push_token || null;
+  } catch (error) {
+    console.error('Error getting push token:', error);
+    return null;
+  }
+};
+
+export const getUsersWithPushTokens = async (): Promise<any[]> => {
+  try {
+    const result = await query(
+      'SELECT id, email, push_token FROM users WHERE push_token IS NOT NULL AND push_token != \'\' AND auto_analysis_enabled = TRUE'
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting users with push tokens:', error);
+    return [];
+  }
+};
+
+export const removeUserPushToken = async (userId: string): Promise<boolean> => {
+  try {
+    await query(
+      'UPDATE users SET push_token = NULL, push_token_updated_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [userId]
+    );
+    console.log(`✅ Push token removed for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error removing push token:', error);
+    return false;
+  }
+};
+
 // ===================== Analysis Operations =====================
 export const saveAnalysis = async (
   id: string,

@@ -5,9 +5,10 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { createUser, getUserByEmail, getUserById, createSession, terminateAllUserSessions, getUserActiveSessions } from '../db/index';
+import { createUser, getUserByEmail, getUserById, createSession, terminateAllUserSessions, getUserActiveSessions, setUserPushToken, removeUserPushToken } from '../db/index';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { getUserSubscriptionStatus, purchaseSubscription } from '../services/subscriptionService';
+import { isValidPushToken } from '../services/expoPushService';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
@@ -374,6 +375,76 @@ router.get('/sessions', authMiddleware, async (req: AuthRequest, res: Response) 
   } catch (error) {
     console.error('Get sessions error:', error);
     res.status(500).json({ error: 'خطأ في جلب الجلسات' });
+  }
+});
+
+// ===================== Push Token Endpoints =====================
+
+// تسجيل Push Token للإشعارات
+router.post('/register-push-token', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    const { pushToken } = req.body;
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'غير مصرح' });
+    }
+    
+    if (!pushToken) {
+      return res.status(400).json({ success: false, error: 'Push token مطلوب' });
+    }
+    
+    // التحقق من صحة التوكن
+    if (!isValidPushToken(pushToken)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Push token غير صالح - يجب أن يكون Expo Push Token' 
+      });
+    }
+    
+    // حفظ التوكن
+    const success = await setUserPushToken(userId, pushToken);
+    
+    if (success) {
+      console.log(`📱 Push token registered for user ${userId}`);
+      res.json({ 
+        success: true, 
+        message: 'تم تسجيل Push Token بنجاح',
+        pushNotificationsEnabled: true
+      });
+    } else {
+      res.status(500).json({ success: false, error: 'فشل في حفظ Push Token' });
+    }
+  } catch (error) {
+    console.error('Register push token error:', error);
+    res.status(500).json({ success: false, error: 'خطأ في تسجيل Push Token' });
+  }
+});
+
+// إزالة Push Token (عند تسجيل الخروج أو تعطيل الإشعارات)
+router.post('/remove-push-token', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'غير مصرح' });
+    }
+    
+    const success = await removeUserPushToken(userId);
+    
+    if (success) {
+      console.log(`📱 Push token removed for user ${userId}`);
+      res.json({ 
+        success: true, 
+        message: 'تم إزالة Push Token بنجاح',
+        pushNotificationsEnabled: false
+      });
+    } else {
+      res.status(500).json({ success: false, error: 'فشل في إزالة Push Token' });
+    }
+  } catch (error) {
+    console.error('Remove push token error:', error);
+    res.status(500).json({ success: false, error: 'خطأ في إزالة Push Token' });
   }
 });
 
