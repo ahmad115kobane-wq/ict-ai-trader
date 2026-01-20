@@ -1133,8 +1133,8 @@ cron.schedule('0 * * * *', async () => {
   console.log('🧹 Cleaning up expired sessions...');
   
   try {
-    const { cleanupExpiredSessions } = await import('./db/database');
-    const cleanedCount = cleanupExpiredSessions();
+    const { cleanupExpiredSessions } = await import('./db/index');
+    const cleanedCount = await cleanupExpiredSessions();
     
     if (cleanedCount > 0) {
       console.log(`✅ Cleaned up ${cleanedCount} expired sessions`);
@@ -1271,8 +1271,8 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
     module.exports.lastAnalysisTime = lastAnalysisTime;
 
     // حفظ في قاعدة البيانات لكل مستخدم مفعل التحليل التلقائي
-    const { getUsersWithAutoAnalysisEnabled } = await import('./db/database');
-    const usersWithAutoAnalysis = getUsersWithAutoAnalysisEnabled();
+    const { getUsersWithAutoAnalysisEnabled } = await import('./db/index');
+    const usersWithAutoAnalysis = await getUsersWithAutoAnalysisEnabled();
     
     console.log(`👥 Found ${usersWithAutoAnalysis.length} users with auto analysis enabled`);
     

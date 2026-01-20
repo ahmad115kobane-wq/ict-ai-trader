@@ -333,7 +333,7 @@ router.post('/create-test-subscription', authMiddleware, async (req: AuthRequest
 // تسجيل الخروج (إنهاء الجلسة الحالية)
 router.post('/logout', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
-    const { terminateSession } = require('../db/database');
+    const { terminateSession } = require('../db/index');
     
     if (req.sessionId) {
       terminateSession(req.sessionId);
