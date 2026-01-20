@@ -350,7 +350,7 @@ router.post('/logout', authMiddleware, (req: AuthRequest, res: Response) => {
 });
 
 // الحصول على الجلسات النشطة
-router.get('/sessions', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/sessions', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     
@@ -378,7 +378,7 @@ router.get('/sessions', authMiddleware, (req: AuthRequest, res: Response) => {
 });
 
 // إنهاء جميع الجلسات الأخرى
-router.post('/terminate-other-sessions', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/terminate-other-sessions', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     const currentSessionId = req.sessionId;

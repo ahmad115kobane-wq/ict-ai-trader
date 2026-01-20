@@ -17,6 +17,25 @@ import {
   addCoins
 } from '../db/index';
 
+// Types
+interface SubscriptionStatus {
+  hasActiveSubscription: boolean;
+  subscription?: any;
+  canAnalyze: boolean;
+  analysisInfo: {
+    canAnalyze: boolean;
+    reason?: string;
+    remainingAnalyses?: number;
+  };
+}
+
+interface AnalysisPermissionResult {
+  allowed: boolean;
+  reason?: string;
+  costDeducted?: number;
+  remainingAnalyses?: number;
+}
+
 // ===================== VIP Package Management =====================
 
 export interface VipPackage {
@@ -348,9 +367,9 @@ export const checkAndExpireSubscriptions = (): {
 // ===================== Coins Management =====================
 
 // إضافة عملات للمستخدم
-export const addCoinsToUser = (userId: string, amount: number, reason: string = 'إضافة عملات'): boolean => {
+export const addCoinsToUser = async (userId: string, amount: number, reason: string = 'إضافة عملات'): Promise<boolean> => {
   try {
-    const success = addCoins(userId, amount);
+    const success = await addCoins(userId, amount);
     if (success) {
       console.log(`💰 Added ${amount} coins to user ${userId}: ${reason}`);
     }

@@ -19,7 +19,7 @@ export interface AnalysisRequest extends AuthRequest {
 }
 
 // Middleware للتحقق من إمكانية التحليل
-export const analysisPermissionMiddleware = (req: AnalysisRequest, res: Response, next: NextFunction) => {
+export const analysisPermissionMiddleware = async (req: AnalysisRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.userId;
     
@@ -32,7 +32,7 @@ export const analysisPermissionMiddleware = (req: AnalysisRequest, res: Response
     }
 
     // التحقق من حالة الاشتراك وإمكانية التحليل
-    const subscriptionStatus = getUserSubscriptionStatus(userId);
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
     
     if (!subscriptionStatus.canAnalyze) {
       return res.status(403).json({
@@ -48,7 +48,7 @@ export const analysisPermissionMiddleware = (req: AnalysisRequest, res: Response
     }
 
     // معالجة طلب التحليل (خصم العملات أو تسجيل الاستخدام)
-    const analysisResult = processAnalysisRequest(userId);
+    const analysisResult = await processAnalysisRequest(userId);
     
     if (!analysisResult.allowed) {
       return res.status(403).json({
@@ -60,7 +60,7 @@ export const analysisPermissionMiddleware = (req: AnalysisRequest, res: Response
 
     // خصم العملات إذا كان مستخدم مجاني
     if (analysisResult.costDeducted) {
-      const deductionSuccess = deductCoins(userId, analysisResult.costDeducted);
+      const deductionSuccess = await deductCoins(userId, analysisResult.costDeducted);
       if (!deductionSuccess) {
         return res.status(403).json({
           success: false,
@@ -94,7 +94,7 @@ export const analysisPermissionMiddleware = (req: AnalysisRequest, res: Response
 };
 
 // Middleware للتحقق من رصيد العملات للمحادثة والمتابعة (50 عملة)
-export const chatPermissionMiddleware = (req: AnalysisRequest, res: Response, next: NextFunction) => {
+export const chatPermissionMiddleware = async (req: AnalysisRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.userId;
     
@@ -107,7 +107,7 @@ export const chatPermissionMiddleware = (req: AnalysisRequest, res: Response, ne
     }
 
     // التحقق من حالة الاشتراك
-    const subscriptionStatus = getUserSubscriptionStatus(userId);
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
     
     // إذا كان لديه اشتراك نشط، السماح بدون خصم
     if (subscriptionStatus.hasActiveSubscription) {
@@ -170,7 +170,7 @@ export const chatPermissionMiddleware = (req: AnalysisRequest, res: Response, ne
 };
 
 // Middleware للتحقق من الاشتراك النشط فقط (بدون خصم)
-export const activeSubscriptionMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const activeSubscriptionMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.userId;
     
@@ -182,7 +182,7 @@ export const activeSubscriptionMiddleware = (req: AuthRequest, res: Response, ne
       });
     }
 
-    const subscriptionStatus = getUserSubscriptionStatus(userId);
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
     
     if (!subscriptionStatus.hasActiveSubscription) {
       return res.status(403).json({

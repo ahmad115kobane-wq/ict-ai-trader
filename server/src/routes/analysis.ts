@@ -173,7 +173,7 @@ router.post('/follow-up', authMiddleware, chatPermissionMiddleware, async (req: 
 });
 
 // سجل التحليلات المحسن - مجاني للجميع
-router.get('/enhanced-history', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/enhanced-history', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 50;
@@ -202,7 +202,7 @@ router.get('/enhanced-history', authMiddleware, (req: AuthRequest, res: Response
 });
 
 // سجل الصفقات فقط - مجاني للجميع
-router.get('/trades-history', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/trades-history', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -229,7 +229,7 @@ router.get('/trades-history', authMiddleware, (req: AuthRequest, res: Response) 
 });
 
 // سجل التحليلات بدون صفقات - مجاني للجميع
-router.get('/no-trades-history', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/no-trades-history', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -248,7 +248,7 @@ router.get('/no-trades-history', authMiddleware, (req: AuthRequest, res: Respons
 });
 
 // سجل التحليلات التلقائية من النظام (للمشتركين فقط)
-router.get('/auto-history', authMiddleware, analysisPermissionMiddleware, (req: AnalysisRequest, res: Response) => {
+router.get('/auto-history', authMiddleware, analysisPermissionMiddleware, async (req: AnalysisRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -278,7 +278,7 @@ router.get('/auto-history', authMiddleware, analysisPermissionMiddleware, (req: 
 });
 
 // سجل التحليلات
-router.get('/history', authMiddleware, analysisPermissionMiddleware, (req: AnalysisRequest, res: Response) => {
+router.get('/history', authMiddleware, analysisPermissionMiddleware, async (req: AnalysisRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 50;
