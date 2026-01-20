@@ -196,7 +196,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
 // التحقق من حالة الاشتراك - محدث مع النظام الجديد
 router.get('/subscription-status', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({
@@ -291,12 +291,12 @@ router.post('/quick-login', async (req: Request, res: Response) => {
 // إنشاء اشتراك تجريبي للاختبار
 router.post('/create-test-subscription', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        error: 'User not authenticated'
+        error: 'غير مصرح'
       });
     }
 

@@ -403,7 +403,7 @@ router.get('/latest-auto', authMiddleware, async (req: AuthRequest, res: Respons
 router.post('/toggle-auto', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { enabled } = req.body;
-    const userId = req.user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({
@@ -411,6 +411,8 @@ router.post('/toggle-auto', authMiddleware, async (req: AuthRequest, res: Respon
         error: 'User not authenticated'
       });
     }
+    
+    console.log(`🔧 Toggle auto analysis request: userId=${userId}, enabled=${enabled}`);
 
     // إذا كان المستخدم يريد تفعيل التحليل التلقائي، نتحقق من الاشتراك
     if (enabled) {
