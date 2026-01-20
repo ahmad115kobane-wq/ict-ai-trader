@@ -15,7 +15,7 @@ import {
   incrementAnalysisUsage,
   getUserById,
   addCoins
-} from '../db/database';
+} from '../db/index';
 
 // ===================== VIP Package Management =====================
 

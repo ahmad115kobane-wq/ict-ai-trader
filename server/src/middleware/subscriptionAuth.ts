@@ -4,7 +4,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from './auth';
 import { getUserSubscriptionStatus, processAnalysisRequest } from '../services/subscriptionService';
-import { deductCoins, getUserById } from '../db/database';
+import { deductCoins, getUserById } from '../db/index';
 
 // Interface لطلبات التحليل
 export interface AnalysisRequest extends AuthRequest {

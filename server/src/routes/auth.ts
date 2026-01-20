@@ -5,7 +5,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { createUser, getUserByEmail, getUserById, createSession, terminateAllUserSessions, getUserActiveSessions } from '../db/database';
+import { createUser, getUserByEmail, getUserById, createSession, terminateAllUserSessions, getUserActiveSessions } from '../db/index';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { getUserSubscriptionStatus, purchaseSubscription } from '../services/subscriptionService';
 

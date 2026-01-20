@@ -8,7 +8,7 @@ import { analysisPermissionMiddleware, chatPermissionMiddleware, AnalysisRequest
 import { analyzeMultiTimeframe, chatWithAI, followUpTrade } from '../services/aiService';
 import { getCandles, getCurrentPrice } from '../services/oandaService';
 import { renderDualCharts } from '../services/chartService';
-import { saveAnalysis, getAnalysisHistory, saveEnhancedAnalysis, getEnhancedAnalysisHistory, getTradeHistory, getNoTradeAnalysis } from '../db/database';
+import { saveAnalysis, getAnalysisHistory, saveEnhancedAnalysis, getEnhancedAnalysisHistory, getTradeHistory, getNoTradeAnalysis } from '../db/index';
 import * as fs from 'fs';
 import * as path from 'path';
 

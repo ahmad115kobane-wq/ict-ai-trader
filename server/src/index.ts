@@ -17,7 +17,7 @@ dotenv.config();
 // في وضع الإنتاج: server/dist/src -> server
 const SERVER_ROOT = path.join(__dirname, process.env.NODE_ENV === 'production' ? '../..' : '..');
 
-import { initDatabase } from './db/database';
+import { initDatabase } from './db/index';
 import authRoutes from './routes/auth';
 import analysisRoutes from './routes/analysis';
 import subscriptionRoutes from './routes/subscription';
@@ -25,7 +25,7 @@ import { initializeDefaultPackages, checkAndExpireSubscriptions } from './servic
 import { getCandles, getCurrentPrice } from './services/oandaService';
 import { renderDualCharts } from './services/chartService';
 import { analyzeMultiTimeframe } from './services/aiService';
-import { saveAutoAnalysis, saveEnhancedAnalysis } from './db/database';
+import { saveAutoAnalysis, saveEnhancedAnalysis } from './db/index';
 import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
