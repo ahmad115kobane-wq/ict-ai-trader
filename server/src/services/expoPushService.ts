@@ -1,17 +1,27 @@
 // services/expoPushService.ts
-// خدمة Expo Push Notifications لإرسال الإشعارات للتطبيق
+// خدمة Expo Push Notifications المتقدمة مع دعم الإشعارات المستمرة
 
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 
 // إنشاء instance من Expo SDK
 const expo = new Expo();
 
-// إرسال إشعارات Push للمستخدمين
+// إرسال إشعارات Push للمستخدمين مع دعم الإشعارات المستمرة
 export const sendPushNotifications = async (
   pushTokens: string[],
   title: string,
   body: string,
-  data?: Record<string, any>
+  data?: Record<string, any>,
+  options?: {
+    priority?: 'default' | 'normal' | 'high';
+    sound?: string | null;
+    badge?: number;
+    ttl?: number; // Time to live in seconds
+    expiration?: number;
+    collapseId?: string;
+    categoryId?: string;
+    mutableContent?: boolean;
+  }
 ): Promise<{ success: boolean; tickets: ExpoPushTicket[] }> => {
   // فلترة التوكنات الصالحة فقط
   const validTokens = pushTokens.filter(token => Expo.isExpoPushToken(token));
@@ -21,22 +31,34 @@ export const sendPushNotifications = async (
     return { success: false, tickets: [] };
   }
 
-  // إنشاء الرسائل
+  // إنشاء الرسائل مع إعدادات متقدمة للإشعارات المستمرة
   const messages: ExpoPushMessage[] = validTokens.map(token => ({
     to: token,
-    sound: 'default',
+    sound: options?.sound !== null ? (options?.sound || 'default') : undefined,
     title,
     body,
-    data: data || {},
-    priority: 'high',
-    channelId: 'trade-alerts',
+    data: {
+      ...data,
+      persistent: true, // جعل الإشعار مستمر
+      showWhenLocked: true, // إظهار حتى عند قفل الشاشة
+      priority: 'high',
+      timestamp: Date.now(),
+    },
+    priority: options?.priority || 'high',
+    channelId: 'trade-alerts-persistent', // قناة خاصة للإشعارات المستمرة
+    badge: options?.badge,
+    ttl: options?.ttl || 86400, // 24 ساعة افتراضياً
+    expiration: options?.expiration,
+    collapseId: options?.collapseId,
+    categoryId: options?.categoryId || 'TRADE_ALERT',
+    mutableContent: options?.mutableContent !== false, // true افتراضياً
   }));
 
   // تقسيم الرسائل إلى chunks (Expo يدعم 100 رسالة في المرة)
   const chunks = expo.chunkPushNotifications(messages);
   const tickets: ExpoPushTicket[] = [];
 
-  console.log(`📱 Sending ${messages.length} push notifications...`);
+  console.log(`📱 Sending ${messages.length} persistent push notifications...`);
 
   for (const chunk of chunks) {
     try {
@@ -46,7 +68,7 @@ export const sendPushNotifications = async (
       // التحقق من حالة كل تذكرة
       ticketChunk.forEach((ticket, index) => {
         if (ticket.status === 'ok') {
-          console.log(`✅ Push sent to token ${index + 1}`);
+          console.log(`✅ Persistent push sent to token ${index + 1}`);
         } else if (ticket.status === 'error') {
           console.error(`❌ Push error: ${ticket.message}`);
           if (ticket.details?.error === 'DeviceNotRegistered') {
@@ -94,10 +116,17 @@ export const sendTradeNotification = async (
     timestamp: Date.now(),
   };
 
-  const result = await sendPushNotifications(pushTokens, title, body, data);
+  const result = await sendPushNotifications(pushTokens, title, body, data, {
+    priority: 'high',
+    ttl: 86400, // 24 ساعة - الإشعار يبقى حتى لو الهاتف مطفأ
+    sound: 'default',
+    badge: 1,
+    categoryId: 'TRADE_ALERT',
+    mutableContent: true,
+  });
   
   if (result.success) {
-    console.log(`📱 Trade notification sent to ${pushTokens.length} devices`);
+    console.log(`📱 Persistent trade notification sent to ${pushTokens.length} devices`);
   }
   
   return result.success;
