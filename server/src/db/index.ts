@@ -12,51 +12,56 @@ console.log(`🗄️ Database type: ${dbType.toUpperCase()}`);
 console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
 console.log(`🔗 DATABASE_URL exists: ${!!process.env.DATABASE_URL}`);
 
-// تصدير الدوال المناسبة
-export const initDatabase = isProduction ? postgresDb.initDatabase : sqliteDb.initDatabase;
-export const createUser = isProduction ? postgresDb.createUser : sqliteDb.createUser;
-export const getUserByEmail = isProduction ? postgresDb.getUserByEmail : sqliteDb.getUserByEmail;
-export const getUserById = isProduction ? postgresDb.getUserById : sqliteDb.getUserById;
-export const updateUserCoins = isProduction ? postgresDb.updateUserCoins : sqliteDb.updateUserCoins;
-export const deductCoins = isProduction ? postgresDb.deductCoins : sqliteDb.deductCoins;
-export const addCoins = isProduction ? postgresDb.addCoins : sqliteDb.addCoins;
-export const setUserAutoAnalysis = isProduction ? postgresDb.setUserAutoAnalysis : sqliteDb.setUserAutoAnalysis;
-export const getUsersWithAutoAnalysisEnabled = isProduction ? postgresDb.getUsersWithAutoAnalysisEnabled : sqliteDb.getUsersWithAutoAnalysisEnabled;
+// Wrapper functions to make SQLite async-compatible
+const wrapSync = <T extends (...args: any[]) => any>(fn: T): (...args: Parameters<T>) => Promise<ReturnType<T>> => {
+  return async (...args: Parameters<T>) => fn(...args);
+};
+
+// تصدير الدوال المناسبة (كلها async)
+export const initDatabase = isProduction ? postgresDb.initDatabase : wrapSync(sqliteDb.initDatabase);
+export const createUser = isProduction ? postgresDb.createUser : wrapSync(sqliteDb.createUser);
+export const getUserByEmail = isProduction ? postgresDb.getUserByEmail : wrapSync(sqliteDb.getUserByEmail);
+export const getUserById = isProduction ? postgresDb.getUserById : wrapSync(sqliteDb.getUserById);
+export const updateUserCoins = isProduction ? postgresDb.updateUserCoins : wrapSync(sqliteDb.updateUserCoins);
+export const deductCoins = isProduction ? postgresDb.deductCoins : wrapSync(sqliteDb.deductCoins);
+export const addCoins = isProduction ? postgresDb.addCoins : wrapSync(sqliteDb.addCoins);
+export const setUserAutoAnalysis = isProduction ? postgresDb.setUserAutoAnalysis : wrapSync(sqliteDb.setUserAutoAnalysis);
+export const getUsersWithAutoAnalysisEnabled = isProduction ? postgresDb.getUsersWithAutoAnalysisEnabled : wrapSync(sqliteDb.getUsersWithAutoAnalysisEnabled);
 
 // Analysis operations
-export const saveAnalysis = isProduction ? postgresDb.saveAnalysis : sqliteDb.saveAnalysis;
-export const getAnalysisHistory = isProduction ? postgresDb.getAnalysisHistory : sqliteDb.getAnalysisHistory;
-export const saveEnhancedAnalysis = isProduction ? postgresDb.saveEnhancedAnalysis : sqliteDb.saveEnhancedAnalysis;
-export const getEnhancedAnalysisHistory = isProduction ? postgresDb.getEnhancedAnalysisHistory : sqliteDb.getEnhancedAnalysisHistory;
-export const getTradeHistory = isProduction ? postgresDb.getTradeHistory : sqliteDb.getTradeHistory;
-export const getNoTradeAnalysis = isProduction ? postgresDb.getNoTradeAnalysis : sqliteDb.getNoTradeAnalysis;
-export const updateTradeResult = isProduction ? postgresDb.updateTradeResult : sqliteDb.updateTradeResult;
+export const saveAnalysis = isProduction ? postgresDb.saveAnalysis : wrapSync(sqliteDb.saveAnalysis);
+export const getAnalysisHistory = isProduction ? postgresDb.getAnalysisHistory : wrapSync(sqliteDb.getAnalysisHistory);
+export const saveEnhancedAnalysis = isProduction ? postgresDb.saveEnhancedAnalysis : wrapSync(sqliteDb.saveEnhancedAnalysis);
+export const getEnhancedAnalysisHistory = isProduction ? postgresDb.getEnhancedAnalysisHistory : wrapSync(sqliteDb.getEnhancedAnalysisHistory);
+export const getTradeHistory = isProduction ? postgresDb.getTradeHistory : wrapSync(sqliteDb.getTradeHistory);
+export const getNoTradeAnalysis = isProduction ? postgresDb.getNoTradeAnalysis : wrapSync(sqliteDb.getNoTradeAnalysis);
+export const updateTradeResult = isProduction ? postgresDb.updateTradeResult : wrapSync(sqliteDb.updateTradeResult);
 
 // Auto analysis operations
-export const saveAutoAnalysis = isProduction ? postgresDb.saveAutoAnalysis : sqliteDb.saveAutoAnalysis;
-export const getLatestAutoAnalysis = isProduction ? postgresDb.getLatestAutoAnalysis : sqliteDb.getLatestAutoAnalysis;
+export const saveAutoAnalysis = isProduction ? postgresDb.saveAutoAnalysis : wrapSync(sqliteDb.saveAutoAnalysis);
+export const getLatestAutoAnalysis = isProduction ? postgresDb.getLatestAutoAnalysis : wrapSync(sqliteDb.getLatestAutoAnalysis);
 
 // VIP packages operations
-export const createVipPackage = isProduction ? postgresDb.createVipPackage : sqliteDb.createVipPackage;
-export const getAllVipPackages = isProduction ? postgresDb.getAllVipPackages : sqliteDb.getAllVipPackages;
-export const getVipPackageById = isProduction ? postgresDb.getVipPackageById : sqliteDb.getVipPackageById;
+export const createVipPackage = isProduction ? postgresDb.createVipPackage : wrapSync(sqliteDb.createVipPackage);
+export const getAllVipPackages = isProduction ? postgresDb.getAllVipPackages : wrapSync(sqliteDb.getAllVipPackages);
+export const getVipPackageById = isProduction ? postgresDb.getVipPackageById : wrapSync(sqliteDb.getVipPackageById);
 
 // Subscription operations
-export const createUserSubscription = isProduction ? postgresDb.createUserSubscription : sqliteDb.createUserSubscription;
-export const getUserActiveSubscription = isProduction ? postgresDb.getUserActiveSubscription : sqliteDb.getUserActiveSubscription;
-export const getUserSubscriptionHistory = isProduction ? postgresDb.getUserSubscriptionHistory : sqliteDb.getUserSubscriptionHistory;
-export const expireUserSubscription = isProduction ? postgresDb.expireUserSubscription : sqliteDb.expireUserSubscription;
-export const getExpiredSubscriptions = isProduction ? postgresDb.getExpiredSubscriptions : sqliteDb.getExpiredSubscriptions;
+export const createUserSubscription = isProduction ? postgresDb.createUserSubscription : wrapSync(sqliteDb.createUserSubscription);
+export const getUserActiveSubscription = isProduction ? postgresDb.getUserActiveSubscription : wrapSync(sqliteDb.getUserActiveSubscription);
+export const getUserSubscriptionHistory = isProduction ? postgresDb.getUserSubscriptionHistory : wrapSync(sqliteDb.getUserSubscriptionHistory);
+export const expireUserSubscription = isProduction ? postgresDb.expireUserSubscription : wrapSync(sqliteDb.expireUserSubscription);
+export const getExpiredSubscriptions = isProduction ? postgresDb.getExpiredSubscriptions : wrapSync(sqliteDb.getExpiredSubscriptions);
 
 // Analysis usage tracking
-export const incrementAnalysisUsage = isProduction ? postgresDb.incrementAnalysisUsage : sqliteDb.incrementAnalysisUsage;
-export const getUserDailyAnalysisCount = isProduction ? postgresDb.getUserDailyAnalysisCount : sqliteDb.getUserDailyAnalysisCount;
-export const canUserAnalyze = isProduction ? postgresDb.canUserAnalyze : sqliteDb.canUserAnalyze;
+export const incrementAnalysisUsage = isProduction ? postgresDb.incrementAnalysisUsage : wrapSync(sqliteDb.incrementAnalysisUsage);
+export const getUserDailyAnalysisCount = isProduction ? postgresDb.getUserDailyAnalysisCount : wrapSync(sqliteDb.getUserDailyAnalysisCount);
+export const canUserAnalyze = isProduction ? postgresDb.canUserAnalyze : wrapSync(sqliteDb.canUserAnalyze);
 
 // Session management
-export const createSession = isProduction ? postgresDb.createSession : sqliteDb.createSession;
-export const validateSession = isProduction ? postgresDb.validateSession : sqliteDb.validateSession;
-export const terminateSession = isProduction ? postgresDb.terminateSession : sqliteDb.terminateSession;
-export const terminateAllUserSessions = isProduction ? postgresDb.terminateAllUserSessions : sqliteDb.terminateAllUserSessions;
-export const getUserActiveSessions = isProduction ? postgresDb.getUserActiveSessions : sqliteDb.getUserActiveSessions;
-export const cleanupExpiredSessions = isProduction ? postgresDb.cleanupExpiredSessions : sqliteDb.cleanupExpiredSessions;
+export const createSession = isProduction ? postgresDb.createSession : wrapSync(sqliteDb.createSession);
+export const validateSession = isProduction ? postgresDb.validateSession : wrapSync(sqliteDb.validateSession);
+export const terminateSession = isProduction ? postgresDb.terminateSession : wrapSync(sqliteDb.terminateSession);
+export const terminateAllUserSessions = isProduction ? postgresDb.terminateAllUserSessions : wrapSync(sqliteDb.terminateAllUserSessions);
+export const getUserActiveSessions = isProduction ? postgresDb.getUserActiveSessions : wrapSync(sqliteDb.getUserActiveSessions);
+export const cleanupExpiredSessions = isProduction ? postgresDb.cleanupExpiredSessions : wrapSync(sqliteDb.cleanupExpiredSessions);
