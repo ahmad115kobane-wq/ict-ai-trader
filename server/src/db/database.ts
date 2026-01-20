@@ -326,7 +326,11 @@ export const addCoins = (userId: string, amount: number): boolean => {
 
 // تفعيل/إيقاف التحليل التلقائي للمستخدم
 export const setUserAutoAnalysis = (userId: string, enabled: boolean): boolean => {
-  if (!db) return false;
+  console.log(`🔧 [SQLite] setUserAutoAnalysis called - userId: ${userId}, enabled: ${enabled}, db exists: ${!!db}`);
+  if (!db) {
+    console.error('❌ [SQLite] Database not initialized!');
+    return false;
+  }
   try {
     const timestamp = enabled ? new Date().toISOString() : null;
     db.run(
@@ -334,10 +338,10 @@ export const setUserAutoAnalysis = (userId: string, enabled: boolean): boolean =
       [enabled ? 1 : 0, timestamp, userId]
     );
     saveDatabase();
-    console.log(`✅ User ${userId} auto analysis ${enabled ? 'enabled' : 'disabled'}`);
+    console.log(`✅ [SQLite] User ${userId} auto analysis ${enabled ? 'enabled' : 'disabled'}`);
     return true;
   } catch (error) {
-    console.error('Error setting user auto analysis:', error);
+    console.error('❌ [SQLite] Error setting user auto analysis:', error);
     return false;
   }
 };
