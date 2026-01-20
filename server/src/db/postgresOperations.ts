@@ -113,6 +113,18 @@ export const saveEnhancedAnalysis = async (
 ): Promise<void> => {
   const suggestedTrade = analysis.suggestedTrade;
   
+  // Parse rrRatio string (e.g., "1:4.0") to numeric value (e.g., 4.0)
+  let rrRatioNumeric: number | null = null;
+  if (suggestedTrade?.rrRatio) {
+    const rrStr = String(suggestedTrade.rrRatio);
+    const parts = rrStr.split(':');
+    if (parts.length === 2) {
+      rrRatioNumeric = parseFloat(parts[1]) || null;
+    } else {
+      rrRatioNumeric = parseFloat(rrStr) || null;
+    }
+  }
+  
   await query(
     `INSERT INTO enhanced_analysis_history (
       id, user_id, symbol, current_price, decision, score, confidence, 
@@ -137,7 +149,7 @@ export const saveEnhancedAnalysis = async (
       suggestedTrade?.entry || null,
       suggestedTrade?.sl || null,
       suggestedTrade?.tp || null,
-      suggestedTrade?.rrRatio || null,
+      rrRatioNumeric,
       suggestedTrade?.expiryMinutes || null,
       analysis.liquiditySweepDetected || false,
       analysis.marketStructure || '',
