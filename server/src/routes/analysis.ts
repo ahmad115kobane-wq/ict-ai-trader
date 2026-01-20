@@ -432,7 +432,7 @@ router.post('/toggle-auto', authMiddleware, async (req: AuthRequest, res: Respon
 
     // حفظ إعدادات التحليل التلقائي في قاعدة البيانات
     const { setUserAutoAnalysis } = await import('../db/database');
-    const success = setUserAutoAnalysis(userId, enabled);
+    const success = await setUserAutoAnalysis(userId, enabled);
     
     if (!success) {
       return res.status(500).json({
