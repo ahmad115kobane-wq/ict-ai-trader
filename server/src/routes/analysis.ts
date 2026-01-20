@@ -234,7 +234,9 @@ router.get('/no-trades-history', authMiddleware, async (req: AuthRequest, res: R
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 20;
 
-    const noTrades = getNoTradeAnalysis(userId, limit);
+    const noTrades = await getNoTradeAnalysis(userId, limit);
+    
+    console.log(`📋 No-trades history result: ${noTrades.length} analyses for user ${userId}`);
 
     res.json({
       success: true,
