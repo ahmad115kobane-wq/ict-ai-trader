@@ -237,16 +237,7 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
 };
 
 // الحصول على حالة اشتراك المستخدم
-export const getUserSubscriptionStatus = (userId: string): {
-  hasActiveSubscription: boolean;
-  subscription?: any;
-  canAnalyze: boolean;
-  analysisInfo: {
-    canAnalyze: boolean;
-    reason?: string;
-    remainingAnalyses?: number;
-  };
-}: Promise<SubscriptionStatus> => {
+export const getUserSubscriptionStatus = async (userId: string): Promise<SubscriptionStatus> => {
   const activeSubscription = await getUserActiveSubscription(userId);
   const analysisInfo = await canUserAnalyze(userId);
 
@@ -266,12 +257,7 @@ export const getUserSubscriptions = (userId: string, limit: number = 10) => {
 // ===================== Analysis Permission & Usage =====================
 
 // التحقق من إمكانية التحليل وخصم التكلفة
-export const processAnalysisRequest = (userId: string): {
-  allowed: boolean;
-  reason?: string;
-  costDeducted?: number;
-  remainingAnalyses?: number;
-}: Promise<AnalysisPermissionResult> => {
+export const processAnalysisRequest = async (userId: string): Promise<AnalysisPermissionResult> => {
   const analysisCheck = await canUserAnalyze(userId);
   
   if (!analysisCheck.canAnalyze) {
@@ -282,7 +268,7 @@ export const processAnalysisRequest = (userId: string): {
   }
 
   // تسجيل استخدام التحليل
-  const usageRecorded = incrementAnalysisUsage(userId);
+  const usageRecorded = await incrementAnalysisUsage(userId);
   if (!usageRecorded) {
     console.error('Failed to record analysis usage for user:', userId);
   }
@@ -378,11 +364,11 @@ export const addCoinsToUser = (userId: string, amount: number, reason: string = 
 // ===================== Statistics & Analytics =====================
 
 // إحصائيات الاشتراكات
-export const getSubscriptionStats = (): {
+export const getSubscriptionStats = async (): Promise<{
   totalActiveSubscriptions: number;
   packageBreakdown: { [key: string]: number };
   totalRevenue: number;
-}: Promise<SubscriptionRecommendation> => {
+}> => {
   // هذه دالة مبسطة - يمكن توسيعها لاحقاً
   const packages = await getAllVipPackages();
   
