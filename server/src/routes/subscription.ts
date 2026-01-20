@@ -21,7 +21,7 @@ const router = Router();
 // الحصول على جميع الباقات المتاحة
 router.get('/packages', async (req, res) => {
   try {
-    const packages = getAvailablePackages();
+    const packages = await getAvailablePackages();
     
     res.json({
       success: true,
@@ -55,7 +55,7 @@ router.get('/packages', async (req, res) => {
 router.get('/packages/:packageId', async (req, res) => {
   try {
     const { packageId } = req.params;
-    const packageDetails = getPackageDetails(packageId);
+    const packageDetails = await getPackageDetails(packageId);
     
     if (!packageDetails) {
       return res.status(404).json({
@@ -107,7 +107,7 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
     }
 
     // التحقق من وجود الباقة
-    const packageDetails = getPackageDetails(packageId);
+    const packageDetails = await getPackageDetails(packageId);
     if (!packageDetails) {
       return res.status(404).json({
         success: false,
@@ -135,7 +135,7 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
     }
 
     // الحصول على حالة الاشتراك الجديدة
-    const subscriptionStatus = getUserSubscriptionStatus(userId);
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
 
     res.json({
       success: true,
@@ -164,7 +164,7 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
 router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const subscriptionStatus = getUserSubscriptionStatus(userId);
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
     const user = req.user;
 
     res.json({
@@ -208,7 +208,7 @@ router.get('/history', authMiddleware, async (req: AuthRequest, res: Response) =
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 10;
     
-    const subscriptions = getUserSubscriptions(userId, limit);
+    const subscriptions = await getUserSubscriptions(userId, limit);
 
     res.json({
       success: true,
@@ -268,7 +268,7 @@ router.post('/buy-coins', authMiddleware, async (req: AuthRequest, res: Response
     }
 
     // الحصول على الرصيد الجديد
-    const subscriptionStatus = getUserSubscriptionStatus(userId);
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
 
     res.json({
       success: true,
@@ -296,7 +296,7 @@ router.post('/buy-coins', authMiddleware, async (req: AuthRequest, res: Response
 router.get('/stats', authMiddleware, activeSubscriptionMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const subscriptionStatus = getUserSubscriptionStatus(userId);
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
     
     // إحصائيات مخصصة للمستخدم المشترك
     const stats = {

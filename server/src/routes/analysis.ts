@@ -110,8 +110,8 @@ router.post('/chat', authMiddleware, chatPermissionMiddleware, async (req: Analy
     const response = await chatWithAI(message, analysis || null, currentPrice || 0);
 
     // جلب العملات المحدثة
-    const { getUserById } = await import('../db/database');
-    const updatedUser = getUserById(req.userId!);
+    const { getUserById } = await import('../db/index');
+    const updatedUser = await getUserById(req.userId!);
 
     res.json({
       success: true,
@@ -155,8 +155,8 @@ router.post('/follow-up', authMiddleware, chatPermissionMiddleware, async (req: 
     );
 
     // جلب العملات المحدثة
-    const { getUserById } = await import('../db/database');
-    const updatedUser = getUserById(req.userId!);
+    const { getUserById } = await import('../db/index');
+    const updatedUser = await getUserById(req.userId!);
 
     res.json({
       success: true,
@@ -180,7 +180,7 @@ router.get('/enhanced-history', authMiddleware, (req: AuthRequest, res: Response
 
     console.log(`📊 Enhanced history request: userId=${userId}, limit=${limit}`);
     
-    const history = getEnhancedAnalysisHistory(userId, limit);
+    const history = await getEnhancedAnalysisHistory(userId, limit);
     
     console.log(`📊 Enhanced history result: ${history.length} records for user ${userId}`);
 
@@ -209,7 +209,7 @@ router.get('/trades-history', authMiddleware, (req: AuthRequest, res: Response) 
 
     console.log(`💼 Trades history request: userId=${userId}, limit=${limit}`);
     
-    const trades = getTradeHistory(userId, limit);
+    const trades = await getTradeHistory(userId, limit);
     
     console.log(`💼 Trades history result: ${trades.length} trades for user ${userId}`);
 
@@ -254,7 +254,7 @@ router.get('/auto-history', authMiddleware, analysisPermissionMiddleware, (req: 
     const limit = parseInt(req.query.limit as string) || 20;
 
     // جلب التحليلات التلقائية الخاصة بالمستخدم فقط
-    const autoAnalyses = getEnhancedAnalysisHistory(userId, limit);
+    const autoAnalyses = await getEnhancedAnalysisHistory(userId, limit);
     
     // فلترة التحليلات التلقائية فقط
     const autoOnly = autoAnalyses.filter((h: any) => h.analysis_type === 'auto');
@@ -283,7 +283,7 @@ router.get('/history', authMiddleware, analysisPermissionMiddleware, (req: Analy
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 50;
 
-    const history = getAnalysisHistory(userId, limit);
+    const history = await getAnalysisHistory(userId, limit);
 
     res.json({
       success: true,
@@ -359,8 +359,8 @@ router.get('/latest-auto', authMiddleware, async (req: AuthRequest, res: Respons
     }
     
     // جلب آخر تحليل تلقائي من قاعدة البيانات للمستخدم الحالي فقط
-    const { getEnhancedAnalysisHistory } = await import('../db/database');
-    const userAnalyses = getEnhancedAnalysisHistory(userId, 1); // جلب آخر تحليل فقط
+    const { getEnhancedAnalysisHistory } = await import('../db/index');
+    const userAnalyses = await getEnhancedAnalysisHistory(userId, 1); // جلب آخر تحليل فقط
     
     if (userAnalyses && userAnalyses.length > 0) {
       const latestAnalysis = userAnalyses[0];

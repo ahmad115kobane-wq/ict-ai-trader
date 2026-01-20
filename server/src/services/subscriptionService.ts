@@ -46,7 +46,7 @@ export const initializeDefaultPackages = async (): Promise<void> => {
   console.log('🎁 Initializing default VIP packages...');
   
   try {
-    const existingPackages = getAllVipPackages();
+    const existingPackages = await getAllVipPackages();
     if (existingPackages.length > 0) {
       console.log('✅ VIP packages already exist, skipping initialization');
       return;
@@ -119,8 +119,8 @@ export const initializeDefaultPackages = async (): Promise<void> => {
 };
 
 // الحصول على جميع الباقات المتاحة
-export const getAvailablePackages = (): VipPackage[] => {
-  const packages = getAllVipPackages();
+export const getAvailablePackages = async (): Promise<VipPackage[]> => {
+  const packages = await getAllVipPackages();
   return packages.map(pkg => ({
     id: pkg.id,
     name: pkg.name,
@@ -138,8 +138,8 @@ export const getAvailablePackages = (): VipPackage[] => {
 };
 
 // الحصول على باقة محددة
-export const getPackageDetails = (packageId: string): VipPackage | null => {
-  const pkg = getVipPackageById(packageId);
+export const getPackageDetails = async (packageId: string): Promise<VipPackage | null> => {
+  const pkg = await getVipPackageById(packageId);
   if (!pkg) return null;
   
   return {
@@ -173,7 +173,7 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
     console.log(`🛒 Purchasing subscription: packageId=${packageId}, userId=${userId}`);
 
     // التحقق من وجود الباقة
-    const vipPackage = getVipPackageById(packageId);
+    const vipPackage = await getVipPackageById(packageId);
     console.log(`📦 VIP Package found:`, vipPackage ? 'Yes' : 'No');
     
     if (!vipPackage) {
@@ -184,7 +184,7 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
     }
 
     // التحقق من وجود المستخدم
-    const user = getUserById(userId);
+    const user = await getUserById(userId);
     console.log(`👤 User found:`, user ? 'Yes' : 'No');
     
     if (!user) {
@@ -246,9 +246,9 @@ export const getUserSubscriptionStatus = (userId: string): {
     reason?: string;
     remainingAnalyses?: number;
   };
-} => {
-  const activeSubscription = getUserActiveSubscription(userId);
-  const analysisInfo = canUserAnalyze(userId);
+}: Promise<SubscriptionStatus> => {
+  const activeSubscription = await getUserActiveSubscription(userId);
+  const analysisInfo = await canUserAnalyze(userId);
 
   return {
     hasActiveSubscription: !!activeSubscription,
@@ -271,8 +271,8 @@ export const processAnalysisRequest = (userId: string): {
   reason?: string;
   costDeducted?: number;
   remainingAnalyses?: number;
-} => {
-  const analysisCheck = canUserAnalyze(userId);
+}: Promise<AnalysisPermissionResult> => {
+  const analysisCheck = await canUserAnalyze(userId);
   
   if (!analysisCheck.canAnalyze) {
     return {
@@ -287,11 +287,11 @@ export const processAnalysisRequest = (userId: string): {
     console.error('Failed to record analysis usage for user:', userId);
   }
 
-  const activeSubscription = getUserActiveSubscription(userId);
+  const activeSubscription = await getUserActiveSubscription(userId);
   
   if (!activeSubscription) {
     // مستخدم مجاني - خصم العملات
-    const user = getUserById(userId);
+    const user = await getUserById(userId);
     const costDeducted = 50;
     
     return {
@@ -327,7 +327,7 @@ export const checkAndExpireSubscriptions = (): {
   console.log('🕐 Checking for expired subscriptions...');
   
   try {
-    const expiredSubscriptions = getExpiredSubscriptions();
+    const expiredSubscriptions = await getExpiredSubscriptions();
     
     if (expiredSubscriptions.length === 0) {
       console.log('✅ No expired subscriptions found');
@@ -382,9 +382,9 @@ export const getSubscriptionStats = (): {
   totalActiveSubscriptions: number;
   packageBreakdown: { [key: string]: number };
   totalRevenue: number;
-} => {
+}: Promise<SubscriptionRecommendation> => {
   // هذه دالة مبسطة - يمكن توسيعها لاحقاً
-  const packages = getAllVipPackages();
+  const packages = await getAllVipPackages();
   
   return {
     totalActiveSubscriptions: 0, // يحتاج استعلام قاعدة بيانات

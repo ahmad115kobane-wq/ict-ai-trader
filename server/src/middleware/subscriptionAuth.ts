@@ -123,7 +123,7 @@ export const chatPermissionMiddleware = (req: AnalysisRequest, res: Response, ne
     }
 
     // للمستخدمين المجانيين: التحقق من رصيد العملات
-    const user = getUserById(userId);
+    const user = await getUserById(userId);
     const CHAT_COST = 50; // تكلفة المحادثة أو المتابعة
     
     if (!user || user.coins < CHAT_COST) {
@@ -138,7 +138,7 @@ export const chatPermissionMiddleware = (req: AnalysisRequest, res: Response, ne
     }
 
     // خصم العملات
-    const deductionSuccess = deductCoins(userId, CHAT_COST);
+    const deductionSuccess = await deductCoins(userId, CHAT_COST);
     if (!deductionSuccess) {
       return res.status(403).json({
         success: false,

@@ -48,7 +48,7 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     // التحقق من عدم وجود المستخدم
-    const existingUser = getUserByEmail(email);
+    const existingUser = await getUserByEmail(email);
     if (existingUser) {
       return res.status(400).json({ error: 'البريد الإلكتروني مستخدم بالفعل' });
     }
@@ -58,7 +58,7 @@ router.post('/register', async (req: Request, res: Response) => {
     const userId = uuidv4();
 
     // إنشاء المستخدم
-    createUser(userId, email, hashedPassword);
+    await createUser(userId, email, hashedPassword);
 
     // إنشاء التوكن
     const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '30d' });
@@ -66,7 +66,7 @@ router.post('/register', async (req: Request, res: Response) => {
     // إنشاء جلسة
     const deviceInfo = getDeviceInfo(req);
     const ipAddress = getClientIP(req);
-    createSession(userId, token, deviceInfo, ipAddress);
+    await createSession(userId, token, deviceInfo, ipAddress);
 
     res.status(201).json({
       message: 'تم إنشاء الحساب بنجاح',
@@ -94,7 +94,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // البحث عن المستخدم
-    const user = getUserByEmail(email);
+    const user = await getUserByEmail(email);
     if (!user) {
       return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
     }
@@ -111,7 +111,7 @@ router.post('/login', async (req: Request, res: Response) => {
     // إنشاء جلسة جديدة (سيتم إنهاء الجلسات القديمة تلقائياً)
     const deviceInfo = getDeviceInfo(req);
     const ipAddress = getClientIP(req);
-    createSession(user.id, token, deviceInfo, ipAddress);
+    await createSession(user.id, token, deviceInfo, ipAddress);
 
     res.json({
       message: 'تم تسجيل الدخول بنجاح',
@@ -165,16 +165,16 @@ router.get('/verify-token', authMiddleware, (req: AuthRequest, res: Response) =>
 });
 
 // الحصول على بيانات المستخدم الحالي مع معلومات الاشتراك
-router.get('/me', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   // جلب بيانات المستخدم المحدثة من قاعدة البيانات
-  const { getUserById } = require('../db/database');
-  const freshUser = getUserById(req.user.id);
+  const { getUserById } = require('../db/index');
+  const freshUser = await getUserById(req.user.id);
   
   if (!freshUser) {
     return res.status(404).json({ error: 'User not found' });
   }
   
-  const subscriptionStatus = getUserSubscriptionStatus(freshUser.id);
+  const subscriptionStatus = await getUserSubscriptionStatus(freshUser.id);
   
   res.json({
     id: freshUser.id,
@@ -205,7 +205,7 @@ router.get('/subscription-status', authMiddleware, async (req: AuthRequest, res:
       });
     }
 
-    const subscriptionStatus = getUserSubscriptionStatus(userId);
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
     
     res.json({
       success: true,
@@ -252,14 +252,14 @@ router.post('/quick-login', async (req: Request, res: Response) => {
     }
 
     // البحث عن المستخدم أو إنشاؤه
-    let user = getUserByEmail(email);
+    let user = await getUserByEmail(email);
     
     if (!user) {
       // إنشاء مستخدم جديد
       const userId = uuidv4();
       const defaultPassword = await bcrypt.hash('123456', 10);
-      createUser(userId, email, defaultPassword);
-      user = getUserByEmail(email);
+      await createUser(userId, email, defaultPassword);
+      user = await getUserByEmail(email);
     }
 
     if (!user) {
@@ -358,7 +358,7 @@ router.get('/sessions', authMiddleware, (req: AuthRequest, res: Response) => {
       return res.status(401).json({ error: 'غير مصرح' });
     }
     
-    const sessions = getUserActiveSessions(userId);
+    const sessions = await getUserActiveSessions(userId);
     
     res.json({
       success: true,
@@ -388,18 +388,18 @@ router.post('/terminate-other-sessions', authMiddleware, (req: AuthRequest, res:
     }
     
     // الحصول على جميع الجلسات
-    const sessions = getUserActiveSessions(userId);
+    const sessions = await getUserActiveSessions(userId);
     
     // إنهاء جميع الجلسات ماعدا الحالية
-    const { terminateSession } = require('../db/database');
+    const { terminateSession } = require('../db/index');
     let terminatedCount = 0;
     
-    sessions.forEach(session => {
+    for (const session of sessions) {
       if (session.id !== currentSessionId) {
-        terminateSession(session.id);
+        await terminateSession(session.id);
         terminatedCount++;
       }
-    });
+    }
     
     res.json({
       success: true,

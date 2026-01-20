@@ -33,7 +33,7 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
     console.log('✅ Auth: Token verified for user:', decoded.userId);
     
     // التحقق من صلاحية الجلسة
-    const sessionValidation = validateSession(token);
+    const sessionValidation = await validateSession(token);
     
     if (!sessionValidation.valid) {
       console.log('❌ Auth: Session invalid or expired');
@@ -44,7 +44,7 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
     }
     
     // التحقق من وجود المستخدم
-    const user = getUserById(decoded.userId);
+    const user = await getUserById(decoded.userId);
     if (!user) {
       console.log('❌ Auth: User not found in database:', decoded.userId);
       return res.status(401).json({ 
