@@ -1207,6 +1207,11 @@ app.get('/test-subscription', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'test-subscription.html'));
 });
 
+// Delete old push tokens page
+app.get('/delete-old-tokens', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'delete-old-tokens.html'));
+});
+
 // Manual subscription expiry check endpoint
 app.get('/check-expired-subscriptions', async (req, res) => {
   try {
