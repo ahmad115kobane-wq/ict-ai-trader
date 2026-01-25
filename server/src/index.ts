@@ -1209,7 +1209,295 @@ app.get('/test-subscription', (req, res) => {
 
 // Delete old push tokens page
 app.get('/delete-old-tokens', (req, res) => {
-  res.sendFile(path.join(SERVER_ROOT, 'delete-old-tokens.html'));
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>حذف Push Tokens القديمة</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0d1117 0%, #0a0e14 50%, #06080c 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container { max-width: 700px; width: 100%; }
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            text-align: center;
+            color: #9ca3af;
+            margin-bottom: 30px;
+            font-size: 0.95em;
+        }
+        .warning-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .warning-box h3 {
+            color: #ef4444;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+        }
+        .warning-box p {
+            color: #fca5a5;
+            line-height: 1.6;
+            font-size: 0.95em;
+        }
+        .quick-delete {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .quick-delete h4 {
+            color: #fca5a5;
+            margin-bottom: 10px;
+            font-size: 0.95em;
+        }
+        .quick-delete button {
+            padding: 10px 15px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 6px;
+            color: #fca5a5;
+            cursor: pointer;
+            font-size: 0.85em;
+            margin: 5px;
+            transition: all 0.2s;
+        }
+        .quick-delete button:hover {
+            background: rgba(239, 68, 68, 0.3);
+            color: #fff;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            color: #d1d5db;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95em;
+            font-family: 'Courier New', monospace;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #ef4444;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+        }
+        .btn-danger:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 12px;
+            display: none;
+        }
+        .result.success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            display: block;
+        }
+        .result.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            display: block;
+        }
+        .result h3 { margin-bottom: 12px; font-size: 1.1em; }
+        .result.success h3 { color: #10b981; }
+        .result.error h3 { color: #ef4444; }
+        .result pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.85em;
+            line-height: 1.5;
+            color: #e5e7eb;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .loading.active { display: block; }
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #ef4444;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🗑️ حذف Push Tokens القديمة</h1>
+            <p class="subtitle">إزالة Push Tokens الخاطئة من قاعدة البيانات</p>
+
+            <div class="warning-box">
+                <h3>⚠️ تحذير</h3>
+                <p>
+                    هذه الأداة تحذف Push Tokens من قاعدة البيانات بشكل نهائي.
+                    استخدمها فقط لحذف Tokens الخاطئة أو القديمة.
+                </p>
+            </div>
+
+            <div class="quick-delete">
+                <h4>🚀 حذف سريع للـ Token الخاطئ المعروف:</h4>
+                <button onclick="deleteKnownToken()">
+                    حذف ExponentPushToken[0471f47f-fc62-4b7d-9d62-853231493d73]
+                </button>
+            </div>
+
+            <div class="form-group">
+                <label>🔑 Push Token المراد حذفه:</label>
+                <input 
+                    type="text" 
+                    id="pushToken" 
+                    placeholder="ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+                    value=""
+                />
+            </div>
+
+            <button class="btn btn-danger" onclick="deleteToken()" id="deleteBtn">
+                🗑️ حذف Push Token
+            </button>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>جاري حذف Push Token...</p>
+            </div>
+
+            <div class="result" id="result"></div>
+        </div>
+    </div>
+
+    <script>
+        async function deleteKnownToken() {
+            document.getElementById('pushToken').value = 'ExponentPushToken[0471f47f-fc62-4b7d-9d62-853231493d73]';
+            await deleteToken();
+        }
+
+        async function deleteToken() {
+            const pushToken = document.getElementById('pushToken').value.trim();
+            const btn = document.getElementById('deleteBtn');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+
+            if (!pushToken) {
+                result.className = 'result error';
+                result.innerHTML = '<h3>❌ خطأ</h3><p style="color: #fca5a5;">الرجاء إدخال Push Token</p>';
+                return;
+            }
+
+            result.style.display = 'none';
+            result.className = 'result';
+            loading.classList.add('active');
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/auth/delete-push-token-by-value', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pushToken })
+                });
+
+                const data = await response.json();
+                loading.classList.remove('active');
+                btn.disabled = false;
+
+                if (data.success) {
+                    result.className = 'result success';
+                    result.innerHTML = \`
+                        <h3>✅ تم الحذف بنجاح!</h3>
+                        <p style="color: #6ee7b7; margin: 15px 0;">تم حذف Push Token من قاعدة البيانات.</p>
+                        <pre>\${JSON.stringify(data, null, 2)}</pre>
+                    \`;
+                    document.getElementById('pushToken').value = '';
+                } else {
+                    result.className = 'result error';
+                    result.innerHTML = \`<h3>❌ فشل الحذف</h3><pre>\${JSON.stringify(data, null, 2)}</pre>\`;
+                }
+            } catch (error) {
+                loading.classList.remove('active');
+                btn.disabled = false;
+                result.className = 'result error';
+                result.innerHTML = \`<h3>❌ خطأ في الاتصال</h3><p style="color: #fca5a5; margin-top: 10px;">\${error.message}</p>\`;
+            }
+        }
+
+        document.getElementById('pushToken').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') deleteToken();
+        });
+    </script>
+</body>
+</html>
+  `;
+  res.send(html);
 });
 
 // Manual subscription expiry check endpoint
