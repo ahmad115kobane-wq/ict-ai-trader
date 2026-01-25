@@ -124,6 +124,20 @@ export const removeUserPushToken = async (userId: string): Promise<boolean> => {
   }
 };
 
+export const removePushTokenByValue = async (pushToken: string): Promise<boolean> => {
+  try {
+    await query(
+      'UPDATE users SET push_token = NULL, push_token_updated_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE push_token = $1',
+      [pushToken]
+    );
+    console.log(`✅ Push token removed by value: ${pushToken}`);
+    return true;
+  } catch (error) {
+    console.error('Error removing push token by value:', error);
+    return false;
+  }
+};
+
 // ===================== Analysis Operations =====================
 export const saveAnalysis = async (
   id: string,
