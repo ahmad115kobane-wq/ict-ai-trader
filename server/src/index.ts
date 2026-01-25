@@ -313,9 +313,34 @@ app.get('/send-test-trade', async (req, res) => {
       console.log('⚠️ Telegram notification skipped (not configured)');
     }
 
+    // إرسال Push Notifications مباشرة للتطبيق (يعمل حتى لو التطبيق مغلق)
+    let pushSent = 0;
+    try {
+      const { getUsersWithPushTokens } = await import('./db/index');
+      const { sendTradeNotification } = await import('./services/expoPushService');
+
+      const usersWithTokens = await getUsersWithPushTokens();
+      const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
+
+      if (pushTokens.length > 0) {
+        await sendTradeNotification(
+          pushTokens,
+          { ...mockAnalysis.suggestedTrade, rrRatio: String(mockAnalysis.suggestedTrade.rrRatio) },
+          mockAnalysis.score,
+          currentPrice
+        );
+        pushSent = pushTokens.length;
+        console.log(`📱 Push notifications sent to ${pushTokens.length} devices`);
+      } else {
+        console.log('📱 No push tokens registered');
+      }
+    } catch (pushError) {
+      console.error('❌ Push notification failed:', pushError);
+    }
+
     res.json({
       success: true,
-      message: 'Test trade created successfully! Mobile app will receive notification within 10 seconds.',
+      message: `Test trade created! Push sent to ${pushSent} devices.`,
       testTrade: {
         analysis: mockAnalysis,
         currentPrice,
