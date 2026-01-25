@@ -65,23 +65,17 @@ export const setUserAutoAnalysis = async (userId: string, enabled: boolean): Pro
 
 export const getUsersWithAutoAnalysisEnabled = async (): Promise<any[]> => {
   try {
-    // جلب المستخدمين الذين لديهم auto_analysis مفعل واشتراك نشط
+    // جلب المستخدمين الذين لديهم auto_analysis مفعل واشتراك مدفوع (ليس مجاني)
     const result = await query(`
       SELECT u.* 
       FROM users u
       WHERE u.auto_analysis_enabled = TRUE
-        AND (
-          u.subscription = 'vip' 
-          OR u.subscription = 'premium'
-          OR EXISTS (
-            SELECT 1 FROM subscriptions s 
-            WHERE s.user_id = u.id 
-              AND s.status = 'active' 
-              AND s.expires_at > CURRENT_TIMESTAMP
-          )
-        )
+        AND u.subscription IS NOT NULL 
+        AND u.subscription != ''
+        AND u.subscription != 'free'
+        AND (u.subscription_expiry IS NULL OR u.subscription_expiry > CURRENT_TIMESTAMP)
     `);
-    console.log(`👥 Found ${result.rows.length} users with active subscriptions and auto analysis enabled`);
+    console.log(`👥 Found ${result.rows.length} users with paid subscriptions and auto analysis enabled`);
     return result.rows;
   } catch (error) {
     console.error('Error getting users with auto analysis:', error);
@@ -116,25 +110,20 @@ export const getUserPushToken = async (userId: string): Promise<string | null> =
 
 export const getUsersWithPushTokens = async (): Promise<any[]> => {
   try {
-    // جلب المستخدمين الذين لديهم push token و auto_analysis مفعل واشتراك نشط
+    // جلب المستخدمين الذين لديهم push token و auto_analysis مفعل واشتراك نشط (ليس مجاني)
     const result = await query(`
-      SELECT u.id, u.email, u.push_token, u.subscription 
+      SELECT u.id, u.email, u.push_token, u.subscription, u.subscription_expiry
       FROM users u
       WHERE u.push_token IS NOT NULL 
         AND u.push_token != '' 
         AND u.auto_analysis_enabled = TRUE
-        AND (
-          u.subscription = 'vip' 
-          OR u.subscription = 'premium'
-          OR EXISTS (
-            SELECT 1 FROM subscriptions s 
-            WHERE s.user_id = u.id 
-              AND s.status = 'active' 
-              AND s.expires_at > CURRENT_TIMESTAMP
-          )
-        )
+        AND u.subscription IS NOT NULL 
+        AND u.subscription != ''
+        AND u.subscription != 'free'
+        AND (u.subscription_expiry IS NULL OR u.subscription_expiry > CURRENT_TIMESTAMP)
     `);
-    console.log(`📱 Found ${result.rows.length} users with active subscriptions and push tokens`);
+    console.log(`📱 Found ${result.rows.length} users with paid subscriptions and push tokens`);
+    result.rows.forEach((u: any) => console.log(`  - ${u.email}: ${u.subscription}`));
     return result.rows;
   } catch (error) {
     console.error('Error getting users with push tokens:', error);
