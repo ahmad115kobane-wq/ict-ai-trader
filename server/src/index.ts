@@ -297,7 +297,7 @@ app.get('/send-test-trade', async (req, res) => {
     try {
       const { getUsersWithAutoAnalysisEnabled } = await import('./db/index');
       const usersWithAutoAnalysis = await getUsersWithAutoAnalysisEnabled();
-      
+
       for (const user of usersWithAutoAnalysis) {
         const testAnalysisId = uuidv4();
         saveEnhancedAnalysis(
@@ -373,7 +373,7 @@ app.get('/send-test-trade', async (req, res) => {
 app.get('/debug-users', async (req, res) => {
   try {
     const { query } = await import('./db/postgresAdapter');
-    
+
     // جلب جميع المستخدمين مع معلوماتهم
     const allUsers = await query(`
       SELECT id, email, subscription, subscription_expiry, auto_analysis_enabled, 
@@ -381,7 +381,7 @@ app.get('/debug-users', async (req, res) => {
              LEFT(push_token, 30) as push_token_preview
       FROM users
     `);
-    
+
     // جلب المستخدمين المؤهلين للإشعارات
     const eligibleUsers = await query(`
       SELECT u.id, u.email, u.subscription, u.auto_analysis_enabled
@@ -390,7 +390,7 @@ app.get('/debug-users', async (req, res) => {
         AND u.push_token != '' 
         AND u.auto_analysis_enabled = TRUE
     `);
-    
+
     res.json({
       totalUsers: allUsers.rows.length,
       users: allUsers.rows,
@@ -410,14 +410,174 @@ app.get('/set-push-token', async (req, res) => {
     if (!email || !token) {
       return res.status(400).json({ error: 'email and token required. Usage: /set-push-token?email=a@a.a&token=ExponentPushToken[xxx]' });
     }
-    
+
     const { query } = await import('./db/postgresAdapter');
     await query(
       'UPDATE users SET push_token = $1, push_token_updated_at = CURRENT_TIMESTAMP WHERE email = $2',
       [token, email]
     );
-    
+
     res.json({ success: true, message: `Push token set for ${email}` });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Debug notifications endpoint - للتحقق من حالة الإشعارات لكل مستخدم
+app.get('/debug-notifications', async (req, res) => {
+  try {
+    const { query } = await import('./db/postgresAdapter');
+
+    // جلب جميع المستخدمين مع تفاصيل كاملة
+    const allUsers = await query(`
+      SELECT 
+        id, 
+        email, 
+        subscription, 
+        subscription_expiry,
+        auto_analysis_enabled,
+        push_token IS NOT NULL AND push_token != '' as has_push_token,
+        CASE WHEN push_token IS NOT NULL THEN LEFT(push_token, 40) || '...' ELSE NULL END as push_token_preview,
+        push_token_updated_at
+      FROM users
+      ORDER BY push_token_updated_at DESC NULLS LAST
+    `);
+
+    // تحليل كل مستخدم وتحديد المشاكل
+    const usersAnalysis = allUsers.rows.map((user: any) => {
+      const issues: string[] = [];
+      const now = new Date();
+
+      // 1. فحص push_token
+      if (!user.has_push_token) {
+        issues.push('❌ push_token غير مسجل');
+      }
+
+      // 2. فحص auto_analysis_enabled
+      if (!user.auto_analysis_enabled) {
+        issues.push('❌ التحليل التلقائي معطل');
+      }
+
+      // 3. فحص الاشتراك
+      if (!user.subscription || user.subscription === '' || user.subscription === 'free') {
+        issues.push('❌ الاشتراك مجاني أو غير موجود');
+      }
+
+      // 4. فحص انتهاء الاشتراك
+      if (user.subscription_expiry) {
+        const expiryDate = new Date(user.subscription_expiry);
+        if (expiryDate <= now) {
+          issues.push(`❌ الاشتراك منتهي منذ ${expiryDate.toLocaleDateString('ar-EG')}`);
+        }
+      } else if (user.subscription && user.subscription !== 'free') {
+        // اشتراك بدون تاريخ انتهاء (هذا قد يكون مشكلة)
+        issues.push('⚠️ الاشتراك بدون تاريخ انتهاء');
+      }
+
+      const canReceiveNotifications = issues.length === 0;
+
+      return {
+        email: user.email,
+        subscription: user.subscription || 'غير محدد',
+        subscriptionExpiry: user.subscription_expiry,
+        autoAnalysisEnabled: user.auto_analysis_enabled,
+        hasPushToken: user.has_push_token,
+        pushTokenPreview: user.push_token_preview,
+        pushTokenUpdatedAt: user.push_token_updated_at,
+        canReceiveNotifications,
+        issues: issues.length > 0 ? issues : ['✅ جاهز لاستقبال الإشعارات'],
+        status: canReceiveNotifications ? '🟢 نشط' : '🔴 غير نشط'
+      };
+    });
+
+    // جلب المستخدمين المؤهلين فقط
+    const { getUsersWithPushTokens } = await import('./db/index');
+    const eligibleUsers = await getUsersWithPushTokens();
+
+    res.json({
+      totalUsers: allUsers.rows.length,
+      eligibleForNotifications: eligibleUsers.length,
+      summary: {
+        withPushToken: usersAnalysis.filter((u: any) => u.hasPushToken).length,
+        withAutoAnalysis: usersAnalysis.filter((u: any) => u.autoAnalysisEnabled).length,
+        withPaidSubscription: usersAnalysis.filter((u: any) => u.subscription && u.subscription !== 'free').length,
+        fullyEligible: eligibleUsers.length
+      },
+      users: usersAnalysis,
+      eligibleEmails: eligibleUsers.map((u: any) => u.email),
+      help: {
+        note: 'لتفعيل الإشعارات، يجب أن يملك المستخدم:',
+        requirements: [
+          '1. push_token مسجل (يتم عند تفعيل الإشعارات في التطبيق)',
+          '2. auto_analysis_enabled = true (يتفعل عند تشغيل التحليل التلقائي)',
+          '3. اشتراك مدفوع (subscription != free)',
+          '4. اشتراك غير منتهي (subscription_expiry > now)'
+        ]
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// إرسال إشعار تجريبي لمستخدم محدد
+app.get('/send-test-notification', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({
+        error: 'email required. Usage: /send-test-notification?email=user@example.com'
+      });
+    }
+
+    const { query } = await import('./db/postgresAdapter');
+    const { sendTradeNotification } = await import('./services/expoPushService');
+
+    // جلب بيانات المستخدم
+    const userResult = await query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = userResult.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.push_token) {
+      return res.status(400).json({
+        error: 'User has no push token registered',
+        solution: 'User must enable notifications in the app first'
+      });
+    }
+
+    // إرسال إشعار تجريبي
+    const testTrade = {
+      type: 'BUY_LIMIT',
+      entry: 2750.00,
+      sl: 2745.00,
+      tp: 2765.00,
+      rrRatio: '1:3'
+    };
+
+    const success = await sendTradeNotification(
+      [user.push_token],
+      testTrade,
+      9,
+      2752.50
+    );
+
+    if (success) {
+      res.json({
+        success: true,
+        message: `✅ Test notification sent to ${email}`,
+        pushToken: user.push_token.substring(0, 40) + '...',
+        note: 'Check your phone for the notification'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send notification',
+        pushToken: user.push_token.substring(0, 40) + '...'
+      });
+    }
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

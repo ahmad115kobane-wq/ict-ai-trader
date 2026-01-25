@@ -110,7 +110,39 @@ export const getUserPushToken = async (userId: string): Promise<string | null> =
 
 export const getUsersWithPushTokens = async (): Promise<any[]> => {
   try {
-    // جلب المستخدمين الذين لديهم push token و auto_analysis مفعل واشتراك نشط (ليس مجاني)
+    // أولاً: جلب جميع المستخدمين الذين لديهم push_token لفهم المشكلة
+    const allWithTokens = await query(`
+      SELECT id, email, subscription, subscription_expiry, auto_analysis_enabled, push_token IS NOT NULL as has_token
+      FROM users
+      WHERE push_token IS NOT NULL AND push_token != ''
+    `);
+
+    console.log(`📱 Users with push tokens: ${allWithTokens.rows.length}`);
+
+    // تحليل كل مستخدم
+    const now = new Date();
+    for (const user of allWithTokens.rows) {
+      const issues: string[] = [];
+
+      if (!user.auto_analysis_enabled) {
+        issues.push('auto_analysis disabled');
+      }
+      if (!user.subscription || user.subscription === '' || user.subscription === 'free') {
+        issues.push('free/no subscription');
+      }
+      if (user.subscription_expiry) {
+        const expiry = new Date(user.subscription_expiry);
+        if (expiry <= now) {
+          issues.push('subscription expired');
+        }
+      }
+
+      if (issues.length > 0) {
+        console.log(`  ⚠️ ${user.email}: excluded (${issues.join(', ')})`);
+      }
+    }
+
+    // جلب المستخدمين المؤهلين فقط
     const result = await query(`
       SELECT u.id, u.email, u.push_token, u.subscription, u.subscription_expiry
       FROM users u
@@ -122,8 +154,10 @@ export const getUsersWithPushTokens = async (): Promise<any[]> => {
         AND u.subscription != 'free'
         AND (u.subscription_expiry IS NULL OR u.subscription_expiry::timestamp > CURRENT_TIMESTAMP)
     `);
-    console.log(`📱 Found ${result.rows.length} users with paid subscriptions and push tokens`);
-    result.rows.forEach((u: any) => console.log(`  - ${u.email}: ${u.subscription}`));
+
+    console.log(`📱 Eligible users for push notifications: ${result.rows.length}`);
+    result.rows.forEach((u: any) => console.log(`  ✅ ${u.email}: ${u.subscription}`));
+
     return result.rows;
   } catch (error) {
     console.error('Error getting users with push tokens:', error);
@@ -198,7 +232,7 @@ export const saveEnhancedAnalysis = async (
   m5ImagePath?: string
 ): Promise<void> => {
   const suggestedTrade = analysis.suggestedTrade;
-  
+
   // Parse rrRatio string (e.g., "1:4.0") to numeric value (e.g., 4.0)
   let rrRatioNumeric: number | null = null;
   if (suggestedTrade?.rrRatio) {
@@ -210,7 +244,7 @@ export const saveEnhancedAnalysis = async (
       rrRatioNumeric = parseFloat(rrStr) || null;
     }
   }
-  
+
   await query(
     `INSERT INTO enhanced_analysis_history (
       id, user_id, symbol, current_price, decision, score, confidence, 
@@ -258,7 +292,7 @@ export const getEnhancedAnalysisHistory = async (userId: string, limit: number =
        LIMIT $2`,
       [userId, limit]
     );
-    
+
     return result.rows.map((row: any) => {
       // تحويل JSON strings إلى objects
       if (row.suggested_trade && typeof row.suggested_trade === 'string') {
@@ -268,7 +302,7 @@ export const getEnhancedAnalysisHistory = async (userId: string, limit: number =
           row.suggested_trade = null;
         }
       }
-      
+
       if (row.key_levels && typeof row.key_levels === 'string') {
         try {
           row.key_levels = JSON.parse(row.key_levels);
@@ -276,7 +310,7 @@ export const getEnhancedAnalysisHistory = async (userId: string, limit: number =
           row.key_levels = [];
         }
       }
-      
+
       if (row.waiting_for && typeof row.waiting_for === 'string') {
         try {
           row.waiting_for = JSON.parse(row.waiting_for);
@@ -284,7 +318,7 @@ export const getEnhancedAnalysisHistory = async (userId: string, limit: number =
           row.waiting_for = null;
         }
       }
-      
+
       if (row.reasons && typeof row.reasons === 'string') {
         try {
           row.reasons = JSON.parse(row.reasons);
@@ -292,7 +326,7 @@ export const getEnhancedAnalysisHistory = async (userId: string, limit: number =
           row.reasons = [];
         }
       }
-      
+
       return row;
     });
   } catch (error) {
@@ -310,7 +344,7 @@ export const getTradeHistory = async (userId: string, limit: number = 20): Promi
        LIMIT $2`,
       [userId, limit]
     );
-    
+
     return result.rows.map((row: any) => {
       if (row.suggested_trade && typeof row.suggested_trade === 'string') {
         try {
@@ -336,7 +370,7 @@ export const getNoTradeAnalysis = async (userId: string, limit: number = 20): Pr
        LIMIT $2`,
       [userId, limit]
     );
-    
+
     return result.rows.map((row: any) => {
       if (row.reasons && typeof row.reasons === 'string') {
         try {
@@ -345,7 +379,7 @@ export const getNoTradeAnalysis = async (userId: string, limit: number = 20): Pr
           row.reasons = [];
         }
       }
-      
+
       if (row.waiting_for && typeof row.waiting_for === 'string') {
         try {
           row.waiting_for = JSON.parse(row.waiting_for);
@@ -353,7 +387,7 @@ export const getNoTradeAnalysis = async (userId: string, limit: number = 20): Pr
           row.waiting_for = null;
         }
       }
-      
+
       return row;
     });
   } catch (error) {
@@ -463,7 +497,7 @@ export const createUserSubscription = async (
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')`,
     [id, userId, packageId, planName, planName, coinsAdded, price, analysisLimit, expiresAt, autoRenew]
   );
-  
+
   // Update user data
   const user = await getUserById(userId);
   if (user) {
@@ -484,7 +518,7 @@ export const getUserActiveSubscription = async (userId: string): Promise<any> =>
        ORDER BY s.started_at DESC LIMIT 1`,
       [userId]
     );
-    
+
     const subscription = result.rows[0] || null;
     if (subscription && subscription.features && typeof subscription.features === 'string') {
       try {
@@ -522,7 +556,7 @@ export const expireUserSubscription = async (userId: string): Promise<void> => {
     `UPDATE subscriptions SET status = 'expired' WHERE user_id = $1 AND status = 'active'`,
     [userId]
   );
-  
+
   await query(
     `UPDATE users SET subscription = 'free', subscription_expiry = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
     [userId]
@@ -546,7 +580,7 @@ export const getExpiredSubscriptions = async (): Promise<any[]> => {
 // ===================== Analysis Usage Tracking =====================
 export const incrementAnalysisUsage = async (userId: string): Promise<boolean> => {
   const today = new Date().toISOString().split('T')[0];
-  
+
   try {
     // محاولة إدراج سجل جديد
     await query(
@@ -584,7 +618,7 @@ export const canUserAnalyze = async (userId: string): Promise<{ canAnalyze: bool
   }
 
   const activeSubscription = await getUserActiveSubscription(userId);
-  
+
   if (!activeSubscription) {
     if (user.coins < 50) {
       return { canAnalyze: false, reason: 'رصيد العملات غير كافٍ (مطلوب 50 عملة)' };
@@ -598,18 +632,18 @@ export const canUserAnalyze = async (userId: string): Promise<{ canAnalyze: bool
 
   const dailyUsage = await getUserDailyAnalysisCount(userId);
   const remainingAnalyses = Math.max(0, activeSubscription.analysis_limit - dailyUsage);
-  
+
   if (remainingAnalyses <= 0) {
-    return { 
-      canAnalyze: false, 
+    return {
+      canAnalyze: false,
       reason: `تم استنفاد حد التحليلات اليومي (${activeSubscription.analysis_limit})`,
       remainingAnalyses: 0
     };
   }
 
-  return { 
-    canAnalyze: true, 
-    remainingAnalyses 
+  return {
+    canAnalyze: true,
+    remainingAnalyses
   };
 };
 
@@ -621,18 +655,18 @@ export const createSession = async (userId: string, token: string, deviceInfo?: 
       'UPDATE sessions SET is_active = FALSE WHERE user_id = $1 AND is_active = TRUE',
       [userId]
     );
-    
+
     // إنشاء جلسة جديدة
     const sessionId = uuidv4();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
-    
+
     await query(
       `INSERT INTO sessions (id, user_id, token, device_info, ip_address, is_active, expires_at) 
        VALUES ($1, $2, $3, $4, $5, TRUE, $6)`,
       [sessionId, userId, token, deviceInfo || null, ipAddress || null, expiresAt.toISOString()]
     );
-    
+
     console.log(`✅ New session created for user ${userId}, old sessions terminated`);
     return sessionId;
   } catch (error) {
@@ -648,25 +682,25 @@ export const validateSession = async (token: string): Promise<{ valid: boolean; 
        WHERE token = $1 AND is_active = TRUE`,
       [token]
     );
-    
+
     const session = result.rows[0];
     if (!session) {
       return { valid: false };
     }
-    
+
     // التحقق من انتهاء الصلاحية
     const expiresAt = new Date(session.expires_at);
     if (expiresAt < new Date()) {
       await query('UPDATE sessions SET is_active = FALSE WHERE id = $1', [session.id]);
       return { valid: false };
     }
-    
+
     // تحديث آخر نشاط
     await query(
       'UPDATE sessions SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
       [session.id]
     );
-    
+
     return {
       valid: true,
       userId: session.user_id,
@@ -723,7 +757,7 @@ export const cleanupExpiredSessions = async (): Promise<number> => {
        WHERE is_active = TRUE AND expires_at < CURRENT_TIMESTAMP
        RETURNING id`
     );
-    
+
     const count = result.rowCount || 0;
     if (count > 0) {
       console.log(`🧹 Cleaned up ${count} expired sessions`);
