@@ -23,8 +23,15 @@ export const sendPushNotifications = async (
     mutableContent?: boolean;
   }
 ): Promise<{ success: boolean; tickets: ExpoPushTicket[] }> => {
-  // فلترة التوكنات الصالحة فقط
-  const validTokens = pushTokens.filter(token => Expo.isExpoPushToken(token));
+  // فلترة وتنظيف التوكنات الصالحة فقط
+  const validTokens = pushTokens
+    .map(token => token.trim()) // إزالة المسافات البادئة والزاحفة
+    .filter(token => {
+      // إصلاح التوكنات التي تحتوي على مسافات داخل القوسين
+      const fixedToken = token.replace('ExponentPushToken[ ', 'ExponentPushToken[');
+      return Expo.isExpoPushToken(fixedToken);
+    })
+    .map(token => token.replace('ExponentPushToken[ ', 'ExponentPushToken[')); // إصلاح الفعلي
 
   if (validTokens.length === 0) {
     console.log('⚠️ No valid Expo push tokens to send');
@@ -152,9 +159,13 @@ export const sendNoTradeNotification = async (
   return result.success;
 };
 
-// التحقق من صحة Push Token
+// التحقق من صحة Push Token مع إصلاح التنسيق
 export const isValidPushToken = (token: string): boolean => {
-  return Expo.isExpoPushToken(token);
+  if (!token) return false;
+  
+  // تنظيف التوكن أولاً
+  const cleanToken = token.trim().replace('ExponentPushToken[ ', 'ExponentPushToken[');
+  return Expo.isExpoPushToken(cleanToken);
 };
 
 export default {

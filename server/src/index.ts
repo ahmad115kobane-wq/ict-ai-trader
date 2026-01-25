@@ -411,10 +411,13 @@ app.get('/set-push-token', async (req, res) => {
       return res.status(400).json({ error: 'email and token required. Usage: /set-push-token?email=a@a.a&token=ExponentPushToken[xxx]' });
     }
 
+    // تنظيف وتصحيح تنسيق التوكن
+    const cleanToken = (token as string).trim().replace('ExponentPushToken[ ', 'ExponentPushToken[');
+
     const { query } = await import('./db/postgresAdapter');
     await query(
       'UPDATE users SET push_token = $1, push_token_updated_at = CURRENT_TIMESTAMP WHERE email = $2',
-      [token, email]
+      [cleanToken, email]
     );
 
     res.json({ success: true, message: `Push token set for ${email}` });

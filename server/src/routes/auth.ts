@@ -394,16 +394,19 @@ router.post('/register-push-token', authMiddleware, async (req: AuthRequest, res
       return res.status(400).json({ success: false, error: 'Push token مطلوب' });
     }
     
+    // تنظيف وتصحيح تنسيق التوكن
+    const cleanToken = pushToken.trim().replace('ExponentPushToken[ ', 'ExponentPushToken[');
+    
     // التحقق من صحة التوكن
-    if (!isValidPushToken(pushToken)) {
+    if (!isValidPushToken(cleanToken)) {
       return res.status(400).json({ 
         success: false, 
         error: 'Push token غير صالح - يجب أن يكون Expo Push Token' 
       });
     }
     
-    // حفظ التوكن
-    const success = await setUserPushToken(userId, pushToken);
+    // حفظ التوكن المنظف
+    const success = await setUserPushToken(userId, cleanToken);
     
     if (success) {
       console.log(`📱 Push token registered for user ${userId}`);
