@@ -293,16 +293,26 @@ app.get('/send-test-trade', async (req, res) => {
     console.log(`✅ TP: ${mockAnalysis.suggestedTrade.tp}`);
     console.log(`⏰ Mobile app will receive this in next poll (within 10 seconds)`);
 
-    // حفظ في قاعدة البيانات أيضاً
-    const testAnalysisId = uuidv4();
-    saveEnhancedAnalysis(
-      testAnalysisId,
-      'test-notification-system',
-      symbol,
-      currentPrice,
-      mockAnalysis,
-      'manual' // نوع التحليل: manual أو auto
-    );
+    // حفظ في قاعدة البيانات لجميع المستخدمين المشتركين
+    try {
+      const { getUsersWithAutoAnalysisEnabled } = await import('./db/index');
+      const usersWithAutoAnalysis = await getUsersWithAutoAnalysisEnabled();
+      
+      for (const user of usersWithAutoAnalysis) {
+        const testAnalysisId = uuidv4();
+        saveEnhancedAnalysis(
+          testAnalysisId,
+          user.id,
+          symbol,
+          currentPrice,
+          mockAnalysis,
+          'auto' // نوع التحليل: auto لتظهر في السجلات
+        );
+      }
+      console.log(`💾 Test trade saved for ${usersWithAutoAnalysis.length} users`);
+    } catch (saveError) {
+      console.error('❌ Failed to save test trade:', saveError);
+    }
 
     // إرسال إشعار Telegram أيضاً (اختياري)
     try {
