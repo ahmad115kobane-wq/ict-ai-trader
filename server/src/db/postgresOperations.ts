@@ -73,7 +73,7 @@ export const getUsersWithAutoAnalysisEnabled = async (): Promise<any[]> => {
         AND u.subscription IS NOT NULL 
         AND u.subscription != ''
         AND u.subscription != 'free'
-        AND (u.subscription_expiry IS NULL OR u.subscription_expiry > CURRENT_TIMESTAMP)
+        AND (u.subscription_expiry IS NULL OR u.subscription_expiry::timestamp > CURRENT_TIMESTAMP)
     `);
     console.log(`👥 Found ${result.rows.length} users with paid subscriptions and auto analysis enabled`);
     return result.rows;
@@ -120,7 +120,7 @@ export const getUsersWithPushTokens = async (): Promise<any[]> => {
         AND u.subscription IS NOT NULL 
         AND u.subscription != ''
         AND u.subscription != 'free'
-        AND (u.subscription_expiry IS NULL OR u.subscription_expiry > CURRENT_TIMESTAMP)
+        AND (u.subscription_expiry IS NULL OR u.subscription_expiry::timestamp > CURRENT_TIMESTAMP)
     `);
     console.log(`📱 Found ${result.rows.length} users with paid subscriptions and push tokens`);
     result.rows.forEach((u: any) => console.log(`  - ${u.email}: ${u.subscription}`));
