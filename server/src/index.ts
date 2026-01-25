@@ -359,6 +359,40 @@ app.get('/send-test-trade', async (req, res) => {
   }
 });
 
+// Debug endpoint - لفحص المستخدمين في قاعدة البيانات
+app.get('/debug-users', async (req, res) => {
+  try {
+    const { query } = await import('./db/postgresAdapter');
+    
+    // جلب جميع المستخدمين مع معلوماتهم
+    const allUsers = await query(`
+      SELECT id, email, subscription, auto_analysis_enabled, 
+             push_token IS NOT NULL as has_push_token,
+             LEFT(push_token, 30) as push_token_preview
+      FROM users
+    `);
+    
+    // جلب المستخدمين المؤهلين للإشعارات
+    const eligibleUsers = await query(`
+      SELECT u.id, u.email, u.subscription, u.auto_analysis_enabled
+      FROM users u
+      WHERE u.push_token IS NOT NULL 
+        AND u.push_token != '' 
+        AND u.auto_analysis_enabled = TRUE
+    `);
+    
+    res.json({
+      totalUsers: allUsers.rows.length,
+      users: allUsers.rows,
+      eligibleForPush: eligibleUsers.rows.length,
+      eligibleUsers: eligibleUsers.rows,
+      note: 'لتلقي الإشعارات: يجب أن يكون push_token موجود + auto_analysis_enabled = true + اشتراك نشط'
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 // Test page
 app.get('/test', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'test-api.html'));
