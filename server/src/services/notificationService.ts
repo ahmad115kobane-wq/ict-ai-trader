@@ -47,7 +47,7 @@ export const notifyTradeOpportunity = async (analysis: any, currentPrice: number
   const trade = analysis.suggestedTrade;
   const type = trade.type.includes('BUY') ? 'شراء 🟢' : 'بيع 🔴';
   const rrRatio = trade.rrRatio || 'غير محدد';
-  
+
   const message = `
 🚨 <b>فرصة تداول جديدة على الذهب!</b>
 
@@ -66,7 +66,7 @@ export const notifyTradeOpportunity = async (analysis: any, currentPrice: number
   `.trim();
 
   await sendTelegramNotification(message);
-  
+
   // يمكن إضافة إشعارات أخرى هنا (Email, SMS, etc.)
   console.log('📱 Trade opportunity notification sent to subscribers');
 };
@@ -75,7 +75,7 @@ export const notifyTradeOpportunity = async (analysis: any, currentPrice: number
 export const notifyNoTrade = async (analysis: any, currentPrice: number): Promise<void> => {
   // يمكن تعطيل هذا لتجنب الإزعاج
   const SEND_NO_TRADE_NOTIFICATIONS = false;
-  
+
   if (!SEND_NO_TRADE_NOTIFICATIONS) {
     return;
   }

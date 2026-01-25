@@ -65,7 +65,23 @@ export const setUserAutoAnalysis = async (userId: string, enabled: boolean): Pro
 
 export const getUsersWithAutoAnalysisEnabled = async (): Promise<any[]> => {
   try {
-    const result = await query('SELECT * FROM users WHERE auto_analysis_enabled = TRUE');
+    // جلب المستخدمين الذين لديهم auto_analysis مفعل واشتراك نشط
+    const result = await query(`
+      SELECT u.* 
+      FROM users u
+      WHERE u.auto_analysis_enabled = TRUE
+        AND (
+          u.subscription = 'vip' 
+          OR u.subscription = 'premium'
+          OR EXISTS (
+            SELECT 1 FROM subscriptions s 
+            WHERE s.user_id = u.id 
+              AND s.status = 'active' 
+              AND s.expires_at > CURRENT_TIMESTAMP
+          )
+        )
+    `);
+    console.log(`👥 Found ${result.rows.length} users with active subscriptions and auto analysis enabled`);
     return result.rows;
   } catch (error) {
     console.error('Error getting users with auto analysis:', error);
@@ -100,9 +116,25 @@ export const getUserPushToken = async (userId: string): Promise<string | null> =
 
 export const getUsersWithPushTokens = async (): Promise<any[]> => {
   try {
-    const result = await query(
-      'SELECT id, email, push_token FROM users WHERE push_token IS NOT NULL AND push_token != \'\' AND auto_analysis_enabled = TRUE'
-    );
+    // جلب المستخدمين الذين لديهم push token و auto_analysis مفعل واشتراك نشط
+    const result = await query(`
+      SELECT u.id, u.email, u.push_token, u.subscription 
+      FROM users u
+      WHERE u.push_token IS NOT NULL 
+        AND u.push_token != '' 
+        AND u.auto_analysis_enabled = TRUE
+        AND (
+          u.subscription = 'vip' 
+          OR u.subscription = 'premium'
+          OR EXISTS (
+            SELECT 1 FROM subscriptions s 
+            WHERE s.user_id = u.id 
+              AND s.status = 'active' 
+              AND s.expires_at > CURRENT_TIMESTAMP
+          )
+        )
+    `);
+    console.log(`📱 Found ${result.rows.length} users with active subscriptions and push tokens`);
     return result.rows;
   } catch (error) {
     console.error('Error getting users with push tokens:', error);

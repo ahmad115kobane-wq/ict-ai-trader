@@ -152,7 +152,7 @@ export const getAvailablePackages = async (): Promise<VipPackage[]> => {
     coinsIncluded: pkg.coins_included,
     analysisLimit: pkg.analysis_limit,
     features: pkg.features || [],
-    isActive: pkg.is_active === 1
+    isActive: pkg.is_active === true || pkg.is_active === 1
   }));
 };
 
@@ -173,7 +173,7 @@ export const getPackageDetails = async (packageId: string): Promise<VipPackage |
     coinsIncluded: pkg.coins_included,
     analysisLimit: pkg.analysis_limit,
     features: pkg.features || [],
-    isActive: pkg.is_active === 1
+    isActive: pkg.is_active === true || pkg.is_active === 1
   };
 };
 

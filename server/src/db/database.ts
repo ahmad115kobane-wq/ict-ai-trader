@@ -346,13 +346,33 @@ export const setUserAutoAnalysis = (userId: string, enabled: boolean): boolean =
   }
 };
 
-// الحصول على جميع المستخدمين الذين لديهم التحليل التلقائي مفعل
+// الحصول على جميع المستخدمين الذين لديهم التحليل التلقائي مفعل واشتراك نشط
 export const getUsersWithAutoAnalysisEnabled = (): any[] => {
   if (!db) return [];
   try {
-    const result = db.exec('SELECT * FROM users WHERE auto_analysis_enabled = 1');
-    if (result.length === 0 || result[0].values.length === 0) return [];
-    return result[0].values.map(row => rowToObject(result[0].columns, row));
+    // جلب المستخدمين الذين لديهم auto_analysis مفعل واشتراك نشط
+    const result = db.exec(`
+      SELECT u.* 
+      FROM users u
+      WHERE u.auto_analysis_enabled = 1
+        AND (
+          u.subscription = 'vip' 
+          OR u.subscription = 'premium'
+          OR EXISTS (
+            SELECT 1 FROM subscriptions s 
+            WHERE s.user_id = u.id 
+              AND s.status = 'active' 
+              AND datetime(s.expires_at) > datetime('now')
+          )
+        )
+    `);
+    if (result.length === 0 || result[0].values.length === 0) {
+      console.log('👥 No users with active subscriptions and auto analysis enabled');
+      return [];
+    }
+    const users = result[0].values.map(row => rowToObject(result[0].columns, row));
+    console.log(`👥 Found ${users.length} users with active subscriptions and auto analysis enabled`);
+    return users;
   } catch (error) {
     console.error('Error getting users with auto analysis:', error);
     return [];
@@ -391,11 +411,31 @@ export const getUserPushToken = (userId: string): string | null => {
 export const getUsersWithPushTokens = (): any[] => {
   if (!db) return [];
   try {
-    const result = db.exec(
-      "SELECT id, email, push_token FROM users WHERE push_token IS NOT NULL AND push_token != '' AND auto_analysis_enabled = 1"
-    );
-    if (result.length === 0 || result[0].values.length === 0) return [];
-    return result[0].values.map(row => rowToObject(result[0].columns, row));
+    // جلب المستخدمين الذين لديهم push token و auto_analysis مفعل واشتراك نشط
+    const result = db.exec(`
+      SELECT u.id, u.email, u.push_token, u.subscription 
+      FROM users u
+      WHERE u.push_token IS NOT NULL 
+        AND u.push_token != '' 
+        AND u.auto_analysis_enabled = 1
+        AND (
+          u.subscription = 'vip' 
+          OR u.subscription = 'premium'
+          OR EXISTS (
+            SELECT 1 FROM subscriptions s 
+            WHERE s.user_id = u.id 
+              AND s.status = 'active' 
+              AND datetime(s.expires_at) > datetime('now')
+          )
+        )
+    `);
+    if (result.length === 0 || result[0].values.length === 0) {
+      console.log('📱 No users with active subscriptions and push tokens found');
+      return [];
+    }
+    const users = result[0].values.map(row => rowToObject(result[0].columns, row));
+    console.log(`📱 Found ${users.length} users with active subscriptions and push tokens`);
+    return users;
   } catch (error) {
     console.error('Error getting users with push tokens:', error);
     return [];

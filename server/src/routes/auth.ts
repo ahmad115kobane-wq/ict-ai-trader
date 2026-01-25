@@ -184,7 +184,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
     subscription: freshUser.subscription,
     subscriptionExpiry: freshUser.subscription_expiry,
     createdAt: freshUser.created_at,
-    autoAnalysisEnabled: freshUser.auto_analysis_enabled === 1,
+    autoAnalysisEnabled: freshUser.auto_analysis_enabled === true || freshUser.auto_analysis_enabled === 1,
     subscriptionStatus: {
       hasActiveSubscription: subscriptionStatus.hasActiveSubscription,
       canAnalyze: subscriptionStatus.canAnalyze,
