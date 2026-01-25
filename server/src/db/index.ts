@@ -33,6 +33,7 @@ export const setUserPushToken = isProduction ? postgresDb.setUserPushToken : wra
 export const getUserPushToken = isProduction ? postgresDb.getUserPushToken : wrapSync(sqliteDb.getUserPushToken);
 export const getUsersWithPushTokens = isProduction ? postgresDb.getUsersWithPushTokens : wrapSync(sqliteDb.getUsersWithPushTokens);
 export const removeUserPushToken = isProduction ? postgresDb.removeUserPushToken : wrapSync(sqliteDb.removeUserPushToken);
+export const removePushTokenByValue = isProduction ? postgresDb.removePushTokenByValue : wrapSync(sqliteDb.removePushTokenByValue);
 
 // Analysis operations
 export const saveAnalysis = isProduction ? postgresDb.saveAnalysis : wrapSync(sqliteDb.saveAnalysis);

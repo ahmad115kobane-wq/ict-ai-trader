@@ -25,7 +25,7 @@ export const sendPushNotifications = async (
 ): Promise<{ success: boolean; tickets: ExpoPushTicket[] }> => {
   // فلترة التوكنات الصالحة فقط
   const validTokens = pushTokens.filter(token => Expo.isExpoPushToken(token));
-  
+
   if (validTokens.length === 0) {
     console.log('⚠️ No valid Expo push tokens to send');
     return { success: false, tickets: [] };
@@ -64,7 +64,7 @@ export const sendPushNotifications = async (
     try {
       const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
       tickets.push(...ticketChunk);
-      
+
       // التحقق من حالة كل تذكرة
       ticketChunk.forEach((ticket, index) => {
         if (ticket.status === 'ok') {
@@ -100,10 +100,10 @@ export const sendTradeNotification = async (
   const isBuy = trade.type.includes('BUY');
   const emoji = isBuy ? '🟢' : '🔴';
   const direction = isBuy ? 'شراء' : 'بيع';
-  
+
   const title = `${emoji} فرصة ${direction} على الذهب!`;
   const body = `💰 الدخول: ${trade.entry.toFixed(2)} | 🛑 SL: ${trade.sl.toFixed(2)} | ✅ TP: ${trade.tp.toFixed(2)} | ⭐ التقييم: ${score}/10`;
-  
+
   const data = {
     type: 'trade_opportunity',
     tradeType: trade.type,
@@ -124,11 +124,11 @@ export const sendTradeNotification = async (
     categoryId: 'TRADE_ALERT',
     mutableContent: true,
   });
-  
+
   if (result.success) {
     console.log(`📱 Persistent trade notification sent to ${pushTokens.length} devices`);
   }
-  
+
   return result.success;
 };
 
@@ -140,7 +140,7 @@ export const sendNoTradeNotification = async (
 ): Promise<boolean> => {
   const title = '⏳ تحليل تلقائي جديد';
   const body = `لا توجد فرصة: ${reason.substring(0, 80)} | النقاط: ${score}/10`;
-  
+
   const data = {
     type: 'no_trade',
     reason,

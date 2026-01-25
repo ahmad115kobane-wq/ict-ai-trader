@@ -17,26 +17,26 @@ console.log('📂 Current working directory:', process.cwd());
 // تحديث هيكل قاعدة البيانات للنسخة الجديدة
 const updateDatabaseSchema = async (): Promise<void> => {
   if (!db) return;
-  
+
   console.log('🔄 Checking and updating database schema...');
-  
+
   try {
     // التحقق من وجود حقل auto_analysis_enabled في جدول users
     const usersColumns = db.exec("PRAGMA table_info(users)");
     const userColumnNames = usersColumns[0]?.values.map(row => row[1]) || [];
-    
+
     if (!userColumnNames.includes('auto_analysis_enabled')) {
       console.log('🔧 Adding auto_analysis_enabled column to users table...');
       db.run('ALTER TABLE users ADD COLUMN auto_analysis_enabled BOOLEAN DEFAULT 0');
       db.run('ALTER TABLE users ADD COLUMN auto_analysis_enabled_at TEXT');
     }
-    
+
     // التحقق من وجود جدول vip_packages
     const tablesResult = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='vip_packages'");
-    
+
     if (tablesResult.length === 0 || tablesResult[0].values.length === 0) {
       console.log('📦 Creating vip_packages table...');
-      
+
       // إنشاء جدول الباقات
       db.run(`
         CREATE TABLE vip_packages (
@@ -56,20 +56,20 @@ const updateDatabaseSchema = async (): Promise<void> => {
         )
       `);
     }
-    
+
     // التحقق من وجود الأعمدة الجديدة في جدول subscriptions
     const subscriptionsColumns = db.exec("PRAGMA table_info(subscriptions)");
     const columnNames = subscriptionsColumns[0]?.values.map(row => row[1]) || [];
-    
+
     if (!columnNames.includes('package_id')) {
       console.log('🔧 Adding new columns to subscriptions table...');
-      
+
       // إضافة الأعمدة الجديدة
       db.run('ALTER TABLE subscriptions ADD COLUMN package_id TEXT');
       db.run('ALTER TABLE subscriptions ADD COLUMN plan_name TEXT');
       db.run('ALTER TABLE subscriptions ADD COLUMN analysis_limit INTEGER DEFAULT -1');
       db.run('ALTER TABLE subscriptions ADD COLUMN auto_renew BOOLEAN DEFAULT 0');
-      
+
       // تحديث البيانات الموجودة
       db.run(`UPDATE subscriptions SET 
         plan_name = plan,
@@ -80,13 +80,13 @@ const updateDatabaseSchema = async (): Promise<void> => {
         END
         WHERE plan_name IS NULL`);
     }
-    
+
     // التحقق من وجود جدول analysis_usage
     const analysisUsageResult = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='analysis_usage'");
-    
+
     if (analysisUsageResult.length === 0 || analysisUsageResult[0].values.length === 0) {
       console.log('📊 Creating analysis_usage table...');
-      
+
       db.run(`
         CREATE TABLE analysis_usage (
           id TEXT PRIMARY KEY,
@@ -98,13 +98,13 @@ const updateDatabaseSchema = async (): Promise<void> => {
         )
       `);
     }
-    
+
     // إنشاء جدول تحليلات محسن مع تفاصيل كاملة
     const enhancedAnalysisResult = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='enhanced_analysis_history'");
-    
+
     if (enhancedAnalysisResult.length === 0 || enhancedAnalysisResult[0].values.length === 0) {
       console.log('📊 Creating enhanced_analysis_history table...');
-      
+
       db.run(`
         CREATE TABLE enhanced_analysis_history (
           id TEXT PRIMARY KEY,
@@ -141,16 +141,16 @@ const updateDatabaseSchema = async (): Promise<void> => {
           updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
       `);
-      
+
       // إنشاء فهارس للبحث السريع
       db.run(`CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_user_date ON enhanced_analysis_history(user_id, created_at DESC)`);
       db.run(`CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_decision ON enhanced_analysis_history(decision)`);
       db.run(`CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_type ON enhanced_analysis_history(analysis_type)`);
     }
-    
+
     saveDatabase();
     console.log('✅ Database schema updated successfully');
-    
+
   } catch (error) {
     console.error('❌ Error updating database schema:', error);
   }
@@ -161,7 +161,7 @@ export const initDatabase = async (): Promise<void> => {
     console.log('🔄 Initializing database...');
     console.log('📂 Data directory:', dataDir);
     console.log('📂 Database path:', dbPath);
-    
+
     // إنشاء مجلد البيانات
     if (!fs.existsSync(dataDir)) {
       console.log('📁 Creating data directory...');
@@ -173,7 +173,7 @@ export const initDatabase = async (): Promise<void> => {
 
     const SQL = await initSqlJs();
     console.log('✅ SQL.js initialized');
-    
+
     // تحميل قاعدة البيانات الموجودة أو إنشاء جديدة
     if (fs.existsSync(dbPath)) {
       console.log('📖 Loading existing database...');
@@ -186,8 +186,8 @@ export const initDatabase = async (): Promise<void> => {
       console.log('✅ New database created');
     }
 
-  // إنشاء الجداول الأساسية (النسخة القديمة للتوافق)
-  db.run(`
+    // إنشاء الجداول الأساسية (النسخة القديمة للتوافق)
+    db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
@@ -200,7 +200,7 @@ export const initDatabase = async (): Promise<void> => {
     )
   `);
 
-  db.run(`
+    db.run(`
     CREATE TABLE IF NOT EXISTS analysis_history (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -215,7 +215,7 @@ export const initDatabase = async (): Promise<void> => {
     )
   `);
 
-  db.run(`
+    db.run(`
     CREATE TABLE IF NOT EXISTS subscriptions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -228,7 +228,7 @@ export const initDatabase = async (): Promise<void> => {
     )
   `);
 
-  db.run(`
+    db.run(`
     CREATE TABLE IF NOT EXISTS auto_analysis (
       id TEXT PRIMARY KEY,
       symbol TEXT NOT NULL,
@@ -241,8 +241,8 @@ export const initDatabase = async (): Promise<void> => {
     )
   `);
 
-  // جدول الجلسات - للسماح بجلسة واحدة نشطة فقط
-  db.run(`
+    // جدول الجلسات - للسماح بجلسة واحدة نشطة فقط
+    db.run(`
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -255,16 +255,16 @@ export const initDatabase = async (): Promise<void> => {
       expires_at TEXT NOT NULL
     )
   `);
-  
-  // فهرس للبحث السريع عن الجلسات النشطة
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user_active ON sessions(user_id, is_active)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`);
 
-  // تحديث هيكل قاعدة البيانات للنسخة الجديدة
-  await updateDatabaseSchema();
+    // فهرس للبحث السريع عن الجلسات النشطة
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user_active ON sessions(user_id, is_active)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`);
 
-  saveDatabase();
-  console.log('✅ Database initialized successfully');
+    // تحديث هيكل قاعدة البيانات للنسخة الجديدة
+    await updateDatabaseSchema();
+
+    saveDatabase();
+    console.log('✅ Database initialized successfully');
   } catch (error) {
     console.error('❌ Failed to initialize database:', error);
     throw error;
@@ -418,6 +418,27 @@ export const removeUserPushToken = (userId: string): boolean => {
   }
 };
 
+export const removePushTokenByValue = (token: string): boolean => {
+  if (!db) return false;
+  try {
+    const result = db.exec("SELECT id FROM users WHERE push_token = ?", [token]);
+    if (result.length === 0 || result[0].values.length === 0) return false;
+
+    const userId = result[0].values[0][0] as string;
+
+    db.run(
+      'UPDATE users SET push_token = NULL, push_token_updated_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE push_token = ?',
+      [token]
+    );
+    saveDatabase();
+    console.log(`✅ Invalid push token removed for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error removing push token by value:', error);
+    return false;
+  }
+};
+
 // ===================== Analysis Operations =====================
 export const saveAnalysis = (
   id: string,
@@ -461,9 +482,9 @@ export const saveEnhancedAnalysis = (
   m5ImagePath?: string
 ) => {
   if (!db) return;
-  
+
   const suggestedTrade = analysis.suggestedTrade;
-  
+
   db.run(
     `INSERT INTO enhanced_analysis_history (
       id, user_id, symbol, current_price, decision, score, confidence, 
@@ -505,7 +526,7 @@ export const saveEnhancedAnalysis = (
 
 export const getEnhancedAnalysisHistory = (userId: string, limit: number = 50): any[] => {
   if (!db) return [];
-  
+
   try {
     const result = db.exec(
       `SELECT * FROM enhanced_analysis_history 
@@ -514,12 +535,12 @@ export const getEnhancedAnalysisHistory = (userId: string, limit: number = 50): 
        LIMIT ?`,
       [userId, limit]
     );
-    
+
     if (result.length === 0) return [];
-    
+
     return result[0].values.map((row: any) => {
       const analysis = rowToObject(result[0].columns, row);
-      
+
       // تحويل JSON strings إلى objects
       if (analysis.suggested_trade) {
         try {
@@ -528,7 +549,7 @@ export const getEnhancedAnalysisHistory = (userId: string, limit: number = 50): 
           analysis.suggested_trade = null;
         }
       }
-      
+
       if (analysis.key_levels) {
         try {
           analysis.key_levels = JSON.parse(analysis.key_levels);
@@ -536,7 +557,7 @@ export const getEnhancedAnalysisHistory = (userId: string, limit: number = 50): 
           analysis.key_levels = [];
         }
       }
-      
+
       if (analysis.waiting_for) {
         try {
           analysis.waiting_for = JSON.parse(analysis.waiting_for);
@@ -544,7 +565,7 @@ export const getEnhancedAnalysisHistory = (userId: string, limit: number = 50): 
           analysis.waiting_for = null;
         }
       }
-      
+
       if (analysis.reasons) {
         try {
           analysis.reasons = JSON.parse(analysis.reasons);
@@ -552,7 +573,7 @@ export const getEnhancedAnalysisHistory = (userId: string, limit: number = 50): 
           analysis.reasons = [];
         }
       }
-      
+
       return analysis;
     });
   } catch (error) {
@@ -563,7 +584,7 @@ export const getEnhancedAnalysisHistory = (userId: string, limit: number = 50): 
 
 export const getTradeHistory = (userId: string, limit: number = 20): any[] => {
   if (!db) return [];
-  
+
   try {
     const result = db.exec(
       `SELECT * FROM enhanced_analysis_history 
@@ -572,12 +593,12 @@ export const getTradeHistory = (userId: string, limit: number = 20): any[] => {
        LIMIT ?`,
       [userId, limit]
     );
-    
+
     if (result.length === 0) return [];
-    
+
     return result[0].values.map((row: any) => {
       const trade = rowToObject(result[0].columns, row);
-      
+
       if (trade.suggested_trade) {
         try {
           trade.suggested_trade = JSON.parse(trade.suggested_trade);
@@ -585,7 +606,7 @@ export const getTradeHistory = (userId: string, limit: number = 20): any[] => {
           trade.suggested_trade = null;
         }
       }
-      
+
       return trade;
     });
   } catch (error) {
@@ -596,7 +617,7 @@ export const getTradeHistory = (userId: string, limit: number = 20): any[] => {
 
 export const getNoTradeAnalysis = (userId: string, limit: number = 20): any[] => {
   if (!db) return [];
-  
+
   try {
     const result = db.exec(
       `SELECT * FROM enhanced_analysis_history 
@@ -605,12 +626,12 @@ export const getNoTradeAnalysis = (userId: string, limit: number = 20): any[] =>
        LIMIT ?`,
       [userId, limit]
     );
-    
+
     if (result.length === 0) return [];
-    
+
     return result[0].values.map((row: any) => {
       const analysis = rowToObject(result[0].columns, row);
-      
+
       if (analysis.reasons) {
         try {
           analysis.reasons = JSON.parse(analysis.reasons);
@@ -618,7 +639,7 @@ export const getNoTradeAnalysis = (userId: string, limit: number = 20): any[] =>
           analysis.reasons = [];
         }
       }
-      
+
       if (analysis.waiting_for) {
         try {
           analysis.waiting_for = JSON.parse(analysis.waiting_for);
@@ -626,7 +647,7 @@ export const getNoTradeAnalysis = (userId: string, limit: number = 20): any[] =>
           analysis.waiting_for = null;
         }
       }
-      
+
       return analysis;
     });
   } catch (error) {
@@ -637,7 +658,7 @@ export const getNoTradeAnalysis = (userId: string, limit: number = 20): any[] =>
 
 export const updateTradeResult = (analysisId: string, result: string, pnl?: number) => {
   if (!db) return;
-  
+
   db.run(
     `UPDATE enhanced_analysis_history 
      SET is_trade_executed = 1, trade_result = ?, pnl = ?, updated_at = CURRENT_TIMESTAMP 
@@ -734,7 +755,7 @@ export const createUserSubscription = (
   autoRenew: boolean = false
 ) => {
   if (!db) return;
-  
+
   // Check what columns exist in the subscriptions table
   let hasNewColumns = false;
   try {
@@ -744,7 +765,7 @@ export const createUserSubscription = (
   } catch (error) {
     console.log('Could not check table structure for subscription creation, using fallback');
   }
-  
+
   try {
     if (hasNewColumns) {
       // Use new schema with all columns
@@ -761,7 +782,7 @@ export const createUserSubscription = (
         [id, userId, planName, coinsAdded, price, expiresAt]
       );
     }
-    
+
     // Update user data
     const user = getUserById(userId);
     if (user) {
@@ -779,7 +800,7 @@ export const createUserSubscription = (
 
 export const getUserActiveSubscription = (userId: string): any => {
   if (!db) return null;
-  
+
   // First check what columns exist in the subscriptions table
   let hasNewColumns = false;
   try {
@@ -789,7 +810,7 @@ export const getUserActiveSubscription = (userId: string): any => {
   } catch (error) {
     console.log('Could not check table structure, using fallback');
   }
-  
+
   try {
     if (hasNewColumns) {
       // Use new schema with proper column names
@@ -801,7 +822,7 @@ export const getUserActiveSubscription = (userId: string): any => {
          ORDER BY s.started_at DESC LIMIT 1`,
         [userId]
       );
-      
+
       if (result.length > 0 && result[0].values.length > 0) {
         const subscription = rowToObject(result[0].columns, result[0].values[0]);
         subscription.features = subscription.features ? JSON.parse(subscription.features) : [];
@@ -816,7 +837,7 @@ export const getUserActiveSubscription = (userId: string): any => {
          ORDER BY started_at DESC LIMIT 1`,
         [userId]
       );
-      
+
       if (result.length > 0 && result[0].values.length > 0) {
         const subscription = rowToObject(result[0].columns, result[0].values[0]);
         subscription.features = [];
@@ -826,7 +847,7 @@ export const getUserActiveSubscription = (userId: string): any => {
     }
   } catch (error) {
     console.error('Active subscription query failed:', error);
-    
+
     // Final fallback - basic query without datetime checks
     try {
       const result = db.exec(
@@ -835,7 +856,7 @@ export const getUserActiveSubscription = (userId: string): any => {
          ORDER BY started_at DESC LIMIT 1`,
         [userId]
       );
-      
+
       if (result.length > 0 && result[0].values.length > 0) {
         const subscription = rowToObject(result[0].columns, result[0].values[0]);
         subscription.plan_name = subscription.plan || 'free';
@@ -849,13 +870,13 @@ export const getUserActiveSubscription = (userId: string): any => {
       console.error('All subscription queries failed:', basicError);
     }
   }
-  
+
   return null;
 };
 
 export const getUserSubscriptionHistory = (userId: string, limit: number = 10): any[] => {
   if (!db) return [];
-  
+
   // Check what columns exist in the subscriptions table
   let hasNewColumns = false;
   try {
@@ -865,7 +886,7 @@ export const getUserSubscriptionHistory = (userId: string, limit: number = 10): 
   } catch (error) {
     console.log('Could not check table structure for history, using fallback');
   }
-  
+
   try {
     if (hasNewColumns) {
       // Use new schema
@@ -877,7 +898,7 @@ export const getUserSubscriptionHistory = (userId: string, limit: number = 10): 
          ORDER BY s.started_at DESC LIMIT ?`,
         [userId, limit]
       );
-      
+
       if (result.length > 0) {
         return result[0].values.map((row: any) => rowToObject(result[0].columns, row));
       }
@@ -890,7 +911,7 @@ export const getUserSubscriptionHistory = (userId: string, limit: number = 10): 
          ORDER BY started_at DESC LIMIT ?`,
         [userId, limit]
       );
-      
+
       if (result.length > 0) {
         return result[0].values.map((row: any) => {
           const subscription = rowToObject(result[0].columns, row);
@@ -901,7 +922,7 @@ export const getUserSubscriptionHistory = (userId: string, limit: number = 10): 
     }
   } catch (error) {
     console.error('Subscription history query failed:', error);
-    
+
     // Final fallback - basic query
     try {
       const result = db.exec(
@@ -910,7 +931,7 @@ export const getUserSubscriptionHistory = (userId: string, limit: number = 10): 
          ORDER BY started_at DESC LIMIT ?`,
         [userId, limit]
       );
-      
+
       if (result.length > 0) {
         return result[0].values.map((row: any) => {
           const subscription = rowToObject(result[0].columns, row);
@@ -924,31 +945,31 @@ export const getUserSubscriptionHistory = (userId: string, limit: number = 10): 
       console.error('All subscription history queries failed:', basicError);
     }
   }
-  
+
   return [];
 };
 
 export const expireUserSubscription = (userId: string) => {
   if (!db) return;
-  
+
   // تحديث حالة الاشتراك إلى منتهي الصلاحية
   db.run(
     `UPDATE subscriptions SET status = 'expired' WHERE user_id = ? AND status = 'active'`,
     [userId]
   );
-  
+
   // تحديث بيانات المستخدم إلى الباقة المجانية
   db.run(
     `UPDATE users SET subscription = 'free', subscription_expiry = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
     [userId]
   );
-  
+
   saveDatabase();
 };
 
 export const getExpiredSubscriptions = (): any[] => {
   if (!db) return [];
-  
+
   // Check what columns exist in the subscriptions table
   let hasNewColumns = false;
   try {
@@ -958,7 +979,7 @@ export const getExpiredSubscriptions = (): any[] => {
   } catch (error) {
     console.log('Could not check table structure for expired subscriptions, using fallback');
   }
-  
+
   try {
     if (hasNewColumns) {
       // Use new schema
@@ -985,7 +1006,7 @@ export const getExpiredSubscriptions = (): any[] => {
     }
   } catch (error) {
     console.error('Expired subscriptions query failed:', error);
-    
+
     // Final fallback - get all active subscriptions and check expiry in code
     try {
       const result = db.exec(
@@ -994,7 +1015,7 @@ export const getExpiredSubscriptions = (): any[] => {
          WHERE status = 'active'`
       );
       if (result.length === 0) return [];
-      
+
       const now = new Date();
       return result[0].values
         .map((row: any) => rowToObject(result[0].columns, row))
@@ -1021,18 +1042,18 @@ export const getExpiredSubscriptions = (): any[] => {
 // ===================== Analysis Usage Tracking =====================
 export const incrementAnalysisUsage = (userId: string): boolean => {
   if (!db) return false;
-  
+
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-  
+
   try {
     // التحقق من وجود جدول analysis_usage
     const tableExists = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='analysis_usage'");
-    
+
     if (tableExists.length === 0 || tableExists[0].values.length === 0) {
       console.log('Analysis usage table does not exist, skipping usage tracking');
       return true; // نعتبرها نجحت لأن الجدول غير موجود
     }
-    
+
     // محاولة إدراج سجل جديد
     try {
       db.run(
@@ -1048,7 +1069,7 @@ export const incrementAnalysisUsage = (userId: string): boolean => {
         [userId, today]
       );
     }
-    
+
     saveDatabase();
     return true;
   } catch (error) {
@@ -1059,21 +1080,21 @@ export const incrementAnalysisUsage = (userId: string): boolean => {
 
 export const getUserDailyAnalysisCount = (userId: string): number => {
   if (!db) return 0;
-  
+
   try {
     // التحقق من وجود جدول analysis_usage
     const tableExists = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='analysis_usage'");
-    
+
     if (tableExists.length === 0 || tableExists[0].values.length === 0) {
       return 0; // الجدول غير موجود، إرجاع 0
     }
-    
+
     const today = new Date().toISOString().split('T')[0];
     const result = db.exec(
       `SELECT analysis_count FROM analysis_usage WHERE user_id = ? AND analysis_date = ?`,
       [userId, today]
     );
-    
+
     if (result.length === 0 || result[0].values.length === 0) return 0;
     return result[0].values[0][0] as number;
   } catch (error) {
@@ -1090,7 +1111,7 @@ export const canUserAnalyze = (userId: string): { canAnalyze: boolean; reason?: 
 
   // التحقق من الاشتراك النشط
   const activeSubscription = getUserActiveSubscription(userId);
-  
+
   if (!activeSubscription) {
     // مستخدم مجاني - تحقق من العملات
     if (user.coins < 50) {
@@ -1108,18 +1129,18 @@ export const canUserAnalyze = (userId: string): { canAnalyze: boolean; reason?: 
   // تحقق من الاستخدام اليومي
   const dailyUsage = getUserDailyAnalysisCount(userId);
   const remainingAnalyses = Math.max(0, activeSubscription.analysis_limit - dailyUsage);
-  
+
   if (remainingAnalyses <= 0) {
-    return { 
-      canAnalyze: false, 
+    return {
+      canAnalyze: false,
       reason: `تم استنفاد حد التحليلات اليومي (${activeSubscription.analysis_limit})`,
       remainingAnalyses: 0
     };
   }
 
-  return { 
-    canAnalyze: true, 
-    remainingAnalyses 
+  return {
+    canAnalyze: true,
+    remainingAnalyses
   };
 };
 
@@ -1137,28 +1158,28 @@ const rowToObject = (columns: string[], values: any[]): any => {
 // إنشاء جلسة جديدة وإنهاء الجلسات القديمة
 export const createSession = (userId: string, token: string, deviceInfo?: string, ipAddress?: string): string => {
   if (!db) throw new Error('Database not initialized');
-  
+
   try {
     // إنهاء جميع الجلسات النشطة القديمة للمستخدم
     db.run(
       'UPDATE sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1',
       [userId]
     );
-    
+
     // إنشاء جلسة جديدة
     const sessionId = uuidv4();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30); // صلاحية 30 يوم
-    
+
     db.run(
       `INSERT INTO sessions (id, user_id, token, device_info, ip_address, is_active, expires_at) 
        VALUES (?, ?, ?, ?, ?, 1, ?)`,
       [sessionId, userId, token, deviceInfo || null, ipAddress || null, expiresAt.toISOString()]
     );
-    
+
     saveDatabase();
     console.log(`✅ New session created for user ${userId}, old sessions terminated`);
-    
+
     return sessionId;
   } catch (error) {
     console.error('Error creating session:', error);
@@ -1169,20 +1190,20 @@ export const createSession = (userId: string, token: string, deviceInfo?: string
 // التحقق من صلاحية الجلسة
 export const validateSession = (token: string): { valid: boolean; userId?: string; sessionId?: string } => {
   if (!db) return { valid: false };
-  
+
   try {
     const result = db.exec(
       `SELECT id, user_id, is_active, expires_at FROM sessions 
        WHERE token = ? AND is_active = 1`,
       [token]
     );
-    
+
     if (result.length === 0 || result[0].values.length === 0) {
       return { valid: false };
     }
-    
+
     const session = rowToObject(result[0].columns, result[0].values[0]);
-    
+
     // التحقق من انتهاء الصلاحية
     const expiresAt = new Date(session.expires_at);
     if (expiresAt < new Date()) {
@@ -1191,14 +1212,14 @@ export const validateSession = (token: string): { valid: boolean; userId?: strin
       saveDatabase();
       return { valid: false };
     }
-    
+
     // تحديث آخر نشاط
     db.run(
       'UPDATE sessions SET last_activity = CURRENT_TIMESTAMP WHERE id = ?',
       [session.id]
     );
     saveDatabase();
-    
+
     return {
       valid: true,
       userId: session.user_id,
@@ -1213,7 +1234,7 @@ export const validateSession = (token: string): { valid: boolean; userId?: strin
 // إنهاء جلسة محددة
 export const terminateSession = (sessionId: string): boolean => {
   if (!db) return false;
-  
+
   try {
     db.run('UPDATE sessions SET is_active = 0 WHERE id = ?', [sessionId]);
     saveDatabase();
@@ -1228,7 +1249,7 @@ export const terminateSession = (sessionId: string): boolean => {
 // إنهاء جميع جلسات المستخدم
 export const terminateAllUserSessions = (userId: string): boolean => {
   if (!db) return false;
-  
+
   try {
     db.run('UPDATE sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1', [userId]);
     saveDatabase();
@@ -1243,7 +1264,7 @@ export const terminateAllUserSessions = (userId: string): boolean => {
 // الحصول على الجلسات النشطة للمستخدم
 export const getUserActiveSessions = (userId: string): any[] => {
   if (!db) return [];
-  
+
   try {
     const result = db.exec(
       `SELECT id, device_info, ip_address, created_at, last_activity 
@@ -1252,9 +1273,9 @@ export const getUserActiveSessions = (userId: string): any[] => {
        ORDER BY created_at DESC`,
       [userId]
     );
-    
+
     if (result.length === 0) return [];
-    
+
     return result[0].values.map((row: any) => rowToObject(result[0].columns, row));
   } catch (error) {
     console.error('Error getting user sessions:', error);
@@ -1265,15 +1286,15 @@ export const getUserActiveSessions = (userId: string): any[] => {
 // تنظيف الجلسات المنتهية (يمكن تشغيله دورياً)
 export const cleanupExpiredSessions = (): number => {
   if (!db) return 0;
-  
+
   try {
     const result = db.exec(
       `SELECT COUNT(*) as count FROM sessions 
        WHERE is_active = 1 AND expires_at < datetime('now')`
     );
-    
+
     const count = result[0]?.values[0]?.[0] as number || 0;
-    
+
     if (count > 0) {
       db.run(
         `UPDATE sessions SET is_active = 0 
@@ -1282,7 +1303,7 @@ export const cleanupExpiredSessions = (): number => {
       saveDatabase();
       console.log(`🧹 Cleaned up ${count} expired sessions`);
     }
-    
+
     return count;
   } catch (error) {
     console.error('Error cleaning up sessions:', error);
