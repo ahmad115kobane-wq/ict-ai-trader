@@ -27,6 +27,11 @@ export const getUserById = async (id: string): Promise<any> => {
   return result.rows[0] || null;
 };
 
+export const getAllUsers = async (): Promise<any[]> => {
+  const result = await query('SELECT * FROM users');
+  return result.rows || [];
+};
+
 export const updateUserCoins = async (userId: string, coins: number): Promise<void> => {
   await query(
     'UPDATE users SET coins = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',

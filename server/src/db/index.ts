@@ -22,6 +22,7 @@ export const initDatabase = isProduction ? postgresDb.initDatabase : wrapSync(sq
 export const createUser = isProduction ? postgresDb.createUser : wrapSync(sqliteDb.createUser);
 export const getUserByEmail = isProduction ? postgresDb.getUserByEmail : wrapSync(sqliteDb.getUserByEmail);
 export const getUserById = isProduction ? postgresDb.getUserById : wrapSync(sqliteDb.getUserById);
+export const getAllUsers = isProduction ? postgresDb.getAllUsers : wrapSync(sqliteDb.getAllUsers);
 export const updateUserCoins = isProduction ? postgresDb.updateUserCoins : wrapSync(sqliteDb.updateUserCoins);
 export const deductCoins = isProduction ? postgresDb.deductCoins : wrapSync(sqliteDb.deductCoins);
 export const addCoins = isProduction ? postgresDb.addCoins : wrapSync(sqliteDb.addCoins);

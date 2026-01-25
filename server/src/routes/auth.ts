@@ -451,6 +451,74 @@ router.post('/remove-push-token', authMiddleware, async (req: AuthRequest, res: 
   }
 });
 
+// حذف Push Token بناءً على قيمته (للتنظيف)
+router.post('/delete-push-token-by-value', async (req: Request, res: Response) => {
+  try {
+    const { pushToken } = req.body;
+    
+    if (!pushToken) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Push token مطلوب' 
+      });
+    }
+    
+    const { removePushTokenByValue } = require('../db/index');
+    const success = await removePushTokenByValue(pushToken);
+    
+    if (success) {
+      console.log(`🗑️ Push token deleted: ${pushToken}`);
+      res.json({ 
+        success: true, 
+        message: 'تم حذف Push Token بنجاح',
+        deletedToken: pushToken
+      });
+    } else {
+      res.status(404).json({ 
+        success: false, 
+        error: 'Push Token غير موجود' 
+      });
+    }
+  } catch (error) {
+    console.error('Delete push token error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'خطأ في حذف Push Token' 
+    });
+  }
+});
+
+// عرض جميع Push Tokens (للتنظيف والمراقبة)
+router.get('/list-push-tokens', async (req: Request, res: Response) => {
+  try {
+    const { getAllUsers } = require('../db/index');
+    const users = await getAllUsers();
+    
+    const usersWithTokens = users
+      .filter((u: any) => u.push_token)
+      .map((u: any) => ({
+        userId: u.id,
+        email: u.email,
+        pushToken: u.push_token,
+        autoAnalysisEnabled: u.auto_analysis_enabled,
+        subscription: u.subscription
+      }));
+    
+    res.json({
+      success: true,
+      totalUsers: users.length,
+      usersWithTokens: usersWithTokens.length,
+      tokens: usersWithTokens
+    });
+  } catch (error) {
+    console.error('List push tokens error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'خطأ في جلب Push Tokens' 
+    });
+  }
+});
+
 // إنهاء جميع الجلسات الأخرى
 router.post('/terminate-other-sessions', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

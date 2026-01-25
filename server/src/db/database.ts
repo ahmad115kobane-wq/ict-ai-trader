@@ -304,6 +304,13 @@ export const getUserById = (id: string): any => {
   return rowToObject(result[0].columns, result[0].values[0]);
 };
 
+export const getAllUsers = (): any[] => {
+  if (!db) return [];
+  const result = db.exec('SELECT * FROM users');
+  if (result.length === 0 || result[0].values.length === 0) return [];
+  return result[0].values.map(row => rowToObject(result[0].columns, row));
+};
+
 export const updateUserCoins = (userId: string, coins: number) => {
   if (!db) return;
   db.run('UPDATE users SET coins = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [coins, userId]);
