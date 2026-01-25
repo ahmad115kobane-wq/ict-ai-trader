@@ -47,7 +47,7 @@ app.get('/test-screenshot', async (req, res) => {
     console.log('🧪 Testing screenshot capture...');
     const { testScreenshotCapture } = await import('./services/screenshotService');
     const testImage = await testScreenshotCapture();
-    
+
     const html = `
     <!DOCTYPE html>
     <html>
@@ -65,7 +65,7 @@ app.get('/test-screenshot', async (req, res) => {
     </body>
     </html>
     `;
-    
+
     res.send(html);
   } catch (error) {
     console.error('Screenshot test failed:', error);
@@ -79,9 +79,9 @@ app.get('/test-parallel', async (req, res) => {
     console.log('🧪 Testing parallel screenshot capture...');
     const { getCandles, getCurrentPrice } = await import('./services/oandaService');
     const { captureRealChartScreenshots } = await import('./services/screenshotService');
-    
+
     const symbol = 'XAUUSD';
-    
+
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
       getCandles(symbol, '1h', 199),  // 199 شمعة للساعة
@@ -97,7 +97,7 @@ app.get('/test-parallel', async (req, res) => {
     const startTime = Date.now();
     const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 199, 300);
     const endTime = Date.now();
-    
+
     const html = `
     <!DOCTYPE html>
     <html>
@@ -133,7 +133,7 @@ app.get('/test-parallel', async (req, res) => {
     </body>
     </html>
     `;
-    
+
     res.send(html);
   } catch (error) {
     console.error('Parallel screenshot test failed:', error);
@@ -147,9 +147,9 @@ app.get('/save-charts', async (req, res) => {
     console.log('💾 Saving charts to files...');
     const { getCandles, getCurrentPrice } = await import('./services/oandaService');
     const { saveChartsToFiles } = await import('./services/screenshotService');
-    
+
     const symbol = 'XAUUSD';
-    
+
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
       getCandles(symbol, '1h', 199),  // 199 شمعة للساعة
@@ -163,7 +163,7 @@ app.get('/save-charts', async (req, res) => {
 
     // حفظ الصور في ملفات
     const { h1Path, m5Path } = await saveChartsToFiles(h1Candles, m5Candles, currentPrice);
-    
+
     res.json({
       success: true,
       message: 'Charts saved successfully',
@@ -185,9 +185,9 @@ app.get('/save-charts', async (req, res) => {
 app.get('/test-notification', async (req, res) => {
   try {
     console.log('🧪 Testing notification system...');
-    
+
     const { notifyTradeOpportunity, sendDailyStats, notifySystemError } = await import('./services/notificationService');
-    
+
     // Test trade notification
     const mockAnalysis = {
       decision: 'PLACE_PENDING',
@@ -204,14 +204,14 @@ app.get('/test-notification', async (req, res) => {
         expiryMinutes: 60
       }
     };
-    
+
     const currentPrice = 2687.25;
-    
+
     // Send test notifications
     await notifyTradeOpportunity(mockAnalysis, currentPrice);
     await sendDailyStats();
     await notifySystemError('Test system notification - all systems operational');
-    
+
     res.json({
       success: true,
       message: 'Test notifications sent successfully',
@@ -221,7 +221,7 @@ app.get('/test-notification', async (req, res) => {
         timestamp: new Date().toISOString()
       }
     });
-    
+
   } catch (error) {
     console.error('❌ Test notification failed:', error);
     res.status(500).json({
@@ -236,24 +236,24 @@ app.get('/test-notification', async (req, res) => {
 app.get('/send-test-trade', async (req, res) => {
   try {
     console.log('🧪 Sending test trade for notification testing...');
-    
+
     // الحصول على السعر الحالي
     const symbol = 'XAUUSD';
     let currentPrice = 2687.25; // قيمة افتراضية
-    
+
     try {
       currentPrice = await getCurrentPrice(symbol);
       console.log(`💰 Current price fetched: ${currentPrice}`);
     } catch (priceError) {
       console.log('⚠️ Could not fetch current price, using default');
     }
-    
+
     // إنشاء صفقة تجريبية واقعية
     const isBuy = Math.random() > 0.5;
     const entryOffset = isBuy ? -2.5 : 2.5; // دخول أقل للشراء، أعلى للبيع
     const slOffset = isBuy ? -7.5 : 7.5; // وقف خسارة أبعد
     const tpOffset = isBuy ? 12.5 : -12.5; // هدف ربح
-    
+
     const mockAnalysis = {
       decision: 'PLACE_PENDING',
       score: 9,
@@ -270,7 +270,7 @@ app.get('/send-test-trade', async (req, res) => {
       },
       reasons: []
     };
-    
+
     // تحديث lastAnalysisResult و lastAnalysisTime
     lastAnalysisResult = {
       decision: mockAnalysis.decision,
@@ -281,18 +281,18 @@ app.get('/send-test-trade', async (req, res) => {
       reasoning: mockAnalysis.reasoning
     };
     lastAnalysisTime = new Date();
-    
+
     // تحديث المتغيرات المصدرة
     module.exports.lastAnalysisResult = lastAnalysisResult;
     module.exports.lastAnalysisTime = lastAnalysisTime;
-    
+
     console.log('✅ Test trade created and stored in lastAnalysisResult');
     console.log(`📊 Type: ${mockAnalysis.suggestedTrade.type}`);
     console.log(`💰 Entry: ${mockAnalysis.suggestedTrade.entry}`);
     console.log(`🛑 SL: ${mockAnalysis.suggestedTrade.sl}`);
     console.log(`✅ TP: ${mockAnalysis.suggestedTrade.tp}`);
     console.log(`⏰ Mobile app will receive this in next poll (within 10 seconds)`);
-    
+
     // حفظ في قاعدة البيانات أيضاً
     const testAnalysisId = uuidv4();
     saveEnhancedAnalysis(
@@ -303,7 +303,7 @@ app.get('/send-test-trade', async (req, res) => {
       mockAnalysis,
       'manual' // نوع التحليل: manual أو auto
     );
-    
+
     // إرسال إشعار Telegram أيضاً (اختياري)
     try {
       const { notifyTradeOpportunity } = await import('./services/notificationService');
@@ -312,7 +312,7 @@ app.get('/send-test-trade', async (req, res) => {
     } catch (notificationError) {
       console.log('⚠️ Telegram notification skipped (not configured)');
     }
-    
+
     res.json({
       success: true,
       message: 'Test trade created successfully! Mobile app will receive notification within 10 seconds.',
@@ -323,7 +323,7 @@ app.get('/send-test-trade', async (req, res) => {
         note: 'This trade is now stored in lastAnalysisResult and will be picked up by mobile app'
       }
     });
-    
+
   } catch (error) {
     console.error('❌ Send test trade failed:', error);
     res.status(500).json({
@@ -343,9 +343,9 @@ app.get('/test', (req, res) => {
 app.get('/test-analysis', async (req, res) => {
   try {
     console.log('🧪 Test analysis endpoint called...');
-    
+
     const symbol = 'XAUUSD';
-    
+
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
       getCandles(symbol, '1h', 199),
@@ -361,12 +361,12 @@ app.get('/test-analysis', async (req, res) => {
 
     // رسم الشارتات
     const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice, 199, 300);
-    
+
     console.log(`🖼️ Test Charts rendered: H1=${h1Image.length} chars, M5=${m5Image.length} chars`);
 
     // التحليل
     const analysis = await analyzeMultiTimeframe(h1Image, m5Image, currentPrice);
-    
+
     console.log(`🤖 Test Analysis result: ${analysis.decision}, Score: ${analysis.score}`);
 
     // إرجاع النتيجة
@@ -384,7 +384,7 @@ app.get('/test-analysis', async (req, res) => {
 
   } catch (error) {
     console.error('Test analysis error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: (error as Error).message,
       message: 'Test analysis failed'
@@ -396,7 +396,7 @@ app.get('/test-analysis', async (req, res) => {
 app.get('/chart', async (req, res) => {
   try {
     const symbol = 'XAUUSD';
-    
+
     // جلب البيانات بالعدد المطلوب
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
       getCandles(symbol, '1h', 199),  // 199 شمعة للساعة
@@ -760,7 +760,7 @@ app.get('/subscription-dashboard', (req, res) => {
   </body>
   </html>
   `;
-  
+
   res.send(html);
 });
 
@@ -926,7 +926,7 @@ app.get('/notification-config', (req, res) => {
   </body>
   </html>
   `;
-  
+
   res.send(html);
 });
 
@@ -959,7 +959,7 @@ app.get('/test-subscription', (req, res) => {
 app.get('/check-expired-subscriptions', async (req, res) => {
   try {
     const result = await checkAndExpireSubscriptions();
-    
+
     res.json({
       success: true,
       message: 'Subscription expiry check completed',
@@ -981,8 +981,8 @@ app.get('/check-expired-subscriptions', async (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.0.0'
   });
@@ -1038,7 +1038,7 @@ app.get('/api', (req, res) => {
 // Auto Analysis Status endpoint
 app.get('/auto-analysis-status', (req, res) => {
   const closeInfo = getNextCandleCloseInfo();
-  
+
   const response: any = {
     status: 'active',
     message: 'Smart auto analysis is running',
@@ -1063,7 +1063,7 @@ app.get('/auto-analysis-status', (req, res) => {
       minutesAgo: Math.round((closeInfo.currentTime.getTime() - lastAnalysisTime.getTime()) / 60000)
     };
   }
-  
+
   res.json(response);
 });
 
@@ -1076,22 +1076,22 @@ app.get('/auto-analysis', (req, res) => {
 // فحص انتهاء الاشتراكات يومياً في الساعة 12 صباحاً
 cron.schedule('0 0 * * *', async () => {
   console.log('🕐 Daily subscription expiry check started at 12:00 AM...');
-  
+
   try {
     const result = await checkAndExpireSubscriptions();
-    
+
     if (result.expiredCount > 0) {
       console.log(`⏰ Expired ${result.expiredCount} subscriptions:`);
       result.expiredUsers.forEach(userId => {
         console.log(`   - User: ${userId}`);
       });
-      
+
       // هنا يمكن إرسال إشعارات للمستخدمين المنتهية اشتراكاتهم
       // TODO: Send notifications to expired users
     } else {
       console.log('✅ No expired subscriptions found');
     }
-    
+
   } catch (error) {
     console.error('❌ Daily subscription check failed:', error);
   }
@@ -1102,7 +1102,7 @@ cron.schedule('0 0 * * *', async () => {
 // فحص إضافي كل 6 ساعات للتأكد
 cron.schedule('0 */6 * * *', async () => {
   console.log('🔄 Additional subscription check (every 6 hours)...');
-  
+
   try {
     const result = await checkAndExpireSubscriptions();
     if (result.expiredCount > 0) {
@@ -1116,7 +1116,7 @@ cron.schedule('0 */6 * * *', async () => {
 // إرسال إحصائيات يومية في الساعة 8 صباحاً
 cron.schedule('0 8 * * *', async () => {
   console.log('📊 Sending daily statistics...');
-  
+
   try {
     const { sendDailyStats } = await import('./services/notificationService');
     await sendDailyStats();
@@ -1131,11 +1131,11 @@ cron.schedule('0 8 * * *', async () => {
 // تنظيف الجلسات المنتهية كل ساعة
 cron.schedule('0 * * * *', async () => {
   console.log('🧹 Cleaning up expired sessions...');
-  
+
   try {
     const { cleanupExpiredSessions } = await import('./db/index');
     const cleanedCount = await cleanupExpiredSessions();
-    
+
     if (cleanedCount > 0) {
       console.log(`✅ Cleaned up ${cleanedCount} expired sessions`);
     } else {
@@ -1160,13 +1160,13 @@ const calculateNextCandleClose = (): number => {
   const minutes = now.getMinutes();
   const seconds = now.getSeconds();
   const milliseconds = now.getMilliseconds();
-  
+
   // حساب الدقائق حتى إغلاق الشمعة القادمة (0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55)
   const nextCloseMinute = Math.ceil(minutes / 5) * 5;
   const minutesUntilClose = nextCloseMinute - minutes;
   const secondsUntilClose = (minutesUntilClose * 60) - seconds;
   const millisecondsUntilClose = (secondsUntilClose * 1000) - milliseconds;
-  
+
   return millisecondsUntilClose > 0 ? millisecondsUntilClose : 5 * 60 * 1000; // 5 دقائق بالميلي ثانية
 };
 
@@ -1176,11 +1176,11 @@ const getNextCandleCloseInfo = () => {
   const nextCloseMinute = Math.ceil(minutes / 5) * 5;
   const nextCloseTime = new Date(now);
   nextCloseTime.setMinutes(nextCloseMinute, 0, 0); // تعيين الثواني والميلي ثانية إلى 0
-  
+
   if (nextCloseTime <= now) {
     nextCloseTime.setMinutes(nextCloseTime.getMinutes() + 5);
   }
-  
+
   return {
     currentTime: now,
     nextCloseTime,
@@ -1192,12 +1192,12 @@ const scheduleNextAnalysis = () => {
   if (autoAnalysisInterval) {
     clearTimeout(autoAnalysisInterval);
   }
-  
+
   const closeInfo = getNextCandleCloseInfo();
   const secondsUntilClose = Math.round(closeInfo.millisecondsUntil / 1000);
-  
+
   console.log(`⏰ Next auto analysis scheduled in ${secondsUntilClose} seconds (at ${closeInfo.nextCloseTime.toLocaleTimeString('ar-EG')})`);
-  
+
   autoAnalysisInterval = setTimeout(async () => {
     console.log('🕐 M5 Candle closed - triggering auto analysis...');
     await runAutoAnalysis();
@@ -1208,16 +1208,16 @@ const scheduleNextAnalysis = () => {
 
 const runAutoAnalysis = async (retryCount: number = 0) => {
   console.log('🔄 Auto Analysis: Starting at M5 candle close...');
-  
+
   try {
     const symbol = 'XAUUSD';
-    
+
     // انتظار ثانية واحدة للتأكد من تحديث البيانات
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // جلب البيانات بالعدد المطلوب مع إعادة المحاولة
     let h1Candles, m5Candles, currentPrice;
-    
+
     try {
       [h1Candles, m5Candles, currentPrice] = await Promise.all([
         getCandles(symbol, '1h', 199),  // 199 شمعة للساعة
@@ -1226,11 +1226,11 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       ]);
     } catch (dataError) {
       console.log(`❌ Auto Analysis: Data fetch failed (attempt ${retryCount + 1}/3)`);
-      
+
       // إعادة المحاولة حتى 3 مرات مع تأخير متزايد
       if (retryCount < 2) {
         const delay = (retryCount + 1) * 2000; // 2s, 4s, 6s
-        console.log(`🔄 Retrying in ${delay/1000} seconds...`);
+        console.log(`🔄 Retrying in ${delay / 1000} seconds...`);
         setTimeout(() => runAutoAnalysis(retryCount + 1), delay);
         return;
       } else {
@@ -1265,7 +1265,7 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       reasoning: analysis.reasoning || analysis.bias
     };
     lastAnalysisTime = new Date();
-    
+
     // تحديث المتغيرات المصدرة
     module.exports.lastAnalysisResult = lastAnalysisResult;
     module.exports.lastAnalysisTime = lastAnalysisTime;
@@ -1273,13 +1273,13 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
     // حفظ في قاعدة البيانات لكل مستخدم مفعل التحليل التلقائي
     const { getUsersWithAutoAnalysisEnabled } = await import('./db/index');
     const usersWithAutoAnalysis = await getUsersWithAutoAnalysisEnabled();
-    
+
     console.log(`👥 Found ${usersWithAutoAnalysis.length} users with auto analysis enabled`);
-    
+
     // حفظ التحليل لكل مستخدم مفعل التحليل التلقائي
     for (const user of usersWithAutoAnalysis) {
       const userAnalysisId = uuidv4();
-      
+
       saveEnhancedAnalysis(
         userAnalysisId,
         user.id, // حفظ لكل مستخدم على حدة
@@ -1288,13 +1288,13 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
         analysis,
         'auto'
       );
-      
+
       console.log(`✅ Auto analysis saved for user: ${user.email}`);
     }
-    
+
     // حفظ نسخة عامة أيضاً للتوافق
     const autoAnalysisId = uuidv4();
-    
+
     // حفظ في الجدول القديم للتوافق
     saveAutoAnalysis(
       autoAnalysisId,
@@ -1308,7 +1308,7 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       analysis.suggestedTrade ? JSON.stringify(analysis.suggestedTrade) : null
     );
 
-    // إذا وجدت صفقة - عرض التفاصيل وإرسال إشعارات
+    // إرسال إشعارات لجميع التحليلات (سواء كانت صفقة أو لا)
     if (analysis.decision === 'PLACE_PENDING' && analysis.suggestedTrade) {
       console.log('🎯 Auto Analysis: Trade opportunity found!');
       console.log(`   📊 Type: ${analysis.suggestedTrade.type}`);
@@ -1318,7 +1318,7 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       console.log(`   📈 RR: ${analysis.suggestedTrade.rrRatio || 'N/A'}`);
       console.log(`   ⏰ Expiry: ${analysis.suggestedTrade.expiryMinutes || 60} minutes`);
       console.log(`   📝 Reasoning: ${analysis.reasoning || analysis.bias}`);
-      
+
       // إرسال إشعارات للمستخدمين المشتركين
       try {
         const { notifyTradeOpportunity } = await import('./services/notificationService');
@@ -1327,15 +1327,15 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       } catch (notificationError) {
         console.error('❌ Failed to send Telegram notification:', notificationError);
       }
-      
-      // إرسال Push Notifications للتطبيق
+
+      // إرسال Push Notifications للتطبيق (صفقة)
       try {
         const { getUsersWithPushTokens } = await import('./db/index');
         const { sendTradeNotification } = await import('./services/expoPushService');
-        
+
         const usersWithTokens = await getUsersWithPushTokens();
         const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
-        
+
         if (pushTokens.length > 0) {
           await sendTradeNotification(
             pushTokens,
@@ -1350,22 +1350,45 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       } catch (pushError) {
         console.error('❌ Failed to send push notifications:', pushError);
       }
-      
+
     } else {
       console.log(`📋 Auto Analysis: No trade - ${analysis.reasons?.join(', ') || 'No suitable setup'}`);
-      
-      // إرسال إشعار بعدم وجود فرصة (اختياري)
+
+      // إرسال إشعار بعدم وجود فرصة
       try {
         const { notifyNoTrade } = await import('./services/notificationService');
         await notifyNoTrade(analysis, currentPrice);
       } catch (notificationError) {
         console.error('❌ Failed to send no-trade notification:', notificationError);
       }
+
+      // إرسال Push Notifications للتطبيق (لا توجد صفقة)
+      try {
+        const { getUsersWithPushTokens } = await import('./db/index');
+        const { sendAnalysisNotification } = await import('./services/expoPushService');
+
+        const usersWithTokens = await getUsersWithPushTokens();
+        const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
+
+        if (pushTokens.length > 0) {
+          await sendAnalysisNotification(
+            pushTokens,
+            analysis.decision,
+            analysis.score,
+            analysis.confidence,
+            currentPrice,
+            analysis.reasoning || analysis.bias || analysis.reasons?.join(', ') || 'No suitable setup'
+          );
+          console.log(`📱 Analysis notifications sent to ${pushTokens.length} devices`);
+        }
+      } catch (pushError) {
+        console.error('❌ Failed to send analysis notifications:', pushError);
+      }
     }
 
   } catch (error) {
     console.error('❌ Auto Analysis Error:', error);
-    
+
     // إرسال إشعار بالخطأ
     try {
       const { notifySystemError } = await import('./services/notificationService');
@@ -1384,17 +1407,17 @@ const startServer = async () => {
   try {
     // تهيئة قاعدة البيانات
     await initDatabase();
-    
+
     // تهيئة الباقات الافتراضية
     await initializeDefaultPackages();
-    
+
     // فحص الاشتراكات المنتهية عند بدء التشغيل
     console.log('🔄 Checking for expired subscriptions on startup...');
     const initialCheck = await checkAndExpireSubscriptions();
     if (initialCheck.expiredCount > 0) {
       console.log(`⚠️ Found and processed ${initialCheck.expiredCount} expired subscriptions on startup`);
     }
-    
+
     // تشغيل الخادم
     app.listen(PORT, () => {
       console.log(`
@@ -1408,7 +1431,7 @@ const startServer = async () => {
 ║  💾 Database initialized                           ║
 ╚════════════════════════════════════════════════════╝
       `);
-      
+
       // تشغيل التحليل الأول وبدء الجدولة الذكية
       console.log('🔄 Starting smart auto analysis system...');
       scheduleNextAnalysis();
