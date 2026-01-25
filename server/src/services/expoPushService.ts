@@ -45,7 +45,7 @@ export const sendPushNotifications = async (
       timestamp: Date.now(),
     },
     priority: options?.priority || 'high',
-    channelId: 'trade-alerts-persistent', // قناة خاصة للإشعارات المستمرة
+    channelId: 'trade-alerts-v2', // يجب أن يتطابق مع قناة التطبيق
     badge: options?.badge,
     ttl: options?.ttl || 86400, // 24 ساعة افتراضياً
     expiration: options?.expiration,
@@ -152,47 +152,6 @@ export const sendNoTradeNotification = async (
   return result.success;
 };
 
-// إرسال إشعار تحليل عام (لجميع التحليلات)
-export const sendAnalysisNotification = async (
-  pushTokens: string[],
-  decision: string,
-  score: number,
-  confidence: number,
-  currentPrice: number,
-  reasoning: string
-): Promise<boolean> => {
-  const title = '📊 تحليل تلقائي جديد';
-  const emoji = decision === 'PLACE_PENDING' ? '🎯' : decision === 'NO_TRADE' ? '⏳' : '📋';
-  const decisionText = decision === 'PLACE_PENDING' ? 'فرصة متاحة' : decision === 'NO_TRADE' ? 'لا توجد فرصة' : decision;
-  
-  const body = `${emoji} ${decisionText}\n💰 السعر: ${currentPrice.toFixed(2)} | ⭐ ${score}/10 | 🎯 ${confidence}%\n📝 ${reasoning.substring(0, 100)}`;
-
-  const data = {
-    type: 'analysis_update',
-    decision,
-    score,
-    confidence,
-    currentPrice,
-    reasoning,
-    timestamp: Date.now(),
-  };
-
-  const result = await sendPushNotifications(pushTokens, title, body, data, {
-    priority: 'high',
-    ttl: 3600, // ساعة واحدة
-    sound: 'default',
-    badge: 1,
-    categoryId: 'ANALYSIS_UPDATE',
-    mutableContent: true,
-  });
-
-  if (result.success) {
-    console.log(`📱 Analysis notification sent to ${pushTokens.length} devices`);
-  }
-
-  return result.success;
-};
-
 // التحقق من صحة Push Token
 export const isValidPushToken = (token: string): boolean => {
   return Expo.isExpoPushToken(token);
@@ -202,6 +161,5 @@ export default {
   sendPushNotifications,
   sendTradeNotification,
   sendNoTradeNotification,
-  sendAnalysisNotification,
   isValidPushToken,
 };

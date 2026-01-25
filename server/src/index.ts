@@ -1308,7 +1308,7 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       analysis.suggestedTrade ? JSON.stringify(analysis.suggestedTrade) : null
     );
 
-    // إرسال إشعارات لجميع التحليلات (سواء كانت صفقة أو لا)
+    // إذا وجدت صفقة - عرض التفاصيل وإرسال إشعارات
     if (analysis.decision === 'PLACE_PENDING' && analysis.suggestedTrade) {
       console.log('🎯 Auto Analysis: Trade opportunity found!');
       console.log(`   📊 Type: ${analysis.suggestedTrade.type}`);
@@ -1328,7 +1328,7 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
         console.error('❌ Failed to send Telegram notification:', notificationError);
       }
 
-      // إرسال Push Notifications للتطبيق (صفقة)
+      // إرسال Push Notifications للتطبيق
       try {
         const { getUsersWithPushTokens } = await import('./db/index');
         const { sendTradeNotification } = await import('./services/expoPushService');
@@ -1354,35 +1354,12 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
     } else {
       console.log(`📋 Auto Analysis: No trade - ${analysis.reasons?.join(', ') || 'No suitable setup'}`);
 
-      // إرسال إشعار بعدم وجود فرصة
+      // إرسال إشعار بعدم وجود فرصة (اختياري)
       try {
         const { notifyNoTrade } = await import('./services/notificationService');
         await notifyNoTrade(analysis, currentPrice);
       } catch (notificationError) {
         console.error('❌ Failed to send no-trade notification:', notificationError);
-      }
-
-      // إرسال Push Notifications للتطبيق (لا توجد صفقة)
-      try {
-        const { getUsersWithPushTokens } = await import('./db/index');
-        const { sendAnalysisNotification } = await import('./services/expoPushService');
-
-        const usersWithTokens = await getUsersWithPushTokens();
-        const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
-
-        if (pushTokens.length > 0) {
-          await sendAnalysisNotification(
-            pushTokens,
-            analysis.decision,
-            analysis.score,
-            analysis.confidence,
-            currentPrice,
-            analysis.reasoning || analysis.bias || analysis.reasons?.join(', ') || 'No suitable setup'
-          );
-          console.log(`📱 Analysis notifications sent to ${pushTokens.length} devices`);
-        }
-      } catch (pushError) {
-        console.error('❌ Failed to send analysis notifications:', pushError);
       }
     }
 
