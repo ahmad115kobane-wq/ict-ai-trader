@@ -366,7 +366,7 @@ app.get('/debug-users', async (req, res) => {
     
     // جلب جميع المستخدمين مع معلوماتهم
     const allUsers = await query(`
-      SELECT id, email, subscription, auto_analysis_enabled, 
+      SELECT id, email, subscription, subscription_expiry, auto_analysis_enabled, 
              push_token IS NOT NULL as has_push_token,
              LEFT(push_token, 30) as push_token_preview
       FROM users
@@ -388,6 +388,26 @@ app.get('/debug-users', async (req, res) => {
       eligibleUsers: eligibleUsers.rows,
       note: 'لتلقي الإشعارات: يجب أن يكون push_token موجود + auto_analysis_enabled = true + اشتراك نشط'
     });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// تسجيل push token يدوياً للاختبار
+app.get('/set-push-token', async (req, res) => {
+  try {
+    const { email, token } = req.query;
+    if (!email || !token) {
+      return res.status(400).json({ error: 'email and token required. Usage: /set-push-token?email=a@a.a&token=ExponentPushToken[xxx]' });
+    }
+    
+    const { query } = await import('./db/postgresAdapter');
+    await query(
+      'UPDATE users SET push_token = $1, push_token_updated_at = CURRENT_TIMESTAMP WHERE email = $2',
+      [token, email]
+    );
+    
+    res.json({ success: true, message: `Push token set for ${email}` });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
