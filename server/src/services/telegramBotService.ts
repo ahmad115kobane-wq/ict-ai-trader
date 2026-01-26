@@ -175,7 +175,7 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
           [{
             text: '💬 الدعم الفني',
             url: 'https://t.me/iqbotict'
-          }]
+          } as any]
         ]
       };
       
@@ -243,11 +243,11 @@ async function showPackages(chatId: number, user: any): Promise<void> {
       {
         text: '🏠 الرئيسية',
         callback_data: 'back_to_main'
-      },
+      } as any,
       {
         text: '💬 الدعم الفني',
         url: 'https://t.me/iqbotict'
-      }
+      } as any
     ]);
     
     const keyboard = {
@@ -406,7 +406,7 @@ async function handleSubscriptionDetails(chatId: number, telegramUser: TelegramU
         [{
           text: '💬 الدعم الفني',
           url: 'https://t.me/iqbotict'
-        }]
+        } as any]
       ]
     };
 
