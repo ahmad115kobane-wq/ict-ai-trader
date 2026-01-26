@@ -160,16 +160,28 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
       // المستخدم لديه اشتراك نشط
       const expiryDate = new Date(activeSubscription.expires_at).toLocaleDateString('ar-SA');
       
+      // إنشاء زر التحليل التلقائي
+      const autoStatus = user.auto_analysis_enabled ? '⏸️ إيقاف' : '▶️ تفعيل';
+      const keyboard = {
+        inline_keyboard: [[
+          {
+            text: `${autoStatus} التحليل التلقائي`,
+            callback_data: 'toggle_auto'
+          }
+        ]]
+      };
+      
       await sendMessage(
         chatId,
         `🎉 <b>مرحباً ${telegramUser.first_name}!</b>\n\n` +
         `✅ لديك اشتراك نشط: <b>${activeSubscription.plan_name}</b>\n` +
         `📅 ينتهي في: ${expiryDate}\n` +
         `💰 رصيدك: ${user.coins} عملة\n\n` +
+        `🤖 التحليل التلقائي: ${user.auto_analysis_enabled ? '✅ مفعّل' : '⏸️ متوقف'}\n\n` +
         `استخدم الأوامر التالية:\n` +
-        `/auto - تفعيل/إيقاف التحليل التلقائي\n` +
         `/status - عرض حالة الاشتراك\n` +
-        `/packages - عرض الباقات المتاحة`
+        `/packages - عرض الباقات المتاحة`,
+        keyboard
       );
       console.log(`✅ Sent subscription info to user: ${telegramUser.id}`);
     } else {
@@ -248,6 +260,21 @@ async function handlePackagePurchase(chatId: number, telegramUser: TelegramUser,
     return;
   }
 
+  // التحقق من وجود اشتراك نشط
+  const activeSubscription = await getUserActiveSubscription(user.id);
+  
+  if (activeSubscription) {
+    await answerCallbackQuery(callbackQueryId, '⚠️ لديك اشتراك نشط بالفعل');
+    await sendMessage(
+      chatId,
+      `⚠️ <b>لديك اشتراك نشط بالفعل</b>\n\n` +
+      `📦 الباقة الحالية: <b>${activeSubscription.plan_name}</b>\n` +
+      `📅 ينتهي في: ${new Date(activeSubscription.expires_at).toLocaleDateString('ar-SA')}\n\n` +
+      `لا يمكنك شراء باقة جديدة حتى تنتهي الباقة الحالية.`
+    );
+    return;
+  }
+
   // محاولة شراء الباقة
   const result = await purchaseSubscription({
     packageId,
@@ -260,14 +287,23 @@ async function handlePackagePurchase(chatId: number, telegramUser: TelegramUser,
     
     const expiryDate = result.expiresAt ? new Date(result.expiresAt).toLocaleDateString('ar-SA') : '';
     
+    // إنشاء زر التحليل التلقائي
+    const keyboard = {
+      inline_keyboard: [[
+        {
+          text: '▶️ تفعيل التحليل التلقائي',
+          callback_data: 'toggle_auto'
+        }
+      ]]
+    };
+    
     await sendMessage(
       chatId,
-      `🎉 *تم تفعيل اشتراكك بنجاح!*\n\n` +
+      `🎉 <b>تم تفعيل اشتراكك بنجاح!</b>\n\n` +
       `✅ ${result.message}\n` +
       `📅 ينتهي في: ${expiryDate}\n\n` +
-      `يمكنك الآن استخدام:\n` +
-      `/analyze - طلب تحليل\n` +
-      `/status - عرض حالة الاشتراك`
+      `يمكنك الآن تفعيل التحليل التلقائي لاستلام إشارات التداول:`,
+      keyboard
     );
   } else {
     await answerCallbackQuery(callbackQueryId, '❌ فشل التفعيل');
@@ -309,6 +345,67 @@ async function handleStatusCommand(chatId: number, telegramUser: TelegramUser): 
   }
 
   await sendMessage(chatId, message);
+}
+
+/**
+ * معالج زر التحليل التلقائي
+ */
+async function handleAutoToggle(chatId: number, telegramUser: TelegramUser, callbackQueryId: string): Promise<void> {
+  try {
+    const user = await getOrCreateUser(telegramUser);
+    
+    if (!user) {
+      await answerCallbackQuery(callbackQueryId, '❌ خطأ في الحساب');
+      return;
+    }
+
+    // التحقق من الاشتراك
+    const activeSubscription = await getUserActiveSubscription(user.id);
+    
+    if (!activeSubscription) {
+      await answerCallbackQuery(callbackQueryId, '⚠️ يجب أن يكون لديك اشتراك نشط');
+      return;
+    }
+
+    // تبديل حالة التحليل التلقائي
+    const { setUserAutoAnalysis } = await import('../db/index');
+    const newStatus = !user.auto_analysis_enabled;
+    
+    await setUserAutoAnalysis(user.id, newStatus);
+    
+    // تحديث الزر
+    const autoStatus = newStatus ? '⏸️ إيقاف' : '▶️ تفعيل';
+    const keyboard = {
+      inline_keyboard: [[
+        {
+          text: `${autoStatus} التحليل التلقائي`,
+          callback_data: 'toggle_auto'
+        }
+      ]]
+    };
+    
+    if (newStatus) {
+      await answerCallbackQuery(callbackQueryId, '✅ تم تفعيل التحليل التلقائي');
+      await sendMessage(
+        chatId,
+        `✅ <b>تم تفعيل التحليل التلقائي!</b>\n\n` +
+        `🤖 سيتم إرسال إشارات التداول تلقائياً إلى حسابك على تليجرام كل 5 دقائق.\n\n` +
+        `📊 ستستلم فقط الصفقات ذات الجودة العالية (Score ≥ 7)`,
+        keyboard
+      );
+    } else {
+      await answerCallbackQuery(callbackQueryId, '⏸️ تم إيقاف التحليل التلقائي');
+      await sendMessage(
+        chatId,
+        `⏸️ <b>تم إيقاف التحليل التلقائي</b>\n\n` +
+        `لن تستلم إشارات التداول التلقائية بعد الآن.`,
+        keyboard
+      );
+    }
+  } catch (error) {
+    console.error(`❌ Error in handleAutoToggle:`, error);
+    await answerCallbackQuery(callbackQueryId, '❌ حدث خطأ');
+  }
 }
 
 /**
@@ -412,6 +509,8 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       if (data.startsWith('buy_')) {
         const packageId = data.replace('buy_', '');
         await handlePackagePurchase(chatId, user, packageId, callbackQuery.id);
+      } else if (data === 'toggle_auto') {
+        await handleAutoToggle(chatId, user, callbackQuery.id);
       }
     }
   } catch (error) {
