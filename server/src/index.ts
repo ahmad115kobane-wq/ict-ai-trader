@@ -37,11 +37,19 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// Serve static files from public directory
+app.use(express.static(path.join(SERVER_ROOT, 'public')));
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/telegram', telegramRoutes);
+
+// Telegram setup page
+app.get('/setup-telegram', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'public', 'setup-telegram.html'));
+});
 
 // Test screenshot route
 app.get('/test-screenshot', async (req, res) => {
