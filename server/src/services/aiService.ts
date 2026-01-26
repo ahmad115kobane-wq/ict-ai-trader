@@ -240,7 +240,13 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // 3) Sweep (H1 أولوية، M5 بديل)
   const h1Sweep = r.liquidityPurge?.h1Sweep?.occurred === true;
   const m5Sweep = r.liquidityPurge?.m5InternalSweep?.occurred === true;
-  const primarySource = r.liquidityPurge?.primarySource || "NONE";
+  let primarySource = r.liquidityPurge?.primarySource || "NONE";
+  
+  // ✅ إصلاح 4: تصحيح primarySource تلقائياً عند التضارب
+  if (primarySource === "H1" && !h1Sweep && m5Sweep) primarySource = "M5";
+  if (primarySource === "M5" && !m5Sweep && h1Sweep) primarySource = "H1";
+  if (!h1Sweep && !m5Sweep) primarySource = "NONE";
+  r.liquidityPurge = { ...(r.liquidityPurge || {}), primarySource };
   
   // يجب وجود سحب سيولة على H1 أو M5
   if (!h1Sweep && !m5Sweep) {
@@ -259,8 +265,15 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     // شروط إضافية لسحب السيولة الداخلي على M5
     const m5Evidence = r.liquidityPurge?.m5InternalSweep?.evidence || {};
     const isRecent = r.liquidityPurge?.m5InternalSweep?.isRecent === true;
-    const hasStrongWick = m5Evidence.wickSize === "LARGE" || m5Evidence.wickSize === "MEDIUM";
-    const candlesAgo = m5Evidence.candlesAgo || 999;
+    
+    // ✅ إصلاح 6: تحسين منطق wickSize + closedBackInside
+    const closedBackInside = m5Evidence.closedBackInside === true;
+    const wickSize = m5Evidence.wickSize;
+    const hasStrongWick = wickSize === "LARGE" || (wickSize === "MEDIUM" && closedBackInside);
+    
+    // ✅ إصلاح 5: تحويل candlesAgo إلى رقم مضبوط
+    const candlesAgoRaw = m5Evidence.candlesAgo;
+    const candlesAgo = Number.isFinite(Number(candlesAgoRaw)) ? Number(candlesAgoRaw) : 999;
     
     if (!isRecent || candlesAgo > 15) {
       r.decision = "NO_TRADE";
@@ -339,15 +352,13 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     return r as ICTAnalysis;
   }
 
-  // 7.5) فحص priceLocation - ممنوع الدخول من MID فقط (تحذير وليس رفض)
-  const priceLocation = r.priceLocation || "";
-  // إذا كان MID صريح - رفض الصفقة
+  // ✅ إصلاح 7: لا تسمح بصفقة إذا priceLocation غير محدد (اعتبره MID)
+  const priceLocation = r.priceLocation || "MID";
   if (priceLocation === "MID") {
     r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, "السعر في منتصف الرينج (MID) - لا توجد فرصة حالياً"];
+    r.reasons = [...r.reasons, "الموقع السعري غير واضح/منتصف الرينج - لا توجد فرصة"];
     return r as ICTAnalysis;
   }
-  // إذا لم يحدد النموذج priceLocation - نسمح بالصفقة (لا نرفض)
 
   // 8) M5 Conditions (Balanced)
   const m5 = r.m5Analysis || {};
@@ -358,7 +369,11 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   const hasChoCHorMSS = m5Structure === "CHoCH" || m5Structure === "MSS";
   const dispOk = m5Disp !== "WEAK";
   const hasPdArray = m5Pd !== "NONE";
-  const hasStrongReject = r.liquidityPurge?.evidence?.wickRejection === true;
+  
+  // ✅ إصلاح 1: التحقق من الرفض القوي من المكان الصحيح
+  const h1WickReject = r?.liquidityPurge?.h1Sweep?.evidence?.wickRejection === true;
+  const m5WickReject = r?.liquidityPurge?.m5InternalSweep?.evidence?.wickRejection === true;
+  const hasStrongReject = h1WickReject || m5WickReject;
 
   // رفض التذبذب الصريح إذا ماكو كسر
   if (!hasChoCHorMSS) {
@@ -397,12 +412,30 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     return r as ICTAnalysis;
   }
 
-  // 10) مستويات الصفقة
-  t.entry = round2(Number(t.entry));
-  t.sl = round2(Number(t.sl));
-  t.tp1 = round2(Number(t.tp1 || t.tp || 0));
-  t.tp2 = round2(Number(t.tp2 || 0));
-  t.tp3 = round2(Number(t.tp3 || 0));
+  // ✅ إصلاح 3: تأمين الأرقام ضد NaN/0
+  const toNum = (x: any) => {
+    const n = Number(x);
+    return Number.isFinite(n) ? n : NaN;
+  };
+  
+  t.entry = toNum(t.entry);
+  t.sl = toNum(t.sl);
+  t.tp1 = toNum(t.tp1 || t.tp || 0);
+  t.tp2 = toNum(t.tp2 || 0);
+  t.tp3 = toNum(t.tp3 || 0);
+  
+  if (![t.entry, t.sl, t.tp1, t.tp2, t.tp3].every(Number.isFinite)) {
+    r.decision = "NO_TRADE";
+    r.reasons = [...r.reasons, "قيم الدخول/الوقف/الأهداف غير صالحة (NaN)"];
+    return r as ICTAnalysis;
+  }
+  
+  // تقريب الأرقام بعد التحقق
+  t.entry = round2(t.entry);
+  t.sl = round2(t.sl);
+  t.tp1 = round2(t.tp1);
+  t.tp2 = round2(t.tp2);
+  t.tp3 = round2(t.tp3);
 
   // التحقق من وجود الأهداف الثلاثة
   if (!t.tp1 || !t.tp2 || !t.tp3) {
@@ -684,10 +717,12 @@ export const followUpTrade = async (
       ? `${hoursPassed} ساعة و ${minutesPassed % 60} دقيقة`
       : `${minutesPassed} دقيقة`;
 
-    // حساب حالة الصفقة
+    // ✅ إصلاح 2: تصحيح followUpTrade (tp → tp1,tp2,tp3)
     const entry = originalAnalysis.suggestedTrade?.entry || 0;
     const sl = originalAnalysis.suggestedTrade?.sl || 0;
-    const tp = originalAnalysis.suggestedTrade?.tp || 0;
+    const tp1 = originalAnalysis.suggestedTrade?.tp1 || 0;
+    const tp2 = originalAnalysis.suggestedTrade?.tp2 || 0;
+    const tp3 = originalAnalysis.suggestedTrade?.tp3 || 0;
     const isBuy = originalAnalysis.suggestedTrade?.type.includes('BUY') || false;
     
     // هل تم تفعيل الصفقة؟
@@ -706,11 +741,15 @@ export const followUpTrade = async (
       }
     }
     
-    // حساب المسافة من SL و TP
+    // حساب المسافة من SL و TP (استخدام TP1 كهدف قريب)
     const distanceToSL = Math.abs(currentPrice - sl);
-    const distanceToTP = Math.abs(currentPrice - tp);
+    const distanceToTP1 = Math.abs(currentPrice - tp1);
+    const distanceToTP2 = Math.abs(currentPrice - tp2);
+    const distanceToTP3 = Math.abs(currentPrice - tp3);
     const slPercent = ((distanceToSL / currentPrice) * 100).toFixed(2);
-    const tpPercent = ((distanceToTP / currentPrice) * 100).toFixed(2);
+    const tp1Percent = ((distanceToTP1 / currentPrice) * 100).toFixed(2);
+    const tp2Percent = ((distanceToTP2 / currentPrice) * 100).toFixed(2);
+    const tp3Percent = ((distanceToTP3 / currentPrice) * 100).toFixed(2);
 
     const data = await callOllamaChat({
       model: MODEL,
@@ -730,7 +769,10 @@ export const followUpTrade = async (
 📈 نوع الصفقة: ${isBuy ? 'شراء (BUY)' : 'بيع (SELL)'}
 🎯 سعر الدخول: ${entry.toFixed(2)}
 🛑 وقف الخسارة: ${sl.toFixed(2)} (${slPercent}% بعيد)
-✅ جني الأرباح: ${tp.toFixed(2)} (${tpPercent}% بعيد)
+✅ الأهداف:
+   TP1: ${tp1.toFixed(2)} (${tp1Percent}% بعيد)
+   TP2: ${tp2.toFixed(2)} (${tp2Percent}% بعيد)
+   TP3: ${tp3.toFixed(2)} (${tp3Percent}% بعيد)
 
 ${tradeStatus === 'تم التفعيل ✅' ? `📊 الربح/الخسارة الحالية: ${currentPnL > 0 ? '+' : ''}${currentPnL.toFixed(2)} نقطة` : ''}
 
