@@ -45,7 +45,7 @@ export interface SuggestedTrade {
   type: TradeType;
   entry: number;
   sl: number;
-  tp: number;
+  tp?: number; // للتوافق مع الكود القديم
   tp1: number;
   tp2: number;
   tp3: number;

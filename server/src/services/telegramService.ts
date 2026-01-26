@@ -8,7 +8,10 @@ interface TradeSignal {
   type: 'BUY' | 'SELL';
   entry: number;
   sl: number;
-  tp: number;
+  tp?: number; // للتوافق مع الكود القديم
+  tp1: number;
+  tp2: number;
+  tp3: number;
   confidence: number;
   pair: string;
   timestamp: Date;
@@ -27,25 +30,32 @@ export async function sendTradeSignal(chatId: string, signal: TradeSignal): Prom
     const emoji = signal.type === 'BUY' ? '🟢' : '🔴';
     const direction = signal.type === 'BUY' ? 'شراء' : 'بيع';
     
-    // حساب نسبة المخاطرة إلى العائد
+    // حساب نسبة المخاطرة إلى العائد للأهداف الثلاثة
     const risk = Math.abs(signal.entry - signal.sl);
-    const reward = Math.abs(signal.tp - signal.entry);
-    const rr = (reward / risk).toFixed(2);
+    const reward1 = Math.abs(signal.tp1 - signal.entry);
+    const reward2 = Math.abs(signal.tp2 - signal.entry);
+    const reward3 = Math.abs(signal.tp3 - signal.entry);
+    const rr1 = (reward1 / risk).toFixed(1);
+    const rr2 = (reward2 / risk).toFixed(1);
+    const rr3 = (reward3 / risk).toFixed(1);
 
     const message = `
-${emoji} *إشارة ${direction} جديدة*
+${emoji} <b>إشارة ${direction} جديدة</b>
 
-📊 *الزوج:* ${signal.pair}
-💰 *الدخول:* ${signal.entry.toFixed(2)}
-🎯 *الهدف:* ${signal.tp.toFixed(2)}
-🛑 *الإيقاف:* ${signal.sl.toFixed(2)}
+📊 <b>الزوج:</b> ${signal.pair}
+💰 <b>الدخول:</b> ${signal.entry.toFixed(2)}
 
-📈 *نسبة RR:* 1:${rr}
-✅ *الثقة:* ${signal.confidence}%
+🎯 <b>الأهداف:</b>
+   TP1: ${signal.tp1.toFixed(2)} (1:${rr1})
+   TP2: ${signal.tp2.toFixed(2)} (1:${rr2})
+   TP3: ${signal.tp3.toFixed(2)} (1:${rr3})
 
-⏰ *الوقت:* ${signal.timestamp.toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}
+🛑 <b>الإيقاف:</b> ${signal.sl.toFixed(2)}
 
-_تم إنشاؤها بواسطة ICT AI Trader_
+✅ <b>الثقة:</b> ${signal.confidence}%
+⏰ <b>الوقت:</b> ${signal.timestamp.toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}
+
+<i>تم إنشاؤها بواسطة ICT AI Trader</i>
 `.trim();
 
     const response = await fetchFn(`${TELEGRAM_API_URL}/sendMessage`, {
@@ -56,7 +66,7 @@ _تم إنشاؤها بواسطة ICT AI Trader_
       body: JSON.stringify({
         chat_id: chatId,
         text: message,
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
       }),
     });
 

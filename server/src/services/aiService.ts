@@ -191,7 +191,9 @@ export const systemInstruction = `
     "type": "BUY_LIMIT" | "SELL_LIMIT" | "BUY_STOP" | "SELL_STOP",
     "entry": number,
     "sl": number,
-    "tp": number,
+    "tp1": number,
+    "tp2": number,
+    "tp3": number,
     "expiryMinutes": 60,
     "cancelConditions": ["شرط 1 بالعربية", "شرط 2 بالعربية"]
   }
@@ -397,7 +399,16 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // 10) مستويات الصفقة
   t.entry = round2(Number(t.entry));
   t.sl = round2(Number(t.sl));
-  t.tp = round2(Number(t.tp));
+  t.tp1 = round2(Number(t.tp1 || t.tp || 0));
+  t.tp2 = round2(Number(t.tp2 || 0));
+  t.tp3 = round2(Number(t.tp3 || 0));
+
+  // التحقق من وجود الأهداف الثلاثة
+  if (!t.tp1 || !t.tp2 || !t.tp3) {
+    r.decision = "NO_TRADE";
+    r.reasons = [...r.reasons, "يجب تحديد 3 أهداف (TP1, TP2, TP3)"];
+    return r as ICTAnalysis;
+  }
 
   // 11) المسافة (2%)
   const dist = Math.abs(t.entry - currentPrice);
@@ -413,29 +424,45 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
 
   // 12) ترتيب SL/TP
   if (isBuy) {
-    if (!(t.sl < t.entry && t.entry < t.tp)) {
+    if (!(t.sl < t.entry && t.entry < t.tp1 && t.tp1 < t.tp2 && t.tp2 < t.tp3)) {
       r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "ترتيب مستويات الشراء خاطئ (SL < Entry < TP)"];
+      r.reasons = [...r.reasons, "ترتيب مستويات الشراء خاطئ (SL < Entry < TP1 < TP2 < TP3)"];
       return r as ICTAnalysis;
     }
   } else {
-    if (!(t.tp < t.entry && t.entry < t.sl)) {
+    if (!(t.tp3 < t.tp2 && t.tp2 < t.tp1 && t.tp1 < t.entry && t.entry < t.sl)) {
       r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "ترتيب مستويات البيع خاطئ (TP < Entry < SL)"];
+      r.reasons = [...r.reasons, "ترتيب مستويات البيع خاطئ (TP3 < TP2 < TP1 < Entry < SL)"];
       return r as ICTAnalysis;
     }
   }
 
-  // 13) RR
+  // 13) RR للأهداف الثلاثة
   const risk = Math.abs(t.entry - t.sl);
-  const reward = Math.abs(t.tp - t.entry);
-  const rr = reward / (risk || 0.0001);
-  if (rr < opts.minRR) {
+  const reward1 = Math.abs(t.tp1 - t.entry);
+  const reward2 = Math.abs(t.tp2 - t.entry);
+  const reward3 = Math.abs(t.tp3 - t.entry);
+  
+  const rr1 = reward1 / (risk || 0.0001);
+  const rr2 = reward2 / (risk || 0.0001);
+  const rr3 = reward3 / (risk || 0.0001);
+  
+  // التحقق من RR للهدف الأول (الحد الأدنى)
+  if (rr1 < opts.minRR) {
     r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, `RR ضعيف (${rr.toFixed(2)}) - المطلوب >= ${opts.minRR}`];
+    r.reasons = [...r.reasons, `RR للهدف الأول ضعيف (${rr1.toFixed(2)}) - المطلوب >= ${opts.minRR}`];
     return r as ICTAnalysis;
   }
-  t.rrRatio = `1:${rr.toFixed(1)}`;
+  
+  // التحقق من أن الأهداف تتصاعد بشكل منطقي
+  if (rr2 <= rr1 || rr3 <= rr2) {
+    r.decision = "NO_TRADE";
+    r.reasons = [...r.reasons, "الأهداف يجب أن تكون متصاعدة (RR1 < RR2 < RR3)"];
+    return r as ICTAnalysis;
+  }
+  
+  // حفظ نسب RR
+  t.rrRatio = `TP1: 1:${rr1.toFixed(1)} | TP2: 1:${rr2.toFixed(1)} | TP3: 1:${rr3.toFixed(1)}`;
 
   // ✅ OK
   return r as ICTAnalysis;
@@ -516,6 +543,22 @@ export const analyzeMultiTimeframe = async (
 - الدخول يجب أن يكون أقل من السعر الحالي للشراء (BUY_LIMIT)
 - الدخول يجب أن يكون أعلى من السعر الحالي للبيع (SELL_LIMIT)
 
+⚠️ مهم جداً - 3 أهداف إجبارية:
+- TP1 (الهدف الأول): أقرب مستوى مقاومة/دعم أو FVG معاكس (محافظ)
+- TP2 (الهدف الثاني): مستوى سيولة متوسط أو OB مهم (متوازن)
+- TP3 (الهدف الثالث): مستوى سيولة رئيسي BSL/SSL على H1 (طموح)
+
+📊 نسب الأهداف الموصى بها:
+- TP1: RR = 1.5 إلى 2.0 (هدف سريع وآمن)
+- TP2: RR = 2.5 إلى 3.5 (هدف متوسط)
+- TP3: RR = 4.0 إلى 6.0 (هدف رئيسي)
+
+💡 يجب أن تكون الأهداف مبنية على:
+- مستويات سيولة واضحة على H1
+- مناطق PD Array معاكسة (FVG/OB)
+- مستويات نفسية مهمة
+- قمم/قيعان سابقة واضحة
+
 🔄 مثال على سحب السيولة الداخلي على M5:
 - السعر يكسر قاع محلي بذيل طويل ثم يعود للأعلى (SSL Sweep)
 - أو السعر يكسر قمة محلية بذيل طويل ثم يعود للأسفل (BSL Sweep)
@@ -595,7 +638,7 @@ export const chatWithAI = async (
 الاتجاه: ${analysis.sentiment}
 التقييم: ${analysis.score}/10
 الثقة: ${analysis.confidence}%
-${analysis.suggestedTrade ? `صفقة: ${analysis.suggestedTrade.type} | Entry ${analysis.suggestedTrade.entry} | SL ${analysis.suggestedTrade.sl} | TP ${analysis.suggestedTrade.tp}` : ""}
+${analysis.suggestedTrade ? `صفقة: ${analysis.suggestedTrade.type} | Entry ${analysis.suggestedTrade.entry} | SL ${analysis.suggestedTrade.sl} | TP1 ${analysis.suggestedTrade.tp1} | TP2 ${analysis.suggestedTrade.tp2} | TP3 ${analysis.suggestedTrade.tp3}` : ""}
 `
     : "لا يوجد تحليل حالي";
 

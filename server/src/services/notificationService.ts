@@ -64,7 +64,9 @@ export const notifyTradeOpportunity = async (analysis: any, currentPrice: number
           type: trade.type.includes('BUY') ? 'BUY' : 'SELL',
           entry: trade.entry,
           sl: trade.sl,
-          tp: trade.tp,
+          tp1: trade.tp1,
+          tp2: trade.tp2,
+          tp3: trade.tp3,
           confidence: analysis.confidence || analysis.score * 10,
           pair: 'XAUUSD',
           timestamp: new Date()
