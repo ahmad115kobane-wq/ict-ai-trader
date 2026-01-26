@@ -160,15 +160,19 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
       // المستخدم لديه اشتراك نشط
       const expiryDate = new Date(activeSubscription.expires_at).toLocaleDateString('ar-SA');
       
-      // إنشاء زر التحليل التلقائي
+      // إنشاء أزرار
       const autoStatus = user.auto_analysis_enabled ? '⏸️ إيقاف' : '▶️ تفعيل';
       const keyboard = {
-        inline_keyboard: [[
-          {
+        inline_keyboard: [
+          [{
             text: `${autoStatus} التحليل التلقائي`,
             callback_data: 'toggle_auto'
-          }
-        ]]
+          }],
+          [{
+            text: '📊 تفاصيل اشتراكي',
+            callback_data: 'subscription_details'
+          }]
+        ]
       };
       
       await sendMessage(
@@ -178,9 +182,7 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
         `📅 ينتهي في: ${expiryDate}\n` +
         `💰 رصيدك: ${user.coins} عملة\n\n` +
         `🤖 التحليل التلقائي: ${user.auto_analysis_enabled ? '✅ مفعّل' : '⏸️ متوقف'}\n\n` +
-        `استخدم الأوامر التالية:\n` +
-        `/status - عرض حالة الاشتراك\n` +
-        `/packages - عرض الباقات المتاحة`,
+        `استخدم الأزرار أدناه للتحكم في حسابك:`,
         keyboard
       );
       console.log(`✅ Sent subscription info to user: ${telegramUser.id}`);
@@ -348,6 +350,76 @@ async function handleStatusCommand(chatId: number, telegramUser: TelegramUser): 
 }
 
 /**
+ * معالج زر تفاصيل الاشتراك
+ */
+async function handleSubscriptionDetails(chatId: number, telegramUser: TelegramUser, callbackQueryId: string): Promise<void> {
+  try {
+    const user = await getOrCreateUser(telegramUser);
+    
+    if (!user) {
+      await answerCallbackQuery(callbackQueryId, '❌ خطأ في الحساب');
+      return;
+    }
+
+    const activeSubscription = await getUserActiveSubscription(user.id);
+    
+    if (!activeSubscription) {
+      await answerCallbackQuery(callbackQueryId, '⚠️ لا يوجد اشتراك نشط');
+      await sendMessage(
+        chatId,
+        '⚠️ <b>لا يوجد اشتراك نشط</b>\n\n' +
+        'للحصول على اشتراك، استخدم /packages لعرض الباقات المتاحة.'
+      );
+      return;
+    }
+
+    await answerCallbackQuery(callbackQueryId, '📊 تفاصيل الاشتراك');
+
+    const expiryDate = new Date(activeSubscription.expires_at);
+    const now = new Date();
+    const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    const keyboard = {
+      inline_keyboard: [[
+        {
+          text: '🔙 رجوع',
+          callback_data: 'back_to_main'
+        }
+      ]]
+    };
+
+    await sendMessage(
+      chatId,
+      `📊 <b>تفاصيل اشتراكك</b>\n\n` +
+      `📦 <b>الباقة:</b> ${activeSubscription.plan_name}\n` +
+      `💰 <b>السعر المدفوع:</b> ${activeSubscription.price} عملة\n` +
+      `📅 <b>تاريخ البدء:</b> ${new Date(activeSubscription.created_at).toLocaleDateString('ar-SA')}\n` +
+      `⏰ <b>تاريخ الانتهاء:</b> ${expiryDate.toLocaleDateString('ar-SA')}\n` +
+      `⏳ <b>الأيام المتبقية:</b> ${daysRemaining} يوم\n\n` +
+      `💎 <b>رصيدك الحالي:</b> ${user.coins} عملة\n` +
+      `🤖 <b>التحليل التلقائي:</b> ${user.auto_analysis_enabled ? '✅ مفعّل' : '⏸️ متوقف'}\n\n` +
+      `📈 <b>الميزات:</b>\n` +
+      `✅ استلام إشارات تداول غير محدودة\n` +
+      `✅ تحليل ICT متقدم\n` +
+      `✅ إشعارات فورية عبر تليجرام\n` +
+      `✅ دعم فني مميز`,
+      keyboard
+    );
+  } catch (error) {
+    console.error(`❌ Error in handleSubscriptionDetails:`, error);
+    await answerCallbackQuery(callbackQueryId, '❌ حدث خطأ');
+  }
+}
+
+/**
+ * معالج زر الرجوع للقائمة الرئيسية
+ */
+async function handleBackToMain(chatId: number, telegramUser: TelegramUser, callbackQueryId: string): Promise<void> {
+  await answerCallbackQuery(callbackQueryId, '🏠 القائمة الرئيسية');
+  await handleStartCommand(chatId, telegramUser);
+}
+
+/**
  * معالج زر التحليل التلقائي
  */
 async function handleAutoToggle(chatId: number, telegramUser: TelegramUser, callbackQueryId: string): Promise<void> {
@@ -511,6 +583,10 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         await handlePackagePurchase(chatId, user, packageId, callbackQuery.id);
       } else if (data === 'toggle_auto') {
         await handleAutoToggle(chatId, user, callbackQuery.id);
+      } else if (data === 'subscription_details') {
+        await handleSubscriptionDetails(chatId, user, callbackQuery.id);
+      } else if (data === 'back_to_main') {
+        await handleBackToMain(chatId, user, callbackQuery.id);
       }
     }
   } catch (error) {
