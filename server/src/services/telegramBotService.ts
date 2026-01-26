@@ -171,6 +171,10 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
           [{
             text: '📊 تفاصيل اشتراكي',
             callback_data: 'subscription_details'
+          }],
+          [{
+            text: '💬 الدعم الفني',
+            url: 'https://t.me/iqbotict'
           }]
         ]
       };
@@ -234,11 +238,17 @@ async function showPackages(chatId: number, user: any): Promise<void> {
       callback_data: `buy_${pkg.id}`
     }]);
     
-    // إضافة زر الرئيسية
-    buttons.push([{
-      text: '🏠 الرئيسية',
-      callback_data: 'back_to_main'
-    }]);
+    // إضافة أزرار التنقل
+    buttons.push([
+      {
+        text: '🏠 الرئيسية',
+        callback_data: 'back_to_main'
+      },
+      {
+        text: '💬 الدعم الفني',
+        url: 'https://t.me/iqbotict'
+      }
+    ]);
     
     const keyboard = {
       inline_keyboard: buttons
@@ -388,12 +398,16 @@ async function handleSubscriptionDetails(chatId: number, telegramUser: TelegramU
     const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     
     const keyboard = {
-      inline_keyboard: [[
-        {
+      inline_keyboard: [
+        [{
           text: '🔙 رجوع',
           callback_data: 'back_to_main'
-        }
-      ]]
+        }],
+        [{
+          text: '💬 الدعم الفني',
+          url: 'https://t.me/iqbotict'
+        }]
+      ]
     };
 
     await sendMessage(
