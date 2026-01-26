@@ -2,6 +2,7 @@
 // خدمة بوت تليجرام للتفاعل مع المستخدمين
 
 import { v4 as uuidv4 } from 'uuid';
+import bcrypt from 'bcryptjs';
 import {
   getUserById,
   createUser,
@@ -9,7 +10,6 @@ import {
   getAllVipPackages
 } from '../db/index';
 import { purchaseSubscription } from './subscriptionService';
-import bcrypt from 'bcryptjs';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -97,15 +97,15 @@ async function getOrCreateUser(telegramUser: TelegramUser): Promise<any> {
   // البحث عن المستخدم باستخدام telegram_id كـ email مؤقت
   const telegramEmail = `telegram_${telegramUser.id}@ict-trader.local`;
   
-  let user = getUserById(telegramEmail);
+  let user = await getUserById(telegramEmail);
   
   if (!user) {
     // إنشاء مستخدم جديد
     const userId = uuidv4();
     const hashedPassword = await bcrypt.hash(`telegram_${telegramUser.id}`, 10);
     
-    createUser(userId, telegramEmail, hashedPassword);
-    user = getUserById(userId);
+    await createUser(userId, telegramEmail, hashedPassword);
+    user = await getUserById(userId);
     
     console.log(`✅ Created new user for Telegram ID: ${telegramUser.id}`);
   }
