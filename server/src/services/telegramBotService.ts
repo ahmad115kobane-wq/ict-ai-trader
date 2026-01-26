@@ -133,35 +133,49 @@ async function getOrCreateUser(telegramUser: TelegramUser): Promise<any> {
  * معالج أمر /start
  */
 async function handleStartCommand(chatId: number, telegramUser: TelegramUser): Promise<void> {
-  // الحصول على المستخدم أو إنشاء حساب جديد
-  const user = await getOrCreateUser(telegramUser);
-  
-  if (!user) {
-    await sendMessage(chatId, '❌ حدث خطأ في إنشاء الحساب. يرجى المحاولة لاحقاً.');
-    return;
-  }
-
-  // التحقق من الاشتراك
-  const activeSubscription = await getUserActiveSubscription(user.id);
-  
-  if (activeSubscription) {
-    // المستخدم لديه اشتراك نشط
-    const expiryDate = new Date(activeSubscription.expires_at).toLocaleDateString('ar-SA');
+  try {
+    console.log(`🔄 Processing /start for user: ${telegramUser.id}`);
     
-    await sendMessage(
-      chatId,
-      `🎉 *مرحباً ${telegramUser.first_name}!*\n\n` +
-      `✅ لديك اشتراك نشط: *${activeSubscription.plan_name}*\n` +
-      `📅 ينتهي في: ${expiryDate}\n` +
-      `💰 رصيدك: ${user.coins} عملة\n\n` +
-      `استخدم الأوامر التالية:\n` +
-      `/analyze - طلب تحليل جديد\n` +
-      `/status - عرض حالة الاشتراك\n` +
-      `/packages - عرض الباقات المتاحة`
-    );
-  } else {
-    // المستخدم ليس لديه اشتراك - عرض الباقات
-    await showPackages(chatId, user);
+    // الحصول على المستخدم أو إنشاء حساب جديد
+    const user = await getOrCreateUser(telegramUser);
+    
+    if (!user) {
+      console.log(`❌ Failed to get/create user for: ${telegramUser.id}`);
+      await sendMessage(chatId, '❌ حدث خطأ في إنشاء الحساب. يرجى المحاولة لاحقاً.');
+      return;
+    }
+
+    console.log(`✅ User found/created: ${user.email}`);
+
+    // التحقق من الاشتراك
+    const activeSubscription = await getUserActiveSubscription(user.id);
+    
+    if (activeSubscription) {
+      console.log(`✅ User has active subscription: ${activeSubscription.plan_name}`);
+      // المستخدم لديه اشتراك نشط
+      const expiryDate = new Date(activeSubscription.expires_at).toLocaleDateString('ar-SA');
+      
+      await sendMessage(
+        chatId,
+        `🎉 *مرحباً ${telegramUser.first_name}!*\n\n` +
+        `✅ لديك اشتراك نشط: *${activeSubscription.plan_name}*\n` +
+        `📅 ينتهي في: ${expiryDate}\n` +
+        `💰 رصيدك: ${user.coins} عملة\n\n` +
+        `استخدم الأوامر التالية:\n` +
+        `/analyze - طلب تحليل جديد\n` +
+        `/status - عرض حالة الاشتراك\n` +
+        `/packages - عرض الباقات المتاحة`
+      );
+      console.log(`✅ Sent subscription info to user: ${telegramUser.id}`);
+    } else {
+      console.log(`ℹ️ User has no subscription, showing packages`);
+      // المستخدم ليس لديه اشتراك - عرض الباقات
+      await showPackages(chatId, user);
+      console.log(`✅ Sent packages to user: ${telegramUser.id}`);
+    }
+  } catch (error) {
+    console.error(`❌ Error in handleStartCommand:`, error);
+    await sendMessage(chatId, '❌ حدث خطأ. يرجى المحاولة لاحقاً.');
   }
 }
 
@@ -169,41 +183,52 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
  * عرض الباقات المتاحة
  */
 async function showPackages(chatId: number, user: any): Promise<void> {
-  const packages = await getAllVipPackages();
-  
-  if (packages.length === 0) {
-    await sendMessage(chatId, '❌ لا توجد باقات متاحة حالياً.');
-    return;
-  }
-
-  let message = `🎁 *الباقات المتاحة*\n\n`;
-  message += `💰 رصيدك الحالي: ${user.coins} عملة\n\n`;
-  
-  const keyboard = {
-    inline_keyboard: packages.map((pkg: any) => [{
-      text: `${pkg.name_ar} - ${pkg.price}`,
-      callback_data: `buy_${pkg.id}`
-    }])
-  };
-
-  packages.forEach((pkg: any) => {
-    message += `📦 *${pkg.name_ar}*\n`;
-    message += `💵 السعر: ${pkg.price}\n`;
-    message += `⏰ المدة: ${pkg.duration_days} يوم\n`;
-    message += `💎 عملات مجانية: ${pkg.coins_included}\n`;
+  try {
+    console.log(`🔄 Fetching packages for user: ${user.email}`);
+    const packages = await getAllVipPackages();
     
-    if (pkg.analysis_limit === -1) {
-      message += `📊 التحليلات: غير محدودة\n`;
-    } else {
-      message += `📊 التحليلات: ${pkg.analysis_limit} يومياً\n`;
+    if (packages.length === 0) {
+      console.log(`⚠️ No packages available`);
+      await sendMessage(chatId, '❌ لا توجد باقات متاحة حالياً.');
+      return;
     }
+
+    console.log(`✅ Found ${packages.length} packages`);
+
+    let message = `🎁 *الباقات المتاحة*\n\n`;
+    message += `💰 رصيدك الحالي: ${user.coins} عملة\n\n`;
     
-    message += `\n`;
-  });
+    const keyboard = {
+      inline_keyboard: packages.map((pkg: any) => [{
+        text: `${pkg.name_ar} - ${pkg.price}`,
+        callback_data: `buy_${pkg.id}`
+      }])
+    };
 
-  message += `\n👇 اختر الباقة المناسبة لك:`;
+    packages.forEach((pkg: any) => {
+      message += `📦 *${pkg.name_ar}*\n`;
+      message += `💵 السعر: ${pkg.price}\n`;
+      message += `⏰ المدة: ${pkg.duration_days} يوم\n`;
+      message += `💎 عملات مجانية: ${pkg.coins_included}\n`;
+      
+      if (pkg.analysis_limit === -1) {
+        message += `📊 التحليلات: غير محدودة\n`;
+      } else {
+        message += `📊 التحليلات: ${pkg.analysis_limit} يومياً\n`;
+      }
+      
+      message += `\n`;
+    });
 
-  await sendMessage(chatId, message, keyboard);
+    message += `\n👇 اختر الباقة المناسبة لك:`;
+
+    console.log(`📤 Sending packages message to chat: ${chatId}`);
+    await sendMessage(chatId, message, keyboard);
+    console.log(`✅ Packages sent successfully`);
+  } catch (error) {
+    console.error(`❌ Error in showPackages:`, error);
+    await sendMessage(chatId, '❌ حدث خطأ في عرض الباقات.');
+  }
 }
 
 /**
