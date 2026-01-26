@@ -1,0 +1,11 @@
+node_modules/
+*.log
+.env.local
+.env.development
+test-*.html
+check-*.ts
+check-*.js
+show-*.ts
+list-*.ts
+analysis-images/
+dist/

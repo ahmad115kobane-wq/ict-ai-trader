@@ -1,0 +1,269 @@
+// db/postgresAdapter.ts
+// PostgreSQL adapter for production (Railway)
+
+import { Pool, PoolClient } from 'pg';
+import { v4 as uuidv4 } from 'uuid';
+
+let pool: Pool | null = null;
+
+// تهيئة PostgreSQL
+export const initPostgres = async (): Promise<void> => {
+  try {
+    console.log('🔄 Initializing PostgreSQL...');
+    
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
+
+    // اختبار الاتصال
+    const client = await pool.connect();
+    console.log('✅ PostgreSQL connected successfully');
+    
+    // إنشاء الجداول
+    await createTables(client);
+    
+    client.release();
+    console.log('✅ PostgreSQL initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize PostgreSQL:', error);
+    throw error;
+  }
+};
+
+// إنشاء جميع الجداول
+const createTables = async (client: PoolClient): Promise<void> => {
+  console.log('🔄 Creating PostgreSQL tables...');
+  
+  try {
+    await client.query('BEGIN');
+
+    // جدول المستخدمين
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        coins INTEGER DEFAULT 100,
+        subscription TEXT DEFAULT 'free',
+        subscription_expiry TEXT,
+        auto_analysis_enabled BOOLEAN DEFAULT FALSE,
+        auto_analysis_enabled_at TIMESTAMP,
+        push_token TEXT,
+        push_token_updated_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // إضافة حقول push_token إذا لم تكن موجودة (للتوافق مع الجداول القديمة)
+    await client.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='push_token') THEN
+          ALTER TABLE users ADD COLUMN push_token TEXT;
+          ALTER TABLE users ADD COLUMN push_token_updated_at TIMESTAMP;
+        END IF;
+      END $$;
+    `);
+
+    // جدول تاريخ التحليلات (القديم - للتوافق)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS analysis_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        score REAL,
+        confidence REAL,
+        sentiment TEXT,
+        suggested_trade TEXT,
+        reasoning TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // جدول التحليلات المحسّن
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS enhanced_analysis_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        timeframe_h1 TEXT,
+        timeframe_m5 TEXT,
+        current_price REAL NOT NULL,
+        decision TEXT NOT NULL,
+        score REAL,
+        confidence REAL,
+        sentiment TEXT,
+        bias TEXT,
+        reasoning TEXT,
+        suggested_trade TEXT,
+        trade_type TEXT,
+        entry_price REAL,
+        stop_loss REAL,
+        take_profit REAL,
+        risk_reward_ratio REAL,
+        expiry_minutes INTEGER,
+        liquidity_sweep_detected BOOLEAN DEFAULT FALSE,
+        market_structure TEXT,
+        key_levels TEXT,
+        waiting_for TEXT,
+        reasons TEXT,
+        analysis_type TEXT DEFAULT 'manual',
+        h1_image_path TEXT,
+        m5_image_path TEXT,
+        is_trade_executed BOOLEAN DEFAULT FALSE,
+        trade_result TEXT,
+        pnl REAL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // فهارس للتحليلات المحسّنة
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_user_date 
+      ON enhanced_analysis_history(user_id, created_at DESC)
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_decision 
+      ON enhanced_analysis_history(decision)
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_type 
+      ON enhanced_analysis_history(analysis_type)
+    `);
+
+    // جدول الاشتراكات
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        plan TEXT NOT NULL,
+        package_id TEXT,
+        plan_name TEXT,
+        coins_added INTEGER,
+        price REAL,
+        analysis_limit INTEGER DEFAULT -1,
+        auto_renew BOOLEAN DEFAULT FALSE,
+        status TEXT DEFAULT 'active',
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP
+      )
+    `);
+
+    // جدول التحليل التلقائي
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS auto_analysis (
+        id TEXT PRIMARY KEY,
+        symbol TEXT NOT NULL,
+        current_price REAL,
+        decision TEXT,
+        score REAL,
+        confidence REAL,
+        suggested_trade TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // جدول الجلسات
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        device_info TEXT,
+        ip_address TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sessions_user_active 
+      ON sessions(user_id, is_active)
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sessions_token 
+      ON sessions(token)
+    `);
+
+    // جدول الباقات VIP
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vip_packages (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        name_ar TEXT NOT NULL,
+        description TEXT,
+        description_ar TEXT,
+        duration_type TEXT NOT NULL,
+        duration_days INTEGER NOT NULL,
+        price REAL NOT NULL,
+        coins_included INTEGER DEFAULT 0,
+        analysis_limit INTEGER DEFAULT -1,
+        features TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // جدول استخدام التحليلات
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS analysis_usage (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        analysis_date DATE NOT NULL,
+        analysis_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, analysis_date)
+      )
+    `);
+
+    await client.query('COMMIT');
+    console.log('✅ All PostgreSQL tables created successfully');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error creating tables:', error);
+    throw error;
+  }
+};
+
+// تنفيذ استعلام
+export const query = async (text: string, params?: any[]): Promise<any> => {
+  if (!pool) throw new Error('PostgreSQL not initialized');
+  
+  try {
+    const result = await pool.query(text, params);
+    return result;
+  } catch (error) {
+    console.error('❌ PostgreSQL query error:', error);
+    throw error;
+  }
+};
+
+// الحصول على client للمعاملات
+export const getClient = async (): Promise<PoolClient> => {
+  if (!pool) throw new Error('PostgreSQL not initialized');
+  return await pool.connect();
+};
+
+// إغلاق الاتصال
+export const closePool = async (): Promise<void> => {
+  if (pool) {
+    await pool.end();
+    console.log('✅ PostgreSQL pool closed');
+  }
+};
+
+export default pool;
