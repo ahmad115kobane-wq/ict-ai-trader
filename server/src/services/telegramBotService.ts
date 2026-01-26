@@ -56,12 +56,17 @@ async function sendMessage(chatId: number, text: string, replyMarkup?: any): Pro
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: replyMarkup
       })
     });
 
     const data: any = await response.json();
+    
+    if (!data.ok) {
+      console.error('❌ Telegram API error:', data);
+    }
+    
     return data.ok;
   } catch (error) {
     console.error('❌ Error sending message:', error);
@@ -157,8 +162,8 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
       
       await sendMessage(
         chatId,
-        `🎉 *مرحباً ${telegramUser.first_name}!*\n\n` +
-        `✅ لديك اشتراك نشط: *${activeSubscription.plan_name}*\n` +
+        `🎉 <b>مرحباً ${telegramUser.first_name}!</b>\n\n` +
+        `✅ لديك اشتراك نشط: <b>${activeSubscription.plan_name}</b>\n` +
         `📅 ينتهي في: ${expiryDate}\n` +
         `💰 رصيدك: ${user.coins} عملة\n\n` +
         `استخدم الأوامر التالية:\n` +
@@ -195,7 +200,7 @@ async function showPackages(chatId: number, user: any): Promise<void> {
 
     console.log(`✅ Found ${packages.length} packages`);
 
-    let message = `🎁 *الباقات المتاحة*\n\n`;
+    let message = `🎁 <b>الباقات المتاحة</b>\n\n`;
     message += `💰 رصيدك الحالي: ${user.coins} عملة\n\n`;
     
     const keyboard = {
@@ -206,7 +211,7 @@ async function showPackages(chatId: number, user: any): Promise<void> {
     };
 
     packages.forEach((pkg: any) => {
-      message += `📦 *${pkg.name_ar}*\n`;
+      message += `📦 <b>${pkg.name_ar}</b>\n`;
       message += `💵 السعر: ${pkg.price}\n`;
       message += `⏰ المدة: ${pkg.duration_days} يوم\n`;
       message += `💎 عملات مجانية: ${pkg.coins_included}\n`;
