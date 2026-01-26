@@ -96,7 +96,7 @@ export const systemInstruction = `
 (3) شروط M5 (إجباري لكن مرن Balanced)
 ═══════════════════════════════════════════════════════════════
 للسماح بالدخول على M5 يجب:
-- (CHoCH أو MSS أو BOS) في اتجاه الصفقة  ✅
+- (CHoCH أو MSS) في اتجاه الصفقة  ✅
 - Displacement = MODERATE أو STRONG  ✅ (ارفض WEAK)
 - يوجد منطقة دخول: FVG أو OB  ✅
   أو (Rejection قوي بذيول عند مستوى الدخول) ✅ بديل مقبول إذا لم يتوفر FVG/OB
@@ -105,6 +105,7 @@ export const systemInstruction = `
 - M5 في تذبذب واضح (CONSOLIDATION / Range) + بدون كسر واضح
 - Displacement ضعيف (WEAK)
 - لا يوجد أي منطقة دخول ولا Rejection قوي
+- BOS فقط بدون CHoCH أو MSS (BOS أضعف من CHoCH/MSS)
 
 ═══════════════════════════════════════════════════════════════
 (4) شروط الصفقة (متوازنة - تعطي صفقات معقولة)
@@ -145,7 +146,7 @@ export const systemInstruction = `
     "nearestSSL": "وصف/سعر"
   },
   "m5Analysis": {
-    "marketStructure": "BOS" | "MSS" | "CHoCH" | "CONSOLIDATION",
+    "marketStructure": "MSS" | "CHoCH" | "CONSOLIDATION",
     "displacement": "STRONG" | "MODERATE" | "WEAK",
     "pdArray": "FVG" | "OB" | "NONE",
     "readyForEntry": true | false
@@ -354,7 +355,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   const m5Disp = (m5.displacement || r.displacementStrength || "WEAK") as string;
   const m5Pd = (m5.pdArray || r.pdArrayDetails?.primary || "NONE") as string;
 
-  const hasChoCHorMSS = m5Structure === "CHoCH" || m5Structure === "MSS" || m5Structure === "BOS";
+  const hasChoCHorMSS = m5Structure === "CHoCH" || m5Structure === "MSS";
   const dispOk = m5Disp !== "WEAK";
   const hasPdArray = m5Pd !== "NONE";
   const hasStrongReject = r.liquidityPurge?.evidence?.wickRejection === true;
@@ -364,7 +365,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     r.decision = "NO_TRADE";
     r.reasons = [
       ...r.reasons,
-      "فريم 5 دقائق بدون CHoCH أو MSS أو BOS واضح - لا توجد فرصة حالياً"
+      "فريم 5 دقائق بدون CHoCH أو MSS واضح - لا توجد فرصة حالياً (BOS غير كافٍ)"
     ];
     return r as ICTAnalysis;
   }
@@ -523,7 +524,7 @@ export const analyzeMultiTimeframe = async (
 - حدّد allowBuy / allowSell حسب السياق العام
 
 الصورة 2: M5 (الدخول + السيولة الداخلية)
-- حدّد CHoCH أو MSS أو BOS
+- حدّد CHoCH أو MSS (لا تقبل BOS فقط)
 - حدّد displacement
 - حدّد FVG/OB أو رفض قوي
 - ⚠️ جديد: إذا لم يحدث Sweep على H1، ابحث عن سحب سيولة داخلي على M5:

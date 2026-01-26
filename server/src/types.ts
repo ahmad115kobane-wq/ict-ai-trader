@@ -34,7 +34,7 @@ export interface H1Analysis {
 }
 
 export interface M5Analysis {
-  marketStructure: 'BOS' | 'MSS' | 'CHoCH' | 'CONSOLIDATION';
+  marketStructure: 'MSS' | 'CHoCH' | 'CONSOLIDATION';
   displacement: 'STRONG' | 'MODERATE' | 'WEAK';
   pdArray: 'FVG' | 'OB' | 'NONE';
   readyForEntry: boolean;
