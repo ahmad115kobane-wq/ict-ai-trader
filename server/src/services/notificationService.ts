@@ -48,20 +48,36 @@ export const notifyTradeOpportunity = async (analysis: any, currentPrice: number
 
   const trade = analysis.suggestedTrade;
   
-  // إرسال باستخدام خدمة تليجرام الجديدة
-  if (TELEGRAM_CHAT_ID) {
-    await sendTradeSignal(TELEGRAM_CHAT_ID, {
-      type: trade.type.includes('BUY') ? 'BUY' : 'SELL',
-      entry: trade.entry,
-      sl: trade.sl,
-      tp: trade.tp,
-      confidence: analysis.confidence || analysis.score * 10,
-      pair: 'XAUUSD',
-      timestamp: new Date()
-    });
+  // إرسال باستخدام خدمة تليجرام للمستخدمين المشتركين
+  try {
+    const { getUsersWithAutoAnalysisEnabled } = await import('../db/index');
+    const users = await getUsersWithAutoAnalysisEnabled();
+    
+    console.log(`📱 Sending trade signal to ${users.length} users with auto analysis enabled`);
+    
+    for (const user of users) {
+      // البحث عن telegram chat_id للمستخدم
+      if (user.email && user.email.startsWith('telegram_')) {
+        const telegramId = user.email.replace('telegram_', '').replace('@ict-trader.local', '');
+        
+        await sendTradeSignal(telegramId, {
+          type: trade.type.includes('BUY') ? 'BUY' : 'SELL',
+          entry: trade.entry,
+          sl: trade.sl,
+          tp: trade.tp,
+          confidence: analysis.confidence || analysis.score * 10,
+          pair: 'XAUUSD',
+          timestamp: new Date()
+        });
+        
+        console.log(`✅ Trade signal sent to Telegram user: ${telegramId}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error sending trade signals to Telegram:', error);
   }
 
-  console.log('📱 Trade opportunity notification sent to Telegram');
+  console.log('📱 Trade opportunity notification sent');
 };
 
 // إرسال إشعار بعدم وجود فرصة (اختياري)

@@ -167,7 +167,7 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
         `📅 ينتهي في: ${expiryDate}\n` +
         `💰 رصيدك: ${user.coins} عملة\n\n` +
         `استخدم الأوامر التالية:\n` +
-        `/analyze - طلب تحليل جديد\n` +
+        `/auto - تفعيل/إيقاف التحليل التلقائي\n` +
         `/status - عرض حالة الاشتراك\n` +
         `/packages - عرض الباقات المتاحة`
       );
@@ -312,8 +312,61 @@ async function handleStatusCommand(chatId: number, telegramUser: TelegramUser): 
 }
 
 /**
- * معالج أمر /packages
+ * معالج أمر /auto - تفعيل/إيقاف التحليل التلقائي
  */
+async function handleAutoCommand(chatId: number, telegramUser: TelegramUser): Promise<void> {
+  try {
+    console.log(`🔄 Processing /auto for user: ${telegramUser.id}`);
+    
+    const user = await getOrCreateUser(telegramUser);
+    
+    if (!user) {
+      await sendMessage(chatId, '❌ حدث خطأ. يرجى المحاولة لاحقاً.');
+      return;
+    }
+
+    // التحقق من الاشتراك
+    const activeSubscription = await getUserActiveSubscription(user.id);
+    
+    if (!activeSubscription) {
+      await sendMessage(
+        chatId,
+        '⚠️ <b>يجب أن يكون لديك اشتراك نشط</b>\n\n' +
+        'للحصول على التحليلات التلقائية، يرجى الاشتراك في إحدى الباقات.\n\n' +
+        'استخدم /packages لعرض الباقات المتاحة.'
+      );
+      return;
+    }
+
+    // تبديل حالة التحليل التلقائي
+    const { setUserAutoAnalysis } = await import('../db/index');
+    const newStatus = !user.auto_analysis_enabled;
+    
+    await setUserAutoAnalysis(user.id, newStatus);
+    
+    if (newStatus) {
+      await sendMessage(
+        chatId,
+        `✅ <b>تم تفعيل التحليل التلقائي!</b>\n\n` +
+        `🤖 سيتم إرسال إشارات التداول تلقائياً إلى حسابك على تليجرام كل 5 دقائق.\n\n` +
+        `📊 ستستلم فقط الصفقات ذات الجودة العالية (Score ≥ 7)\n\n` +
+        `لإيقاف التحليل التلقائي، أرسل /auto مرة أخرى.`
+      );
+      console.log(`✅ Auto analysis enabled for user: ${telegramUser.id}`);
+    } else {
+      await sendMessage(
+        chatId,
+        `⏸️ <b>تم إيقاف التحليل التلقائي</b>\n\n` +
+        `لن تستلم إشارات التداول التلقائية بعد الآن.\n\n` +
+        `لإعادة التفعيل، أرسل /auto`
+      );
+      console.log(`⏸️ Auto analysis disabled for user: ${telegramUser.id}`);
+    }
+  } catch (error) {
+    console.error(`❌ Error in handleAutoCommand:`, error);
+    await sendMessage(chatId, '❌ حدث خطأ. يرجى المحاولة لاحقاً.');
+  }
+}
 async function handlePackagesCommand(chatId: number, telegramUser: TelegramUser): Promise<void> {
   const user = await getOrCreateUser(telegramUser);
   
@@ -342,6 +395,8 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         await handleStatusCommand(chatId, user);
       } else if (text === '/packages') {
         await handlePackagesCommand(chatId, user);
+      } else if (text === '/auto') {
+        await handleAutoCommand(chatId, user);
       } else {
         await sendMessage(chatId, 'استخدم /start للبدء');
       }
