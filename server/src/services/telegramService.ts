@@ -40,22 +40,34 @@ export async function sendTradeSignal(chatId: string, signal: TradeSignal): Prom
     const rr3 = (reward3 / risk).toFixed(1);
 
     const message = `
+╔═══════════════════════════
 ${emoji} <b>إشارة ${direction} جديدة</b>
+╚═══════════════════════════
 
 📊 <b>الزوج:</b> ${signal.pair}
 💰 <b>الدخول:</b> ${signal.entry.toFixed(2)}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━
 🎯 <b>الأهداف:</b>
-   TP1: ${signal.tp1.toFixed(2)} (1:${rr1})
-   TP2: ${signal.tp2.toFixed(2)} (1:${rr2})
-   TP3: ${signal.tp3.toFixed(2)} (1:${rr3})
+━━━━━━━━━━━━━━━━━━━━━━━━━
+   🥇 TP1: ${signal.tp1.toFixed(2)} (1:${rr1})
+   🥈 TP2: ${signal.tp2.toFixed(2)} (1:${rr2})
+   🥉 TP3: ${signal.tp3.toFixed(2)} (1:${rr3})
 
-🛑 <b>الإيقاف:</b> ${signal.sl.toFixed(2)}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+🛑 <b>إيقاف الخسارة:</b> ${signal.sl.toFixed(2)}
 
-✅ <b>الثقة:</b> ${signal.confidence}%
-⏰ <b>الوقت:</b> ${signal.timestamp.toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ <b>نسبة الثقة:</b> ${signal.confidence}%
+⏰ <b>التوقيت:</b> ${signal.timestamp.toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}
 
-<i>تم إنشاؤها بواسطة ICT AI Trader</i>
+━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ <b>تنبيه مهم:</b>
+الأمر المعلق صالح لمدة 60 دقيقة فقط
+إذا لم يتم تفعيله خلال هذه المدة، يُلغى تلقائياً
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<i>🤖 تم إنشاؤها بواسطة ICT AI Trader</i>
 `.trim();
 
     const response = await fetchFn(`${TELEGRAM_API_URL}/sendMessage`, {
