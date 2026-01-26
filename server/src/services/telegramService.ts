@@ -1,6 +1,9 @@
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
+// Use global fetch (available in Node 18+)
+const fetchFn = globalThis.fetch;
+
 interface TradeSignal {
   type: 'BUY' | 'SELL';
   entry: number;
@@ -45,7 +48,7 @@ ${emoji} *إشارة ${direction} جديدة*
 _تم إنشاؤها بواسطة ICT AI Trader_
 `.trim();
 
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+    const response = await fetchFn(`${TELEGRAM_API_URL}/sendMessage`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -57,7 +60,7 @@ _تم إنشاؤها بواسطة ICT AI Trader_
       }),
     });
 
-    const data = await response.json();
+    const data: any = await response.json();
 
     if (data.ok) {
       console.log('✅ Trade signal sent to Telegram:', signal.type, signal.pair);
@@ -82,7 +85,7 @@ export async function sendTelegramMessage(chatId: string, message: string): Prom
   }
 
   try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+    const response = await fetchFn(`${TELEGRAM_API_URL}/sendMessage`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,7 +97,7 @@ export async function sendTelegramMessage(chatId: string, message: string): Prom
       }),
     });
 
-    const data = await response.json();
+    const data: any = await response.json();
     return data.ok;
   } catch (error) {
     console.error('❌ Error sending Telegram message:', error);
@@ -111,8 +114,8 @@ export async function getBotInfo(): Promise<any> {
   }
 
   try {
-    const response = await fetch(`${TELEGRAM_API_URL}/getMe`);
-    const data = await response.json();
+    const response = await fetchFn(`${TELEGRAM_API_URL}/getMe`);
+    const data: any = await response.json();
     return data.ok ? data.result : null;
   } catch (error) {
     console.error('❌ Error getting bot info:', error);
