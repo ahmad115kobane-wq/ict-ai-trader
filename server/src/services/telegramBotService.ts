@@ -222,24 +222,26 @@ async function showPackages(chatId: number, user: any): Promise<void> {
       message += `💵 السعر: ${pkg.price} عملة\n`;
       message += `⏰ المدة: ${pkg.duration_days} يوم\n`;
       message += `💎 عملات مجانية: ${pkg.coins_included}\n`;
-      
-      if (pkg.analysis_limit === -1) {
-        message += `📊 التحليلات: غير محدودة\n`;
-      } else {
-        message += `📊 التحليلات: ${pkg.analysis_limit} يومياً\n`;
-      }
-      
+      message += `📊 الإشارات: غير محدودة\n`;
       message += `\n`;
     });
 
     message += `👇 اختر الباقة المناسبة لك:`;
 
     // إنشاء الأزرار
+    const buttons = packages.map((pkg: any) => [{
+      text: `${pkg.name_ar} - ${pkg.price} عملة`,
+      callback_data: `buy_${pkg.id}`
+    }]);
+    
+    // إضافة زر الرئيسية
+    buttons.push([{
+      text: '🏠 الرئيسية',
+      callback_data: 'back_to_main'
+    }]);
+    
     const keyboard = {
-      inline_keyboard: packages.map((pkg: any) => [{
-        text: `${pkg.name_ar} - ${pkg.price} عملة`,
-        callback_data: `buy_${pkg.id}`
-      }])
+      inline_keyboard: buttons
     };
 
     console.log(`📤 Sending packages message with keyboard to chat: ${chatId}`);
@@ -291,12 +293,16 @@ async function handlePackagePurchase(chatId: number, telegramUser: TelegramUser,
     
     // إنشاء زر التحليل التلقائي
     const keyboard = {
-      inline_keyboard: [[
-        {
+      inline_keyboard: [
+        [{
           text: '▶️ تفعيل التحليل التلقائي',
           callback_data: 'toggle_auto'
-        }
-      ]]
+        }],
+        [{
+          text: '🏠 الرئيسية',
+          callback_data: 'back_to_main'
+        }]
+      ]
     };
     
     await sendMessage(
@@ -326,27 +332,29 @@ async function handleStatusCommand(chatId: number, telegramUser: TelegramUser): 
 
   const activeSubscription = await getUserActiveSubscription(user.id);
   
-  let message = `📊 *حالة حسابك*\n\n`;
+  let message = `📊 <b>حالة حسابك</b>\n\n`;
   message += `👤 الاسم: ${telegramUser.first_name}\n`;
   message += `💰 الرصيد: ${user.coins} عملة\n\n`;
   
+  const keyboard = {
+    inline_keyboard: [[{
+      text: '🏠 الرئيسية',
+      callback_data: 'back_to_main'
+    }]]
+  };
+  
   if (activeSubscription) {
     const expiryDate = new Date(activeSubscription.expires_at).toLocaleDateString('ar-SA');
-    message += `✅ *الاشتراك النشط*\n`;
+    message += `✅ <b>الاشتراك النشط</b>\n`;
     message += `📦 الباقة: ${activeSubscription.plan_name}\n`;
     message += `📅 ينتهي في: ${expiryDate}\n`;
-    
-    if (activeSubscription.analysis_limit === -1) {
-      message += `📊 التحليلات: غير محدودة\n`;
-    } else {
-      message += `📊 التحليلات: ${activeSubscription.analysis_limit} يومياً\n`;
-    }
+    message += `📊 الإشارات: غير محدودة\n`;
   } else {
-    message += `⚠️ *لا يوجد اشتراك نشط*\n`;
+    message += `⚠️ <b>لا يوجد اشتراك نشط</b>\n`;
     message += `استخدم /packages لعرض الباقات المتاحة`;
   }
 
-  await sendMessage(chatId, message);
+  await sendMessage(chatId, message, keyboard);
 }
 
 /**
@@ -448,12 +456,16 @@ async function handleAutoToggle(chatId: number, telegramUser: TelegramUser, call
     // تحديث الزر
     const autoStatus = newStatus ? '⏸️ إيقاف' : '▶️ تفعيل';
     const keyboard = {
-      inline_keyboard: [[
-        {
+      inline_keyboard: [
+        [{
           text: `${autoStatus} التحليل التلقائي`,
           callback_data: 'toggle_auto'
-        }
-      ]]
+        }],
+        [{
+          text: '🏠 الرئيسية',
+          callback_data: 'back_to_main'
+        }]
+      ]
     };
     
     if (newStatus) {
