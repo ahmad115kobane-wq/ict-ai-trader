@@ -203,16 +203,9 @@ async function showPackages(chatId: number, user: any): Promise<void> {
     let message = `🎁 <b>الباقات المتاحة</b>\n\n`;
     message += `💰 رصيدك الحالي: ${user.coins} عملة\n\n`;
     
-    const keyboard = {
-      inline_keyboard: packages.map((pkg: any) => [{
-        text: `${pkg.name_ar} - ${pkg.price}`,
-        callback_data: `buy_${pkg.id}`
-      }])
-    };
-
     packages.forEach((pkg: any) => {
       message += `📦 <b>${pkg.name_ar}</b>\n`;
-      message += `💵 السعر: ${pkg.price}\n`;
+      message += `💵 السعر: ${pkg.price} عملة\n`;
       message += `⏰ المدة: ${pkg.duration_days} يوم\n`;
       message += `💎 عملات مجانية: ${pkg.coins_included}\n`;
       
@@ -225,11 +218,11 @@ async function showPackages(chatId: number, user: any): Promise<void> {
       message += `\n`;
     });
 
-    message += `\n👇 اختر الباقة المناسبة لك:`;
+    message += `استخدم /packages لعرض الباقات مع أزرار الشراء`;
 
     console.log(`📤 Sending packages message to chat: ${chatId}`);
-    await sendMessage(chatId, message, keyboard);
-    console.log(`✅ Packages sent successfully`);
+    const result = await sendMessage(chatId, message);
+    console.log(`✅ Message send result: ${result}`);
   } catch (error) {
     console.error(`❌ Error in showPackages:`, error);
     await sendMessage(chatId, '❌ حدث خطأ في عرض الباقات.');
