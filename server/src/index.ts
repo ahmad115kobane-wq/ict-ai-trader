@@ -21,6 +21,7 @@ import { initDatabase } from './db/index';
 import authRoutes from './routes/auth';
 import analysisRoutes from './routes/analysis';
 import subscriptionRoutes from './routes/subscription';
+import telegramRoutes from './routes/telegram';
 import { initializeDefaultPackages, checkAndExpireSubscriptions } from './services/subscriptionService';
 import { getCandles, getCurrentPrice } from './services/oandaService';
 import { renderDualCharts } from './services/chartService';
@@ -40,6 +41,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 // Test screenshot route
 app.get('/test-screenshot', async (req, res) => {
