@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import {
   getUserById,
+  getUserByEmail,
   createUser,
   getUserActiveSubscription,
   getAllVipPackages
@@ -97,7 +98,8 @@ async function getOrCreateUser(telegramUser: TelegramUser): Promise<any> {
   // البحث عن المستخدم باستخدام telegram_id كـ email مؤقت
   const telegramEmail = `telegram_${telegramUser.id}@ict-trader.local`;
   
-  let user = await getUserById(telegramEmail);
+  // البحث بالـ email
+  let user = await getUserByEmail(telegramEmail);
   
   if (!user) {
     // إنشاء مستخدم جديد
@@ -105,7 +107,7 @@ async function getOrCreateUser(telegramUser: TelegramUser): Promise<any> {
     const hashedPassword = await bcrypt.hash(`telegram_${telegramUser.id}`, 10);
     
     await createUser(userId, telegramEmail, hashedPassword);
-    user = await getUserById(userId);
+    user = await getUserByEmail(telegramEmail);
     
     console.log(`✅ Created new user for Telegram ID: ${telegramUser.id}`);
   }
