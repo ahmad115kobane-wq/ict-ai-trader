@@ -95,24 +95,38 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string): Prom
  * البحث عن مستخدم بواسطة Telegram ID أو إنشاء حساب جديد
  */
 async function getOrCreateUser(telegramUser: TelegramUser): Promise<any> {
-  // البحث عن المستخدم باستخدام telegram_id كـ email مؤقت
-  const telegramEmail = `telegram_${telegramUser.id}@ict-trader.local`;
-  
-  // البحث بالـ email
-  let user = await getUserByEmail(telegramEmail);
-  
-  if (!user) {
-    // إنشاء مستخدم جديد
-    const userId = uuidv4();
-    const hashedPassword = await bcrypt.hash(`telegram_${telegramUser.id}`, 10);
+  try {
+    // البحث عن المستخدم باستخدام telegram_id كـ email مؤقت
+    const telegramEmail = `telegram_${telegramUser.id}@ict-trader.local`;
     
-    await createUser(userId, telegramEmail, hashedPassword);
-    user = await getUserByEmail(telegramEmail);
+    // البحث بالـ email
+    let user = await getUserByEmail(telegramEmail);
     
-    console.log(`✅ Created new user for Telegram ID: ${telegramUser.id}`);
+    if (!user) {
+      // إنشاء مستخدم جديد
+      const userId = uuidv4();
+      const hashedPassword = await bcrypt.hash(`telegram_${telegramUser.id}`, 10);
+      
+      try {
+        await createUser(userId, telegramEmail, hashedPassword);
+        user = await getUserByEmail(telegramEmail);
+        console.log(`✅ Created new user for Telegram ID: ${telegramUser.id}`);
+      } catch (createError: any) {
+        // إذا كان الخطأ هو duplicate key، نحاول جلب المستخدم مرة أخرى
+        if (createError.code === '23505') {
+          console.log(`⚠️ User already exists, fetching: ${telegramEmail}`);
+          user = await getUserByEmail(telegramEmail);
+        } else {
+          throw createError;
+        }
+      }
+    }
+    
+    return user;
+  } catch (error) {
+    console.error('❌ Error in getOrCreateUser:', error);
+    throw error;
   }
-  
-  return user;
 }
 
 /**
