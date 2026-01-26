@@ -126,7 +126,7 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
   }
 
   // التحقق من الاشتراك
-  const activeSubscription = getUserActiveSubscription(user.id);
+  const activeSubscription = await getUserActiveSubscription(user.id);
   
   if (activeSubscription) {
     // المستخدم لديه اشتراك نشط
@@ -153,7 +153,7 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
  * عرض الباقات المتاحة
  */
 async function showPackages(chatId: number, user: any): Promise<void> {
-  const packages = getAllVipPackages();
+  const packages = await getAllVipPackages();
   
   if (packages.length === 0) {
     await sendMessage(chatId, '❌ لا توجد باقات متاحة حالياً.');
@@ -164,15 +164,15 @@ async function showPackages(chatId: number, user: any): Promise<void> {
   message += `💰 رصيدك الحالي: ${user.coins} عملة\n\n`;
   
   const keyboard = {
-    inline_keyboard: packages.map(pkg => [{
-      text: `${pkg.name_ar} - $${pkg.price}`,
+    inline_keyboard: packages.map((pkg: any) => [{
+      text: `${pkg.name_ar} - ${pkg.price}`,
       callback_data: `buy_${pkg.id}`
     }])
   };
 
-  packages.forEach(pkg => {
+  packages.forEach((pkg: any) => {
     message += `📦 *${pkg.name_ar}*\n`;
-    message += `💵 السعر: $${pkg.price}\n`;
+    message += `💵 السعر: ${pkg.price}\n`;
     message += `⏰ المدة: ${pkg.duration_days} يوم\n`;
     message += `💎 عملات مجانية: ${pkg.coins_included}\n`;
     
@@ -239,7 +239,7 @@ async function handleStatusCommand(chatId: number, telegramUser: TelegramUser): 
     return;
   }
 
-  const activeSubscription = getUserActiveSubscription(user.id);
+  const activeSubscription = await getUserActiveSubscription(user.id);
   
   let message = `📊 *حالة حسابك*\n\n`;
   message += `👤 الاسم: ${telegramUser.first_name}\n`;
