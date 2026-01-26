@@ -96,7 +96,7 @@ export const systemInstruction = `
 (3) شروط M5 (إجباري لكن مرن Balanced)
 ═══════════════════════════════════════════════════════════════
 للسماح بالدخول على M5 يجب:
-- (CHoCH أو MSS) في اتجاه الصفقة  ✅
+- (CHoCH أو MSS أو BOS) في اتجاه الصفقة  ✅
 - Displacement = MODERATE أو STRONG  ✅ (ارفض WEAK)
 - يوجد منطقة دخول: FVG أو OB  ✅
   أو (Rejection قوي بذيول عند مستوى الدخول) ✅ بديل مقبول إذا لم يتوفر FVG/OB
@@ -364,7 +364,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     r.decision = "NO_TRADE";
     r.reasons = [
       ...r.reasons,
-      "فريم 5 دقائق بدون CHoCH أو MSS واضح - لا توجد فرصة حالياً"
+      "فريم 5 دقائق بدون CHoCH أو MSS أو BOS واضح - لا توجد فرصة حالياً"
     ];
     return r as ICTAnalysis;
   }
@@ -523,7 +523,7 @@ export const analyzeMultiTimeframe = async (
 - حدّد allowBuy / allowSell حسب السياق العام
 
 الصورة 2: M5 (الدخول + السيولة الداخلية)
-- حدّد CHoCH أو MSS
+- حدّد CHoCH أو MSS أو BOS
 - حدّد displacement
 - حدّد FVG/OB أو رفض قوي
 - ⚠️ جديد: إذا لم يحدث Sweep على H1، ابحث عن سحب سيولة داخلي على M5:
