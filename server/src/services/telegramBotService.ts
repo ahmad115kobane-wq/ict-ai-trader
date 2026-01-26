@@ -218,10 +218,18 @@ async function showPackages(chatId: number, user: any): Promise<void> {
       message += `\n`;
     });
 
-    message += `استخدم /packages لعرض الباقات مع أزرار الشراء`;
+    message += `👇 اختر الباقة المناسبة لك:`;
 
-    console.log(`📤 Sending packages message to chat: ${chatId}`);
-    const result = await sendMessage(chatId, message);
+    // إنشاء الأزرار
+    const keyboard = {
+      inline_keyboard: packages.map((pkg: any) => [{
+        text: `${pkg.name_ar} - ${pkg.price} عملة`,
+        callback_data: `buy_${pkg.id}`
+      }])
+    };
+
+    console.log(`📤 Sending packages message with keyboard to chat: ${chatId}`);
+    const result = await sendMessage(chatId, message, keyboard);
     console.log(`✅ Message send result: ${result}`);
   } catch (error) {
     console.error(`❌ Error in showPackages:`, error);
