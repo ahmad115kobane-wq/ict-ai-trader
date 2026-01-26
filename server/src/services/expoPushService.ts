@@ -98,7 +98,10 @@ export const sendTradeNotification = async (
     type: string;
     entry: number;
     sl: number;
-    tp: number;
+    tp?: number; // للتوافق مع الكود القديم
+    tp1: number;
+    tp2: number;
+    tp3: number;
     rrRatio?: string;
   },
   score: number,
@@ -109,14 +112,16 @@ export const sendTradeNotification = async (
   const direction = isBuy ? 'شراء' : 'بيع';
 
   const title = `${emoji} فرصة ${direction} على الذهب!`;
-  const body = `💰 الدخول: ${trade.entry.toFixed(2)} | 🛑 SL: ${trade.sl.toFixed(2)} | ✅ TP: ${trade.tp.toFixed(2)} | ⭐ التقييم: ${score}/10`;
+  const body = `💰 الدخول: ${trade.entry.toFixed(2)} | 🛑 SL: ${trade.sl.toFixed(2)} | ✅ TP1: ${trade.tp1.toFixed(2)} | TP2: ${trade.tp2.toFixed(2)} | TP3: ${trade.tp3.toFixed(2)} | ⭐ التقييم: ${score}/10`;
 
   const data = {
     type: 'trade_opportunity',
     tradeType: trade.type,
     entry: trade.entry,
     sl: trade.sl,
-    tp: trade.tp,
+    tp1: trade.tp1,
+    tp2: trade.tp2,
+    tp3: trade.tp3,
     rrRatio: trade.rrRatio || '',
     score,
     currentPrice,

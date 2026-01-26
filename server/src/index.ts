@@ -209,8 +209,10 @@ app.get('/test-notification', async (req, res) => {
         type: 'BUY_LIMIT',
         entry: 2685.50,
         sl: 2680.00,
-        tp: 2695.00,
-        rrRatio: 1.8,
+        tp1: 2690.00,
+        tp2: 2695.00,
+        tp3: 2705.00,
+        rrRatio: 'TP1: 1:0.8 | TP2: 1:1.7 | TP3: 1:3.5',
         expiryMinutes: 60
       }
     };
@@ -262,7 +264,9 @@ app.get('/send-test-trade', async (req, res) => {
     const isBuy = Math.random() > 0.5;
     const entryOffset = isBuy ? -2.5 : 2.5; // دخول أقل للشراء، أعلى للبيع
     const slOffset = isBuy ? -7.5 : 7.5; // وقف خسارة أبعد
-    const tpOffset = isBuy ? 12.5 : -12.5; // هدف ربح
+    const tp1Offset = isBuy ? 5.0 : -5.0; // هدف أول
+    const tp2Offset = isBuy ? 12.5 : -12.5; // هدف ثاني
+    const tp3Offset = isBuy ? 22.5 : -22.5; // هدف ثالث
 
     const mockAnalysis = {
       decision: 'PLACE_PENDING',
@@ -274,8 +278,10 @@ app.get('/send-test-trade', async (req, res) => {
         type: isBuy ? 'BUY_LIMIT' : 'SELL_LIMIT',
         entry: parseFloat((currentPrice + entryOffset).toFixed(2)),
         sl: parseFloat((currentPrice + slOffset).toFixed(2)),
-        tp: parseFloat((currentPrice + tpOffset).toFixed(2)),
-        rrRatio: 1.67,
+        tp1: parseFloat((currentPrice + tp1Offset).toFixed(2)),
+        tp2: parseFloat((currentPrice + tp2Offset).toFixed(2)),
+        tp3: parseFloat((currentPrice + tp3Offset).toFixed(2)),
+        rrRatio: 'TP1: 1:1.5 | TP2: 1:3.0 | TP3: 1:6.0',
         expiryMinutes: 60
       },
       reasons: []
@@ -300,7 +306,9 @@ app.get('/send-test-trade', async (req, res) => {
     console.log(`📊 Type: ${mockAnalysis.suggestedTrade.type}`);
     console.log(`💰 Entry: ${mockAnalysis.suggestedTrade.entry}`);
     console.log(`🛑 SL: ${mockAnalysis.suggestedTrade.sl}`);
-    console.log(`✅ TP: ${mockAnalysis.suggestedTrade.tp}`);
+    console.log(`✅ TP1: ${mockAnalysis.suggestedTrade.tp1}`);
+    console.log(`✅ TP2: ${mockAnalysis.suggestedTrade.tp2}`);
+    console.log(`✅ TP3: ${mockAnalysis.suggestedTrade.tp3}`);
     console.log(`⏰ Mobile app will receive this in next poll (within 10 seconds)`);
 
     // حفظ في قاعدة البيانات لجميع المستخدمين المشتركين
@@ -566,8 +574,10 @@ app.get('/send-test-notification', async (req, res) => {
       type: 'BUY_LIMIT',
       entry: 2750.00,
       sl: 2745.00,
-      tp: 2765.00,
-      rrRatio: '1:3'
+      tp1: 2758.00,
+      tp2: 2765.00,
+      tp3: 2775.00,
+      rrRatio: 'TP1: 1:1.6 | TP2: 1:3.0 | TP3: 1:5.0'
     };
 
     const success = await sendTradeNotification(
@@ -1869,7 +1879,9 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       console.log(`   📊 Type: ${analysis.suggestedTrade.type}`);
       console.log(`   💰 Entry: ${analysis.suggestedTrade.entry}`);
       console.log(`   🛑 SL: ${analysis.suggestedTrade.sl}`);
-      console.log(`   ✅ TP: ${analysis.suggestedTrade.tp}`);
+      console.log(`   ✅ TP1: ${analysis.suggestedTrade.tp1}`);
+      console.log(`   ✅ TP2: ${analysis.suggestedTrade.tp2}`);
+      console.log(`   ✅ TP3: ${analysis.suggestedTrade.tp3}`);
       console.log(`   📈 RR: ${analysis.suggestedTrade.rrRatio || 'N/A'}`);
       console.log(`   ⏰ Expiry: ${analysis.suggestedTrade.expiryMinutes || 60} minutes`);
       console.log(`   📝 Reasoning: ${analysis.reasoning || analysis.bias}`);
