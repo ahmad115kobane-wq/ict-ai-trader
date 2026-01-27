@@ -611,7 +611,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         await handleAutoToggle(chatId, user, callbackQuery.id);
       } else if (data === 'subscription_details') {
         await handleSubscriptionDetails(chatId, user, callbackQuery.id);
-      } else if (data === 'back_to_main') {
+      } else if (data === 'back_to_main' || data === 'main_menu') {
         await handleBackToMain(chatId, user, callbackQuery.id);
       }
     }

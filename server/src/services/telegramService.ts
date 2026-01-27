@@ -29,50 +29,26 @@ export async function sendTradeSignal(chatId: string, signal: TradeSignal): Prom
   try {
     const emoji = signal.type === 'BUY' ? '🟢' : '🔴';
     const direction = signal.type === 'BUY' ? 'شراء' : 'بيع';
-    
-    // حساب نسبة المخاطرة إلى العائد للأهداف الثلاثة
-    const risk = Math.abs(signal.entry - signal.sl);
-    const reward1 = Math.abs(signal.tp1 - signal.entry);
-    const reward2 = Math.abs(signal.tp2 - signal.entry);
-    const reward3 = Math.abs(signal.tp3 - signal.entry);
-    const rr1 = (reward1 / risk).toFixed(1);
-    const rr2 = (reward2 / risk).toFixed(1);
-    const rr3 = (reward3 / risk).toFixed(1);
 
     const message = `
-╔═══════════════════════════
 ${emoji} <b>إشارة ${direction} جديدة</b>
-╚═══════════════════════════
 
 📊 <b>الزوج:</b> ${signal.pair}
 💰 <b>الدخول:</b> ${signal.entry.toFixed(2)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
 🎯 <b>الأهداف:</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━
-   🥇 TP1: ${signal.tp1.toFixed(2)} (1:${rr1})
-   🥈 TP2: ${signal.tp2.toFixed(2)} (1:${rr2})
-   🥉 TP3: ${signal.tp3.toFixed(2)} (1:${rr3})
+   🥇 TP1: ${signal.tp1.toFixed(2)}
+   🥈 TP2: ${signal.tp2.toFixed(2)}
+   🥉 TP3: ${signal.tp3.toFixed(2)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
 🛑 <b>إيقاف الخسارة:</b> ${signal.sl.toFixed(2)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ <b>نسبة الثقة:</b> ${signal.confidence}%
 ⏰ <b>التوقيت:</b> ${signal.timestamp.toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ <b>تنبيه مهم:</b>
-الأمر المعلق صالح لمدة 60 دقيقة فقط
-إذا لم يتم تفعيله خلال هذه المدة، يُلغى تلقائياً
-━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💡 <b>نصيحة ذهبية:</b>
-• يرجى الالتزام بإدارة صارمة لرأس المال
-• نظام عملك يجب أن يكون مبنياً على إدارة محكمة لتحقيق أرباح مستدامة
-• في حال تعرضت لستوب لوس مرتين، أوقف التداول لهذا اليوم
-• لا تحاول الانتقام من السوق - حافظ على أموالك
-• أنت المسؤول الوحيد عن رأس مالك
+⚠️ <b>ملاحظة مهمة:</b>
+• الأمر المعلق صالح لمدة 60 دقيقة فقط
+• في حال تعرضت لستوب لوس مرتين في اليوم، أوقف التداول إلى اليوم التالي
 
 <i>🤖 تم إنشاؤها بواسطة ICT AI Trader</i>
 `.trim();
