@@ -150,13 +150,7 @@ function createChartHTML(
   candles: Candle[],
   currentPrice: number,
   timeframe: 'H1' | 'M5',
-  candleCount: number,
-  liquidityLevels?: {
-    swingHigh?: number;
-    swingLow?: number;
-    bsl?: number;
-    ssl?: number;
-  }
+  candleCount: number
 ): string {
   console.log(`🎨 Creating ${timeframe} HTML with ${candleCount} candles from ${candles.length} available`);
 
@@ -293,69 +287,8 @@ function createChartHTML(
     </text>
   `;
 
-  // ✅ إصلاح 2: رسم مستويات السيولة (Swing High/Low, BSL/SSL)
-  let liquidityLines = '';
-  if (liquidityLevels) {
-    // Swing High (قمة السوينغ) - أزرق فاتح
-    if (liquidityLevels.swingHigh && liquidityLevels.swingHigh >= min && liquidityLevels.swingHigh <= max) {
-      const swingHighY = getY(liquidityLevels.swingHigh);
-      liquidityLines += `
-        <line x1="${paddingLeft}" y1="${swingHighY}" x2="${candlesEndX}" y2="${swingHighY}" 
-              stroke="#60a5fa" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
-        <rect x="${paddingLeft + 5}" y="${swingHighY - 14}" width="110" height="28" 
-              fill="#60a5fa" rx="4" opacity="0.9"/>
-        <text x="${paddingLeft + 60}" y="${swingHighY + 5}" 
-              fill="#000" font-size="13" font-weight="bold" text-anchor="middle" font-family="Arial">
-              Swing High
-        </text>
-      `;
-    }
-
-    // Swing Low (قاع السوينغ) - أزرق فاتح
-    if (liquidityLevels.swingLow && liquidityLevels.swingLow >= min && liquidityLevels.swingLow <= max) {
-      const swingLowY = getY(liquidityLevels.swingLow);
-      liquidityLines += `
-        <line x1="${paddingLeft}" y1="${swingLowY}" x2="${candlesEndX}" y2="${swingLowY}" 
-              stroke="#60a5fa" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
-        <rect x="${paddingLeft + 5}" y="${swingLowY - 14}" width="100" height="28" 
-              fill="#60a5fa" rx="4" opacity="0.9"/>
-        <text x="${paddingLeft + 55}" y="${swingLowY + 5}" 
-              fill="#000" font-size="13" font-weight="bold" text-anchor="middle" font-family="Arial">
-              Swing Low
-        </text>
-      `;
-    }
-
-    // BSL (Buy Side Liquidity) - أحمر
-    if (liquidityLevels.bsl && liquidityLevels.bsl >= min && liquidityLevels.bsl <= max) {
-      const bslY = getY(liquidityLevels.bsl);
-      liquidityLines += `
-        <line x1="${paddingLeft}" y1="${bslY}" x2="${candlesEndX}" y2="${bslY}" 
-              stroke="#ef4444" stroke-width="3" stroke-dasharray="12,6" opacity="0.9"/>
-        <rect x="${paddingLeft + 5}" y="${bslY - 16}" width="70" height="32" 
-              fill="#ef4444" rx="5" opacity="0.95"/>
-        <text x="${paddingLeft + 40}" y="${bslY + 6}" 
-              fill="#fff" font-size="14" font-weight="bold" text-anchor="middle" font-family="Arial">
-              BSL
-        </text>
-      `;
-    }
-
-    // SSL (Sell Side Liquidity) - أخضر
-    if (liquidityLevels.ssl && liquidityLevels.ssl >= min && liquidityLevels.ssl <= max) {
-      const sslY = getY(liquidityLevels.ssl);
-      liquidityLines += `
-        <line x1="${paddingLeft}" y1="${sslY}" x2="${candlesEndX}" y2="${sslY}" 
-              stroke="#10b981" stroke-width="3" stroke-dasharray="12,6" opacity="0.9"/>
-        <rect x="${paddingLeft + 5}" y="${sslY - 16}" width="70" height="32" 
-              fill="#10b981" rx="5" opacity="0.95"/>
-        <text x="${paddingLeft + 40}" y="${sslY + 6}" 
-              fill="#fff" font-size="14" font-weight="bold" text-anchor="middle" font-family="Arial">
-              SSL
-        </text>
-      `;
-    }
-  }
+  // ❌ إلغاء رسم مستويات السيولة - دع النموذج يحددها بنفسه
+  const liquidityLines = '';
 
   // العنوان والمعلومات
   const title = `${timeframe} Chart - XAUUSD`;
@@ -518,8 +451,8 @@ async function captureChartFromBrowser(
       deviceScaleFactor: SCREENSHOT_CONFIG.deviceScaleFactor
     });
 
-    // إنشاء HTML وتحميله مع مستويات السيولة
-    const html = createChartHTML(candles, currentPrice, timeframe, candleCount, liquidityLevels);
+    // إنشاء HTML وتحميله بدون مستويات السيولة
+    const html = createChartHTML(candles, currentPrice, timeframe, candleCount);
 
     console.log(`🌐 Loading ${timeframe} chart HTML...`);
     await page.setContent(html, {
