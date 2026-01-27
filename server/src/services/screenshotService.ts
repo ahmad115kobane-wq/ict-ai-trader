@@ -43,9 +43,9 @@ const BROWSER_CONFIG = {
 const SCREENSHOT_CONFIG = {
   width: 1400,
   height: 900,
-  deviceScaleFactor: 1,
+  deviceScaleFactor: 3,  // جودة عالية جداً (3x resolution) - Retina Display
   type: 'png' as const,
-  quality: 90,
+  quality: 100,  // أقصى جودة للصورة
   fullPage: false
 };
 
@@ -93,22 +93,17 @@ function createChartHTML(
   const max = maxPrice + padding;
   const range = (max - min) || 0.01;
 
-  // إعدادات الرسم - جودة عالية ووضوح ممتاز
-  const chartWidth = 1400;  // زيادة العرض لجودة أفضل
-  const chartHeight = 800;  // زيادة الارتفاع لوضوح أفضل
-  const paddingTop = 100;
-  const paddingBottom = 100;
-  const paddingLeft = 150;  // مسافة كافية على اليسار
-  const paddingRight = 200; // مسافة كافية على اليمين
+  // إعدادات الرسم - حجم عادي
+  const chartWidth = 1200;
+  const chartHeight = 700;
+  const paddingTop = 80;
+  const paddingBottom = 80;
+  const paddingLeft = 100;
+  const paddingRight = 150;
 
   const getY = (price: number) => paddingTop + ((max - price) / range) * chartHeight;
-  
-  // حساب المساحة المتاحة للشموع
-  const availableWidth = chartWidth - paddingLeft - paddingRight;
-  const candleSpacing = availableWidth / visibleData.length;
-  
-  // عرض الشموع - أوضح وأكبر
-  const candleWidth = Math.max(candleSpacing * 0.75, 6); // زيادة العرض والحد الأدنى
+  const candleSpacing = (chartWidth - paddingLeft - paddingRight) / visibleData.length;
+  const candleWidth = Math.max(candleSpacing * 0.7, 4); // عرض جيد للشموع
 
   // بناء SVG للشموع - واضحة ومحسنة
   let candlesSVG = '';
@@ -133,41 +128,41 @@ function createChartHTML(
     const bodyBottom = Math.max(openY, closeY);
     const bodyHeight = Math.max(bodyBottom - bodyTop, 2);
     
-    // الفتيل العلوي - واضح جداً
+    // الفتيل العلوي - واضح
     if (candle.high > Math.max(candle.open, candle.close)) {
       candlesSVG += `
         <line x1="${centerX}" y1="${highY}" x2="${centerX}" y2="${bodyTop}" 
-              stroke="${color}" stroke-width="4" stroke-linecap="round"/>`;
+              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
       wicksCount++;
     }
     
-    // الفتيل السفلي - واضح جداً
+    // الفتيل السفلي - واضح
     if (candle.low < Math.min(candle.open, candle.close)) {
       candlesSVG += `
         <line x1="${centerX}" y1="${bodyBottom}" x2="${centerX}" y2="${lowY}" 
-              stroke="${color}" stroke-width="4" stroke-linecap="round"/>`;
+              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
       wicksCount++;
     }
     
     // جسم الشمعة - واضح وبسيط
     if (isBullish) {
-      // شمعة صاعدة - مجوفة بحدود سميكة
+      // شمعة صاعدة - مجوفة
       candlesSVG += `
         <rect x="${centerX - candleWidth/2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
-              fill="white" stroke="${color}" stroke-width="4" rx="2"/>`;
+              fill="white" stroke="${color}" stroke-width="2" rx="1"/>`;
     } else {
-      // شمعة هابطة - مملوءة بحدود واضحة
+      // شمعة هابطة - مملوءة
       candlesSVG += `
         <rect x="${centerX - candleWidth/2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
-              fill="${color}" stroke="${color}" stroke-width="3" rx="2"/>`;
+              fill="${color}" stroke="${color}" stroke-width="1" rx="1"/>`;
     }
     
-    // معالجة الشموع الصغيرة جداً (Doji)
+    // معالجة الشموع الصغيرة
     if (Math.abs(candle.close - candle.open) < (maxPrice - minPrice) * 0.001) {
       candlesSVG += `
         <line x1="${centerX - candleWidth/2}" y1="${(bodyTop + bodyBottom)/2}" 
               x2="${centerX + candleWidth/2}" y2="${(bodyTop + bodyBottom)/2}" 
-              stroke="${color}" stroke-width="4" stroke-linecap="round"/>`;
+              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
     }
   });
   
@@ -181,10 +176,10 @@ function createChartHTML(
     const y = getY(price);
     
     gridLines += `<line x1="${paddingLeft}" y1="${y}" x2="${chartWidth - paddingRight}" y2="${y}" 
-                        stroke="rgba(255,255,255,0.2)" stroke-width="2"/>`;
+                        stroke="rgba(255,255,255,0.15)" stroke-width="1"/>`;
     
-    priceLabels += `<text x="${chartWidth - paddingRight + 15}" y="${y + 8}" 
-                          fill="rgba(255,255,255,0.9)" font-size="20" font-weight="bold" font-family="Arial">
+    priceLabels += `<text x="${chartWidth - paddingRight + 15}" y="${y + 6}" 
+                          fill="rgba(255,255,255,0.8)" font-size="16" font-weight="bold" font-family="Arial">
                           ${price.toFixed(2)}
                     </text>`;
   }
@@ -193,11 +188,11 @@ function createChartHTML(
   const currentPriceY = getY(currentPrice);
   const currentPriceLine = `
     <line x1="${paddingLeft}" y1="${currentPriceY}" x2="${chartWidth - paddingRight}" y2="${currentPriceY}" 
-          stroke="#fbbf24" stroke-width="4" stroke-dasharray="10,8"/>
-    <rect x="${chartWidth - paddingRight + 10}" y="${currentPriceY - 20}" width="130" height="40" 
-          fill="#fbbf24" rx="8"/>
-    <text x="${chartWidth - paddingRight + 75}" y="${currentPriceY + 8}" 
-          fill="#000" font-size="20" font-weight="bold" text-anchor="middle" font-family="Arial">
+          stroke="#fbbf24" stroke-width="3" stroke-dasharray="8,6"/>
+    <rect x="${chartWidth - paddingRight + 10}" y="${currentPriceY - 18}" width="120" height="36" 
+          fill="#fbbf24" rx="6"/>
+    <text x="${chartWidth - paddingRight + 70}" y="${currentPriceY + 8}" 
+          fill="#000" font-size="16" font-weight="bold" text-anchor="middle" font-family="Arial">
           ${currentPrice.toFixed(2)}
     </text>
   `;
@@ -240,7 +235,7 @@ function createChartHTML(
             backdrop-filter: blur(10px);
         }
         .chart-title {
-            font-size: 38px;
+            font-size: 32px;
             font-weight: bold;
             color: #00C896;
             text-align: center;
@@ -248,7 +243,7 @@ function createChartHTML(
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
         .chart-info {
-            font-size: 22px;
+            font-size: 18px;
             color: rgba(255,255,255,0.8);
             text-align: center;
             margin-bottom: 25px;
