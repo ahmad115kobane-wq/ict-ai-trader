@@ -227,11 +227,15 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
       const keyboard = {
         inline_keyboard: [
           [{
+            text: '📊 الرسم البياني الحي',
+            web_app: { url: 'https://ict-ai-trader-production.up.railway.app/live-chart.html' }
+          }],
+          [{
             text: `${autoStatus} التحليل التلقائي`,
             callback_data: 'toggle_auto'
           }],
           [{
-            text: '📊 تفاصيل اشتراكي',
+            text: '📋 تفاصيل اشتراكي',
             callback_data: 'subscription_details'
           }],
           [{
@@ -301,6 +305,12 @@ async function showPackages(chatId: number, user: any): Promise<void> {
     }]);
     
     // إضافة أزرار التنقل
+    buttons.push([
+      {
+        text: '📊 الرسم البياني الحي',
+        web_app: { url: 'https://ict-ai-trader-production.up.railway.app/live-chart.html' }
+      }
+    ]);
     buttons.push([
       {
         text: '🏠 الرئيسية',
