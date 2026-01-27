@@ -41,7 +41,7 @@ const BROWSER_CONFIG = {
 };
 
 const SCREENSHOT_CONFIG = {
-  width: 1730,  // زيادة 5% إضافية (1648 * 1.05)
+  width: 1903,  // زيادة 10% إضافية (1730 * 1.10)
   height: 900,
   deviceScaleFactor: 3,  // جودة عالية جداً (3x resolution) - Retina Display
   type: 'png' as const,
@@ -94,7 +94,7 @@ function createChartHTML(
   const range = (max - min) || 0.01;
 
   // إعدادات الرسم - جودة عالية
-  const chartWidth = 1483; // زيادة 5% إضافية (1412 * 1.05)
+  const chartWidth = 1631; // زيادة 10% إضافية (1483 * 1.10)
   const chartHeight = 700;
   const paddingTop = 80;
   const paddingBottom = 80;
