@@ -5,11 +5,14 @@
 
 import { ICTAnalysis, ManagementAdvice } from "../types";
 
+// ===================== Environment Variables =====================
+declare const process: any;
+
 // ===================== API Config =====================
 // ⚠️ استبدل هذه القيم بـ API صحيح يدعم تحليل الصور
-const API_KEY = process.env.AI_API_KEY || "YOUR_API_KEY";
-const BASE_URL = process.env.AI_BASE_URL || "https://api.openai.com";
-const MODEL = process.env.AI_MODEL || "gpt-4-vision-preview";
+const API_KEY = process?.env?.AI_API_KEY || "YOUR_API_KEY";
+const BASE_URL = process?.env?.AI_BASE_URL || "https://api.openai.com";
+const MODEL = process?.env?.AI_MODEL || "gpt-4-vision-preview";
 
 // ===================== Helpers =====================
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -229,8 +232,7 @@ function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis
     },
     confluences: original.confluences || [],
     reasons: reasons,
-    reasoning: original.reasoning || "",
-    suggestedTrade: null
+    reasoning: original.reasoning || ""
   } as ICTAnalysis;
 }
 
