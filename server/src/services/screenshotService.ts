@@ -43,7 +43,7 @@ const BROWSER_CONFIG = {
 const SCREENSHOT_CONFIG = {
   width: 2093,  // زيادة 10% إضافية (1903 * 1.10)
   height: 900,
-  deviceScaleFactor: 3,  // جودة عالية جداً (3x resolution) - Retina Display
+  deviceScaleFactor: 1,  // جودة عادية (1x resolution) - أداء أفضل
   type: 'png' as const,
   quality: 100,  // أقصى جودة للصورة
   fullPage: false
