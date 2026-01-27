@@ -100,7 +100,7 @@ function createChartHTML(
   const paddingBottom = 80;
   const paddingLeft = 100;
   const paddingRight = 180;
-  const rightMargin = 20; // مسافة صغيرة بعد آخر شمعة (مناسبة)
+  const rightMargin = 40; // مسافة إضافية بعد آخر شمعة
 
   const getY = (price: number) => paddingTop + ((max - price) / range) * chartHeight;
   

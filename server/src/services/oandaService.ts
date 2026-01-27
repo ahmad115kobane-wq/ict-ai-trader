@@ -92,8 +92,8 @@ export const getCandles = async (
     
     const data = await response.json() as any;
     
+    // إرجاع جميع الشموع بما فيها الشمعة الحالية (غير المكتملة)
     return (data.candles || [])
-      .filter((c: any) => c.complete)
       .map((c: any) => ({
         time: c.time,
         open: parseFloat(c.mid.o),
@@ -101,6 +101,7 @@ export const getCandles = async (
         low: parseFloat(c.mid.l),
         close: parseFloat(c.mid.c),
         volume: c.volume,
+        complete: c.complete // حفظ حالة الاكتمال
       }));
   } catch (error) {
     console.error('OANDA getCandles error:', error);
