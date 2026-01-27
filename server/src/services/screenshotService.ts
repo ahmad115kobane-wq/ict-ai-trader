@@ -99,11 +99,11 @@ function createChartHTML(
   const paddingTop = 80;
   const paddingBottom = 80;
   const paddingLeft = 100;
-  const paddingRight = 150;
+  const paddingRight = 200; // زيادة المسافة على اليمين
 
   const getY = (price: number) => paddingTop + ((max - price) / range) * chartHeight;
   const candleSpacing = (chartWidth - paddingLeft - paddingRight) / visibleData.length;
-  const candleWidth = Math.max(candleSpacing * 0.7, 4); // عرض جيد للشموع
+  const candleWidth = Math.max(candleSpacing * 0.8, 5); // زيادة عرض الشموع لوضوح أفضل
 
   // بناء SVG للشموع - واضحة ومحسنة
   let candlesSVG = '';
@@ -132,7 +132,7 @@ function createChartHTML(
     if (candle.high > Math.max(candle.open, candle.close)) {
       candlesSVG += `
         <line x1="${centerX}" y1="${highY}" x2="${centerX}" y2="${bodyTop}" 
-              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+              stroke="${color}" stroke-width="3" stroke-linecap="round"/>`;
       wicksCount++;
     }
     
@@ -140,7 +140,7 @@ function createChartHTML(
     if (candle.low < Math.min(candle.open, candle.close)) {
       candlesSVG += `
         <line x1="${centerX}" y1="${bodyBottom}" x2="${centerX}" y2="${lowY}" 
-              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+              stroke="${color}" stroke-width="3" stroke-linecap="round"/>`;
       wicksCount++;
     }
     
@@ -149,12 +149,12 @@ function createChartHTML(
       // شمعة صاعدة - مجوفة
       candlesSVG += `
         <rect x="${centerX - candleWidth/2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
-              fill="white" stroke="${color}" stroke-width="2" rx="1"/>`;
+              fill="white" stroke="${color}" stroke-width="3" rx="1"/>`;
     } else {
       // شمعة هابطة - مملوءة
       candlesSVG += `
         <rect x="${centerX - candleWidth/2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
-              fill="${color}" stroke="${color}" stroke-width="1" rx="1"/>`;
+              fill="${color}" stroke="${color}" stroke-width="2" rx="1"/>`;
     }
     
     // معالجة الشموع الصغيرة
@@ -162,7 +162,7 @@ function createChartHTML(
       candlesSVG += `
         <line x1="${centerX - candleWidth/2}" y1="${(bodyTop + bodyBottom)/2}" 
               x2="${centerX + candleWidth/2}" y2="${(bodyTop + bodyBottom)/2}" 
-              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+              stroke="${color}" stroke-width="3" stroke-linecap="round"/>`;
     }
   });
   
