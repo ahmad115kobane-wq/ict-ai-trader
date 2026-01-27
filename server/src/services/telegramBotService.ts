@@ -229,7 +229,7 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
           [{
             text: '📊 الرسم البياني الحي',
             web_app: { url: 'https://ict-ai-trader-production.up.railway.app/live-chart.html' }
-          }],
+          } as any],
           [{
             text: `${autoStatus} التحليل التلقائي`,
             callback_data: 'toggle_auto'
@@ -309,7 +309,7 @@ async function showPackages(chatId: number, user: any): Promise<void> {
       {
         text: '📊 الرسم البياني الحي',
         web_app: { url: 'https://ict-ai-trader-production.up.railway.app/live-chart.html' }
-      }
+      } as any
     ]);
     buttons.push([
       {
