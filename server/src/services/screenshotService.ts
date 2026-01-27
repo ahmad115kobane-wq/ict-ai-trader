@@ -99,12 +99,13 @@ function createChartHTML(
   const paddingTop = 80;
   const paddingBottom = 80;
   const paddingLeft = 100;
-  const paddingRight = 180; // زيادة المسافة بين آخر شمعة وشريط الأسعار
+  const paddingRight = 180;
+  const rightMargin = 40; // مسافة إضافية بعد آخر شمعة
 
   const getY = (price: number) => paddingTop + ((max - price) / range) * chartHeight;
   
   // حساب المساحة المتاحة للشموع مع ترك مسافة على اليمين
-  const chartAreaWidth = chartWidth - paddingLeft - paddingRight;
+  const chartAreaWidth = chartWidth - paddingLeft - paddingRight - rightMargin;
   const candleSpacing = chartAreaWidth / visibleData.length;
   const candleWidth = Math.max(candleSpacing * 0.7, 4);
 
