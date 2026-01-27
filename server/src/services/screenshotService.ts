@@ -67,90 +67,147 @@ async function getBrowser(): Promise<Browser> {
   return sharedBrowser;
 }
 
-// ✅ دالة حساب مستويات السيولة (Swing High/Low، BSL/SSL)
-function calculateLiquidityLevels(candles: Candle[]): {
-  swingHigh?: number;
-  swingLow?: number;
-  bsl?: number;
-  ssl?: number;
-} {
-  if (!candles || candles.length < 10) {
-    console.log('⚠️ Not enough candles for liquidity calculation');
-    return {};
-  }
-
-  const lookback = Math.min(30, candles.length); // آخر 30 شمعة أو أقل
-  const recentCandles = candles.slice(-lookback);
-
-  // 1. حساب BSL (Buy Side Liquidity) - أعلى قمة في الفترة
-  const bsl = Math.max(...recentCandles.map(c => c.high));
-
-  // 2. حساب SSL (Sell Side Liquidity) - أدنى قاع في الفترة
-  const ssl = Math.min(...recentCandles.map(c => c.low));
-
-  // 3. حساب آخر Swing High (قمة واضحة)
-  // قمة سوينغ = شمعة أعلى من الشمعتين قبلها وبعدها
-  let swingHigh: number | undefined;
-  for (let i = recentCandles.length - 3; i >= 2; i--) {
-    const current = recentCandles[i];
-    const prev1 = recentCandles[i - 1];
-    const prev2 = recentCandles[i - 2];
-    const next1 = recentCandles[i + 1];
-    const next2 = recentCandles[i + 2];
-
-    if (
-      current.high > prev1.high &&
-      current.high > prev2.high &&
-      current.high > next1.high &&
-      current.high > next2.high
-    ) {
-      swingHigh = current.high;
-      break; // أول swing high من اليمين
-    }
-  }
-
-  // 4. حساب آخر Swing Low (قاع واضح)
-  // قاع سوينغ = شمعة أقل من الشمعتين قبلها وبعدها
-  let swingLow: number | undefined;
-  for (let i = recentCandles.length - 3; i >= 2; i--) {
-    const current = recentCandles[i];
-    const prev1 = recentCandles[i - 1];
-    const prev2 = recentCandles[i - 2];
-    const next1 = recentCandles[i + 1];
-    const next2 = recentCandles[i + 2];
-
-    if (
-      current.low < prev1.low &&
-      current.low < prev2.low &&
-      current.low < next1.low &&
-      current.low < next2.low
-    ) {
-      swingLow = current.low;
-      break; // أول swing low من اليمين
-    }
-  }
-
-  console.log('📊 Calculated liquidity levels:', {
-    swingHigh: swingHigh?.toFixed(2) || 'N/A',
-    swingLow: swingLow?.toFixed(2) || 'N/A',
-    bsl: bsl.toFixed(2),
-    ssl: ssl.toFixed(2)
-  });
-
-  return {
-    swingHigh,
-    swingLow,
-    bsl,
-    ssl
-  };
+// ✅ واجهة نتائج تحليل السيولة
+interface LiquidityAnalysis {
+  swingHighs: number[];      // جميع القمم
+  swingLows: number[];       // جميع القيعان
+  bsl: number;               // Buy Side Liquidity
+  ssl: number;               // Sell Side Liquidity
+  sweeps: LiquiditySweep[];  // سحب السيولة المكتشفة
+  equalHighs: number[];      // القمم المتساوية (EQH)
+  equalLows: number[];       // القيعان المتساوية (EQL)
 }
 
-// دالة إنشاء HTML للرسم البياني
+interface LiquiditySweep {
+  type: 'BSL_SWEEP' | 'SSL_SWEEP';  // نوع السحب
+  level: number;                     // المستوى الذي تم سحبه
+  sweepCandle: number;               // index الشمعة التي سحبت
+  confirmed: boolean;                // هل تم تأكيد الارتداد؟
+}
+
+// ✅ دالة حساب مستويات السيولة المحسنة (Swing High/Low، BSL/SSL، Sweeps)
+function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
+  const result: LiquidityAnalysis = {
+    swingHighs: [],
+    swingLows: [],
+    bsl: 0,
+    ssl: 0,
+    sweeps: [],
+    equalHighs: [],
+    equalLows: []
+  };
+
+  if (!candles || candles.length < 5) {
+    console.log('⚠️ Not enough candles for liquidity calculation');
+    return result;
+  }
+
+  const lookback = Math.min(50, candles.length); // آخر 50 شمعة
+  const recentCandles = candles.slice(-lookback);
+
+  // 1. حساب BSL و SSL
+  result.bsl = Math.max(...recentCandles.map(c => c.high));
+  result.ssl = Math.min(...recentCandles.map(c => c.low));
+
+  // 2. كشف Swing Points بمرونة أكبر (شمعة واحدة قبل وبعد)
+  for (let i = 1; i < recentCandles.length - 1; i++) {
+    const prev = recentCandles[i - 1];
+    const current = recentCandles[i];
+    const next = recentCandles[i + 1];
+
+    // Swing High: أعلى من الجيران
+    if (current.high > prev.high && current.high > next.high) {
+      result.swingHighs.push(current.high);
+    }
+
+    // Swing Low: أقل من الجيران  
+    if (current.low < prev.low && current.low < next.low) {
+      result.swingLows.push(current.low);
+    }
+  }
+
+  // 3. كشف القمم/القيعان المتساوية (Equal Highs/Lows) - مناطق سيولة قوية
+  const tolerance = (result.bsl - result.ssl) * 0.002; // 0.2% تسامح
+  
+  for (let i = 0; i < result.swingHighs.length; i++) {
+    for (let j = i + 1; j < result.swingHighs.length; j++) {
+      if (Math.abs(result.swingHighs[i] - result.swingHighs[j]) <= tolerance) {
+        if (!result.equalHighs.includes(result.swingHighs[i])) {
+          result.equalHighs.push(result.swingHighs[i]);
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < result.swingLows.length; i++) {
+    for (let j = i + 1; j < result.swingLows.length; j++) {
+      if (Math.abs(result.swingLows[i] - result.swingLows[j]) <= tolerance) {
+        if (!result.equalLows.includes(result.swingLows[i])) {
+          result.equalLows.push(result.swingLows[i]);
+        }
+      }
+    }
+  }
+
+  // 4. ✅ كشف سحب السيولة (Liquidity Sweeps)
+  for (let i = 2; i < recentCandles.length; i++) {
+    const candle = recentCandles[i];
+    const prevCandle = recentCandles[i - 1];
+    
+    // كشف BSL Sweep (سحب سيولة الشراء)
+    // الشمعة تخترق القمة السابقة ثم تغلق تحتها
+    for (const swingHigh of result.swingHighs) {
+      if (candle.high > swingHigh && candle.close < swingHigh) {
+        // تأكيد: الشمعة التالية تغلق تحت القمة
+        const isConfirmed = i < recentCandles.length - 1 && 
+                           recentCandles[i + 1].close < swingHigh;
+        
+        result.sweeps.push({
+          type: 'BSL_SWEEP',
+          level: swingHigh,
+          sweepCandle: i,
+          confirmed: isConfirmed
+        });
+      }
+    }
+
+    // كشف SSL Sweep (سحب سيولة البيع)
+    // الشمعة تخترق القاع السابق ثم تغلق فوقه
+    for (const swingLow of result.swingLows) {
+      if (candle.low < swingLow && candle.close > swingLow) {
+        const isConfirmed = i < recentCandles.length - 1 && 
+                           recentCandles[i + 1].close > swingLow;
+        
+        result.sweeps.push({
+          type: 'SSL_SWEEP',
+          level: swingLow,
+          sweepCandle: i,
+          confirmed: isConfirmed
+        });
+      }
+    }
+  }
+
+  console.log('📊 Liquidity Analysis:', {
+    swingHighs: result.swingHighs.length,
+    swingLows: result.swingLows.length,
+    bsl: result.bsl.toFixed(2),
+    ssl: result.ssl.toFixed(2),
+    sweeps: result.sweeps.length,
+    equalHighs: result.equalHighs.length,
+    equalLows: result.equalLows.length
+  });
+
+  return result;
+}
+
+// دالة إنشاء HTML للرسم البياني مع مستويات السيولة
 function createChartHTML(
   candles: Candle[],
   currentPrice: number,
   timeframe: 'H1' | 'M5',
-  candleCount: number
+  candleCount: number,
+  liquidityData?: LiquidityAnalysis
 ): string {
   console.log(`🎨 Creating ${timeframe} HTML with ${candleCount} candles from ${candles.length} available`);
 
@@ -287,8 +344,98 @@ function createChartHTML(
     </text>
   `;
 
-  // ❌ إلغاء رسم مستويات السيولة - دع النموذج يحددها بنفسه
-  const liquidityLines = '';
+  // ✅ رسم مستويات السيولة
+  let liquidityLines = '';
+  
+  if (liquidityData) {
+    // رسم BSL (خط أحمر منقط)
+    if (liquidityData.bsl) {
+      const bslY = getY(liquidityData.bsl);
+      liquidityLines += `
+        <line x1="${paddingLeft}" y1="${bslY}" x2="${candlesEndX}" y2="${bslY}" 
+              stroke="#ef4444" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
+        <text x="${paddingLeft + 10}" y="${bslY - 8}" 
+              fill="#ef4444" font-size="14" font-weight="bold" font-family="Arial">
+              BSL ${liquidityData.bsl.toFixed(2)}
+        </text>`;
+    }
+
+    // رسم SSL (خط أخضر منقط)
+    if (liquidityData.ssl) {
+      const sslY = getY(liquidityData.ssl);
+      liquidityLines += `
+        <line x1="${paddingLeft}" y1="${sslY}" x2="${candlesEndX}" y2="${sslY}" 
+              stroke="#22c55e" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
+        <text x="${paddingLeft + 10}" y="${sslY + 18}" 
+              fill="#22c55e" font-size="14" font-weight="bold" font-family="Arial">
+              SSL ${liquidityData.ssl.toFixed(2)}
+        </text>`;
+    }
+
+    // رسم آخر 3 Swing Highs (دوائر حمراء)
+    const recentSwingHighs = liquidityData.swingHighs.slice(-3);
+    recentSwingHighs.forEach((sh, idx) => {
+      const shY = getY(sh);
+      liquidityLines += `
+        <circle cx="${candlesEndX - 50 - idx * 60}" cy="${shY}" r="6" 
+                fill="#ef4444" stroke="white" stroke-width="2"/>
+        <text x="${candlesEndX - 50 - idx * 60 + 12}" y="${shY + 5}" 
+              fill="#ef4444" font-size="12" font-family="Arial">SH</text>`;
+    });
+
+    // رسم آخر 3 Swing Lows (دوائر خضراء)
+    const recentSwingLows = liquidityData.swingLows.slice(-3);
+    recentSwingLows.forEach((sl, idx) => {
+      const slY = getY(sl);
+      liquidityLines += `
+        <circle cx="${candlesEndX - 50 - idx * 60}" cy="${slY}" r="6" 
+                fill="#22c55e" stroke="white" stroke-width="2"/>
+        <text x="${candlesEndX - 50 - idx * 60 + 12}" y="${slY + 5}" 
+              fill="#22c55e" font-size="12" font-family="Arial">SL</text>`;
+    });
+
+    // رسم Equal Highs (خط برتقالي - منطقة سيولة قوية)
+    liquidityData.equalHighs.forEach(eqh => {
+      const eqhY = getY(eqh);
+      liquidityLines += `
+        <line x1="${paddingLeft}" y1="${eqhY}" x2="${candlesEndX}" y2="${eqhY}" 
+              stroke="#f97316" stroke-width="3" opacity="0.6"/>
+        <text x="${paddingLeft + 10}" y="${eqhY - 8}" 
+              fill="#f97316" font-size="12" font-weight="bold" font-family="Arial">
+              ⚠️ EQH
+        </text>`;
+    });
+
+    // رسم Equal Lows (خط بنفسجي - منطقة سيولة قوية)
+    liquidityData.equalLows.forEach(eql => {
+      const eqlY = getY(eql);
+      liquidityLines += `
+        <line x1="${paddingLeft}" y1="${eqlY}" x2="${candlesEndX}" y2="${eqlY}" 
+              stroke="#a855f7" stroke-width="3" opacity="0.6"/>
+        <text x="${paddingLeft + 10}" y="${eqlY + 18}" 
+              fill="#a855f7" font-size="12" font-weight="bold" font-family="Arial">
+              ⚠️ EQL
+        </text>`;
+    });
+
+    // رسم Liquidity Sweeps (علامات تحذيرية)
+    liquidityData.sweeps.forEach(sweep => {
+      const sweepY = getY(sweep.level);
+      const color = sweep.type === 'BSL_SWEEP' ? '#ef4444' : '#22c55e';
+      const icon = sweep.type === 'BSL_SWEEP' ? '🔻' : '🔺';
+      const label = sweep.type === 'BSL_SWEEP' ? 'BSL SWEPT!' : 'SSL SWEPT!';
+      
+      if (sweep.confirmed) {
+        liquidityLines += `
+          <rect x="${candlesEndX - 120}" y="${sweepY - 15}" width="110" height="30" 
+                fill="${color}" rx="5" opacity="0.9"/>
+          <text x="${candlesEndX - 65}" y="${sweepY + 5}" 
+                fill="white" font-size="12" font-weight="bold" text-anchor="middle" font-family="Arial">
+                ${icon} ${label}
+          </text>`;
+      }
+    });
+  }
 
   // العنوان والمعلومات
   const title = `${timeframe} Chart - XAUUSD`;
@@ -432,12 +579,15 @@ async function captureChartFromBrowser(
     console.log(`📸 Starting ${timeframe} chart capture...`);
 
     // ✅ حساب مستويات السيولة تلقائياً
-    const liquidityLevels = calculateLiquidityLevels(candles);
-    console.log(`📊 ${timeframe} Liquidity levels:`, {
-      swingHigh: liquidityLevels.swingHigh?.toFixed(2),
-      swingLow: liquidityLevels.swingLow?.toFixed(2),
-      bsl: liquidityLevels.bsl?.toFixed(2),
-      ssl: liquidityLevels.ssl?.toFixed(2)
+    const liquidityAnalysis = calculateLiquidityLevels(candles);
+    console.log(`📊 ${timeframe} Liquidity Analysis:`, {
+      swingHighs: liquidityAnalysis.swingHighs.length,
+      swingLows: liquidityAnalysis.swingLows.length,
+      bsl: liquidityAnalysis.bsl?.toFixed(2),
+      ssl: liquidityAnalysis.ssl?.toFixed(2),
+      sweeps: liquidityAnalysis.sweeps.length,
+      equalHighs: liquidityAnalysis.equalHighs.length,
+      equalLows: liquidityAnalysis.equalLows.length
     });
 
     // إنشاء متصفح جديد لكل عملية تصوير لتجنب مشاكل Windows
@@ -451,8 +601,8 @@ async function captureChartFromBrowser(
       deviceScaleFactor: SCREENSHOT_CONFIG.deviceScaleFactor
     });
 
-    // إنشاء HTML وتحميله بدون مستويات السيولة
-    const html = createChartHTML(candles, currentPrice, timeframe, candleCount);
+    // إنشاء HTML وتحميله مع مستويات السيولة
+    const html = createChartHTML(candles, currentPrice, timeframe, candleCount, liquidityAnalysis);
 
     console.log(`🌐 Loading ${timeframe} chart HTML...`);
     await page.setContent(html, {
