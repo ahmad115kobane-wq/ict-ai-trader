@@ -184,36 +184,6 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
 
     console.log(`✅ User found/created: ${user.email}`);
 
-    // جلب الرسم البياني للذهب
-    try {
-      const { getCandles, getCurrentPrice } = await import('../services/oandaService');
-      const { captureRealChartScreenshots } = await import('../services/screenshotService');
-      
-      console.log(`📊 Fetching XAUUSD chart for user: ${telegramUser.id}`);
-      
-      const [h1Candles, m5Candles, currentPrice] = await Promise.all([
-        getCandles('XAUUSD', '1h', 199),
-        getCandles('XAUUSD', '5m', 300),
-        getCurrentPrice('XAUUSD')
-      ]);
-      
-      if (h1Candles.length > 0 && m5Candles.length > 0 && currentPrice) {
-        const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 199, 300);
-        
-        // إرسال صورة H1
-        await sendChartPhoto(
-          chatId,
-          h1Image,
-          `📈 <b>XAUUSD - فريم الساعة (H1)</b>\n💰 السعر الحالي: ${currentPrice.toFixed(2)}`
-        );
-        
-        console.log(`✅ Chart sent to user: ${telegramUser.id}`);
-      }
-    } catch (chartError) {
-      console.error(`⚠️ Failed to send chart:`, chartError);
-      // نكمل حتى لو فشل إرسال الرسم البياني
-    }
-
     // التحقق من الاشتراك
     const activeSubscription = await getUserActiveSubscription(user.id);
     
@@ -226,10 +196,6 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
       const autoStatus = user.auto_analysis_enabled ? '⏸️ إيقاف' : '▶️ تفعيل';
       const keyboard = {
         inline_keyboard: [
-          [{
-            text: '📊 الرسم البياني الحي',
-            web_app: { url: 'https://ict-ai-trader-production.up.railway.app/live-chart.html' }
-          } as any],
           [{
             text: `${autoStatus} التحليل التلقائي`,
             callback_data: 'toggle_auto'
@@ -305,12 +271,6 @@ async function showPackages(chatId: number, user: any): Promise<void> {
     }]);
     
     // إضافة أزرار التنقل
-    buttons.push([
-      {
-        text: '📊 الرسم البياني الحي',
-        web_app: { url: 'https://ict-ai-trader-production.up.railway.app/live-chart.html' }
-      } as any
-    ]);
     buttons.push([
       {
         text: '🏠 الرئيسية',
