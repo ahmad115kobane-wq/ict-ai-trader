@@ -9,10 +9,10 @@ import { ICTAnalysis, ManagementAdvice } from "../types";
 declare const process: any;
 
 // ===================== API Config =====================
-// ⚠️ استبدل هذه القيم بـ API صحيح يدعم تحليل الصور
-const API_KEY = process?.env?.AI_API_KEY || "YOUR_API_KEY";
-const BASE_URL = process?.env?.AI_BASE_URL || "https://api.openai.com";
-const MODEL = process?.env?.AI_MODEL || "gpt-4-vision-preview";
+// ⚠️ يقرأ من OLLAMA_API_KEY و OLLAMA_BASE_URL في Railway
+const API_KEY = process?.env?.OLLAMA_API_KEY || process?.env?.AI_API_KEY || "YOUR_API_KEY";
+const BASE_URL = process?.env?.OLLAMA_BASE_URL || process?.env?.AI_BASE_URL || "https://api.openai.com";
+const MODEL = process?.env?.OLLAMA_MODEL || process?.env?.AI_MODEL || "llama3.2-vision";
 
 // ===================== Helpers =====================
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -634,6 +634,11 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
 
 // ===================== API Call Helper =====================
 async function callAIChat(payload: any): Promise<{ content: string }> {
+  console.log("🔌 Connecting to AI API...");
+  console.log(`📍 Base URL: ${BASE_URL}`);
+  console.log(`🤖 Model: ${MODEL}`);
+  console.log(`🔑 API Key: ${API_KEY ? `${API_KEY.substring(0, 10)}...` : 'NOT SET'}`);
+  
   const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
     method: "POST",
     headers: {
@@ -650,10 +655,12 @@ async function callAIChat(payload: any): Promise<{ content: string }> {
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
+    console.error(`❌ API Error: ${response.status} - ${errorText}`);
     throw new Error(`API Error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json() as any;
+  console.log("✅ AI Response received");
   return {
     content: data.choices?.[0]?.message?.content || "{}"
   };
@@ -665,6 +672,11 @@ export const analyzeMultiTimeframe = async (
   m5Image: string,
   currentPrice: number
 ): Promise<ICTAnalysis> => {
+  console.log("\n═══════════════════════════════════════════════════════════════");
+  console.log("🔍 بدء التحليل متعدد الأطر الزمنية");
+  console.log(`💰 السعر الحالي: ${currentPrice}`);
+  console.log("═══════════════════════════════════════════════════════════════\n");
+  
   const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
   const cleanM5 = m5Image.replace(/^data:image\/\w+;base64,/, "");
 
@@ -703,10 +715,66 @@ export const analyzeMultiTimeframe = async (
       max_tokens: 2000
     });
 
+    console.log("\n📊 نتيجة التحليل من النموذج:");
     const parsed = safeParseJson(data.content);
-    return validateAndFix(parsed, currentPrice);
+    console.log(`   القرار: ${parsed.decision || 'غير محدد'}`);
+    console.log(`   التقييم: ${parsed.score || 0}/10`);
+    console.log(`   الثقة: ${parsed.confidence || 0}%`);
+    console.log(`   الاتجاه: ${parsed.sentiment || 'غير محدد'}`);
+    
+    if (parsed.h1Analysis) {
+      console.log("\n📈 تحليل H1:");
+      console.log(`   الاتجاه: ${parsed.h1Analysis.bias || 'غير محدد'}`);
+      console.log(`   سماح شراء: ${parsed.h1Analysis.allowBuy ? '✅' : '❌'}`);
+      console.log(`   سماح بيع: ${parsed.h1Analysis.allowSell ? '✅' : '❌'}`);
+    }
+    
+    if (parsed.m5Analysis) {
+      console.log("\n📉 تحليل M5:");
+      console.log(`   هيكل السوق: ${parsed.m5Analysis.marketStructure || 'غير محدد'}`);
+      console.log(`   MSS بعد السحب: ${parsed.m5Analysis.mssOccurredAfterSweep ? '✅' : '❌'}`);
+      console.log(`   الإزاحة: ${parsed.m5Analysis.displacement || 'غير محدد'}`);
+      console.log(`   PD Array: ${parsed.m5Analysis.pdArray || 'غير محدد'}`);
+    }
+    
+    if (parsed.liquidityPurge) {
+      console.log("\n💧 فحص سحب السيولة:");
+      console.log(`   H1 Sweep: ${parsed.liquidityPurge.h1Sweep?.occurred ? '✅' : '❌'} (${parsed.liquidityPurge.h1Sweep?.type || 'NONE'})`);
+      console.log(`   M5 Sweep: ${parsed.liquidityPurge.m5InternalSweep?.occurred ? '✅' : '❌'} (${parsed.liquidityPurge.m5InternalSweep?.type || 'NONE'})`);
+      console.log(`   المصدر الأساسي: ${parsed.liquidityPurge.primarySource || 'NONE'}`);
+      
+      if (parsed.liquidityPurge.h1Sweep?.evidence) {
+        const ev = parsed.liquidityPurge.h1Sweep.evidence;
+        console.log(`   H1 Evidence: wickReject=${ev.wickRejection ? '✅' : '❌'}, closedBack=${ev.closedBackInside ? '✅' : '❌'}`);
+      }
+      
+      if (parsed.liquidityPurge.m5InternalSweep?.evidence) {
+        const ev = parsed.liquidityPurge.m5InternalSweep.evidence;
+        console.log(`   M5 Evidence: wickReject=${ev.wickRejection ? '✅' : '❌'}, wickSize=${ev.wickSize || 'N/A'}, closedBack=${ev.closedBackInside ? '✅' : '❌'}, candlesAgo=${ev.candlesAgo || 'N/A'}`);
+      }
+    }
+    
+    console.log("\n🔍 بدء التحقق من الصحة...");
+    const validated = validateAndFix(parsed, currentPrice);
+    
+    console.log("\n✅ نتيجة التحقق النهائية:");
+    console.log(`   القرار النهائي: ${validated.decision}`);
+    console.log(`   التقييم النهائي: ${validated.score}/10`);
+    console.log(`   الثقة النهائية: ${validated.confidence}%`);
+    
+    if (validated.reasons && validated.reasons.length > 0) {
+      console.log("\n📝 الأسباب:");
+      validated.reasons.forEach((reason, i) => {
+        console.log(`   ${i + 1}. ${reason}`);
+      });
+    }
+    
+    console.log("\n═══════════════════════════════════════════════════════════════\n");
+    
+    return validated;
   } catch (error) {
-    console.error("Analysis Error:", error);
+    console.error("\n❌ خطأ في التحليل:", error);
+    console.error("═══════════════════════════════════════════════════════════════\n");
     return createNoTradeResult(["❌ خطأ في الاتصال بالنموذج"]);
   }
 };
