@@ -582,7 +582,44 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   
   // 1. التحقق من وجود قرار وصفقة
   if (r.decision !== "PLACE_PENDING" || !r.suggestedTrade) {
-    return createNoTradeResult(["❌ لا يوجد إعداد صفقة من النموذج"], r);
+    // ✅ إضافة الأسباب التفصيلية من النموذج
+    const modelReasons = r.reasons && r.reasons.length > 0 
+      ? r.reasons 
+      : ["❌ النموذج لم يجد setup صالح"];
+    
+    // إضافة أسباب تفصيلية بناءً على التحليل
+    const detailedReasons: string[] = [...modelReasons];
+    
+    // فحص سحب السيولة
+    const h1Sweep = r.liquidityPurge?.h1Sweep?.occurred === true;
+    const m5Sweep = r.liquidityPurge?.m5InternalSweep?.occurred === true;
+    
+    if (!h1Sweep && !m5Sweep) {
+      detailedReasons.push("❌ لم يحدث سحب سيولة على H1 أو M5");
+    }
+    
+    // فحص MSS
+    const mssAfterSweep = r.m5Analysis?.mssOccurredAfterSweep === true;
+    if (!mssAfterSweep) {
+      detailedReasons.push("❌ لم يحدث MSS/CHoCH بعد سحب السيولة");
+    }
+    
+    // فحص Displacement
+    const displacement = r.m5Analysis?.displacement || "WEAK";
+    if (displacement === "WEAK") {
+      detailedReasons.push("❌ الإزاحة السعرية ضعيفة (WEAK)");
+    }
+    
+    // فحص Score و Confidence
+    if (r.score < VALIDATION_OPTIONS.minScore) {
+      detailedReasons.push(`❌ التقييم منخفض (${r.score}/10) - المطلوب >= ${VALIDATION_OPTIONS.minScore}`);
+    }
+    
+    if (r.confidence < VALIDATION_OPTIONS.minConfidence) {
+      detailedReasons.push(`❌ الثقة منخفضة (${r.confidence}%) - المطلوب >= ${VALIDATION_OPTIONS.minConfidence}%`);
+    }
+    
+    return createNoTradeResult(detailedReasons, r);
   }
   
   const t = r.suggestedTrade;
@@ -821,10 +858,16 @@ export const analyzeMultiTimeframe = async (
     console.log(`   الثقة النهائية: ${validated.confidence}%`);
     
     if (validated.reasons && validated.reasons.length > 0) {
-      console.log("\n📝 الأسباب:");
+      console.log("\n📝 الأسباب التفصيلية:");
       validated.reasons.forEach((reason, i) => {
         console.log(`   ${i + 1}. ${reason}`);
       });
+    }
+    
+    if (validated.decision === "NO_TRADE") {
+      console.log("\n🚫 ملخص أسباب عدم التداول:");
+      const summary = validated.reasons.filter(r => r.startsWith("❌")).slice(0, 3);
+      summary.forEach(s => console.log(`   • ${s}`));
     }
     
     console.log("\n═══════════════════════════════════════════════════════════════\n");

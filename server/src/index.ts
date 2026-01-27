@@ -1919,7 +1919,14 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       }
 
     } else {
-      console.log(`📋 Auto Analysis: No trade - ${analysis.reasons?.join(', ') || 'No suitable setup'}`);
+      // ✅ عرض الأسباب التفصيلية
+      const mainReasons = analysis.reasons?.filter(r => r.startsWith("❌")).slice(0, 3) || [];
+      const reasonsText = mainReasons.length > 0 
+        ? mainReasons.join(' | ') 
+        : 'لا يوجد setup صالح';
+      
+      console.log(`📋 Auto Analysis: No trade`);
+      console.log(`   الأسباب: ${reasonsText}`);
 
       // إرسال إشعار بعدم وجود فرصة (اختياري)
       try {
