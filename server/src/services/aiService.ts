@@ -48,12 +48,12 @@ const safeParseJson = (content: string): any => {
 
 // ===================== Validation Options =====================
 const VALIDATION_OPTIONS = {
-  maxDistancePercent: 0.012,  // 1.2% حد أقصى للمسافة
-  minRR: 1.8,                 // نسبة مخاطرة/عائد أدنى
-  minScore: 6.5,              // تقييم أدنى
-  minConfidence: 65,          // ثقة أدنى
-  minConfluences: 3,          // تلاقيات أدنى
-  maxM5CandlesAgo: 15         // أقصى عدد شموع لسحب M5
+  maxDistancePercent: 0.015,  // 1.5% حد أقصى للمسافة (كان 1.2%)
+  minRR: 1.5,                 // نسبة مخاطرة/عائد أدنى (كان 1.8)
+  minScore: 5.5,              // تقييم أدنى (كان 6.5)
+  minConfidence: 60,          // ثقة أدنى (كان 65)
+  minConfluences: 2,          // تلاقيات أدنى (كان 3)
+  maxM5CandlesAgo: 20         // أقصى عدد شموع لسحب M5 (كان 15)
 };
 
 // ===================== ICT System Instruction =====================
@@ -69,10 +69,30 @@ export const systemInstruction = `
 ═══════════════════════════════════════════════════════════════
 ❌ بدون Sweep = NO_TRADE مباشرة
 
-تعريف Sweep الصحيح:
-✅ كسر قمة/قاع واضح
-✅ ذيل طويل (50%+ من حجم الشمعة)
-✅ عودة السعر داخل النطاق خلال 1-3 شموع
+🔍 كيف تتعرف على Sweep (سحب السيولة):
+
+✅ علامات BSL Sweep (Buy Side Liquidity - سحب سيولة الشراء):
+- السعر يكسر قمة واضحة (High سابق)
+- يتجاوز القمة بـ 5-20 نقطة
+- ذيل علوي طويل (upper wick) يظهر الرفض
+- الشمعة تغلق تحت القمة المكسورة (عودة داخل النطاق)
+- يحدث انعكاس هبوطي بعدها مباشرة
+→ هذا يسمح بالبيع (SELL)
+
+✅ علامات SSL Sweep (Sell Side Liquidity - سحب سيولة البيع):
+- السعر يكسر قاع واضح (Low سابق)
+- يتجاوز القاع بـ 5-20 نقطة
+- ذيل سفلي طويل (lower wick) يظهر الرفض
+- الشمعة تغلق فوق القاع المكسور (عودة داخل النطاق)
+- يحدث انعكاس صعودي بعدها مباشرة
+→ هذا يسمح بالشراء (BUY)
+
+⚠️ ابحث بعناية في الصورة:
+- راجع آخر 10-20 شمعة على H1
+- راجع آخر 30-50 شمعة على M5
+- ابحث عن القمم والقيعان الواضحة
+- تحقق من وجود ذيول طويلة عند كسرها
+- تأكد من عودة السعر داخل النطاق
 
 🔴 أولوية H1:
 - SSL Sweep على H1 → يسمح بالشراء
@@ -83,7 +103,10 @@ export const systemInstruction = `
 - BSL Sweep على M5 (محلي) → يسمح بالبيع
 - يجب أن يكون حديث (< 15 شموع)
 
-⚠️ إذا لم يحدث Sweep على H1 ولا M5 → NO_TRADE
+⚠️ إذا لم تجد أي Sweep واضح على H1 أو M5:
+- ضع occurred: false
+- ضع type: "NONE"
+- القرار النهائي: NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
 (2) الشرط الثاني - MSS إلزامي بعد السحب (CRITICAL)
@@ -155,7 +178,7 @@ export const systemInstruction = `
     "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
     "allowBuy": true | false,
     "allowSell": true | false,
-    "liquiditySweep": "وصف السحب على H1",
+    "liquiditySweep": "وصف السحب على H1 أو 'لم يحدث'",
     "nearestBSL": "وصف/سعر",
     "nearestSSL": "وصف/سعر"
   },
@@ -170,7 +193,7 @@ export const systemInstruction = `
     "h1Sweep": {
       "occurred": true | false,
       "type": "BSL" | "SSL" | "NONE",
-      "levelName": "اسم المستوى",
+      "levelName": "اسم المستوى أو 'لا يوجد'",
       "evidence": {
         "wickRejection": true | false,
         "closedBackInside": true | false,
@@ -180,7 +203,7 @@ export const systemInstruction = `
     "m5InternalSweep": {
       "occurred": true | false,
       "type": "BSL" | "SSL" | "NONE",
-      "levelName": "اسم المستوى المحلي",
+      "levelName": "اسم المستوى المحلي أو 'لا يوجد'",
       "isRecent": true | false,
       "evidence": {
         "wickRejection": true | false,
@@ -205,6 +228,8 @@ export const systemInstruction = `
     "cancelConditions": ["شرط 1", "شرط 2"]
   }
 }
+
+🔴 تذكر: إذا لم تجد Sweep واضح = NO_TRADE فوراً
 `;
 
 // ===================== Result Builder =====================
@@ -358,9 +383,11 @@ function validatePriceLocation(r: any, isBuy: boolean): ValidationResult {
   const reasons: string[] = [];
   const priceLocation = r.priceLocation || "MID";
   
+  // ✅ تخفيف: MID يخفض Score بدلاً من الرفض الفوري
   if (priceLocation === "MID") {
-    reasons.push("❌ الموقع السعري في المنتصف - لا فرصة واضحة");
-    return { isValid: false, reasons };
+    r.score = Math.max((r.score || 0) - 1.0, 0);
+    r.confidence = Math.max((r.confidence || 0) - 8, 0);
+    reasons.push("⚠️ الموقع السعري في المنتصف (MID) - تم تخفيض التقييم");
   }
   
   // ✅ إصلاح: التحقق من توافق الموقع مع نوع الصفقة
@@ -412,6 +439,11 @@ function validateDisplacement(r: any): ValidationResult {
     return { isValid: false, reasons };
   }
   
+  // ✅ قبول MODERATE أيضاً (ليس فقط STRONG)
+  if (displacement === "MODERATE") {
+    reasons.push("⚠️ الإزاحة السعرية متوسطة (MODERATE) - مقبول لكن ليس مثالي");
+  }
+  
   return { isValid: true, reasons };
 }
 
@@ -426,9 +458,14 @@ function validatePDArray(r: any): ValidationResult {
   const m5WickReject = r.liquidityPurge?.m5InternalSweep?.evidence?.wickRejection === true;
   const hasStrongReject = h1WickReject || m5WickReject;
   
-  if (pdArray === "NONE" && !hasStrongReject) {
-    reasons.push("❌ لا يوجد FVG أو OB للدخول - ولا رفض قوي");
-    return { isValid: false, reasons };
+  // ✅ تخفيف: تحذير بدلاً من رفض إذا كان هناك رفض قوي
+  if (pdArray === "NONE") {
+    if (hasStrongReject) {
+      reasons.push("⚠️ لا يوجد FVG أو OB واضح - لكن يوجد رفض قوي (مقبول)");
+    } else {
+      reasons.push("❌ لا يوجد FVG أو OB للدخول - ولا رفض قوي");
+      return { isValid: false, reasons };
+    }
   }
   
   return { isValid: true, reasons };
