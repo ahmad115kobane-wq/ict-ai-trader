@@ -135,6 +135,38 @@ async function getOrCreateUser(telegramUser: TelegramUser): Promise<any> {
 }
 
 /**
+ * إرسال صورة الرسم البياني
+ */
+async function sendChartPhoto(chatId: number, imageBase64: string, caption: string): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error('❌ TELEGRAM_BOT_TOKEN not configured');
+    return false;
+  }
+
+  try {
+    // إزالة البادئة data:image/png;base64, إذا كانت موجودة
+    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    
+    const response = await fetchFn(`${TELEGRAM_API_URL}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: cleanBase64,
+        caption: caption,
+        parse_mode: 'HTML'
+      })
+    });
+
+    const data: any = await response.json();
+    return data.ok;
+  } catch (error) {
+    console.error('❌ Error sending chart photo:', error);
+    return false;
+  }
+}
+
+/**
  * معالج أمر /start
  */
 async function handleStartCommand(chatId: number, telegramUser: TelegramUser): Promise<void> {
@@ -151,6 +183,36 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
     }
 
     console.log(`✅ User found/created: ${user.email}`);
+
+    // جلب الرسم البياني للذهب
+    try {
+      const { getCandles, getCurrentPrice } = await import('../services/oandaService');
+      const { captureRealChartScreenshots } = await import('../services/screenshotService');
+      
+      console.log(`📊 Fetching XAUUSD chart for user: ${telegramUser.id}`);
+      
+      const [h1Candles, m5Candles, currentPrice] = await Promise.all([
+        getCandles('XAUUSD', '1h', 199),
+        getCandles('XAUUSD', '5m', 300),
+        getCurrentPrice('XAUUSD')
+      ]);
+      
+      if (h1Candles.length > 0 && m5Candles.length > 0 && currentPrice) {
+        const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 199, 300);
+        
+        // إرسال صورة H1
+        await sendChartPhoto(
+          chatId,
+          h1Image,
+          `📈 <b>XAUUSD - فريم الساعة (H1)</b>\n💰 السعر الحالي: ${currentPrice.toFixed(2)}`
+        );
+        
+        console.log(`✅ Chart sent to user: ${telegramUser.id}`);
+      }
+    } catch (chartError) {
+      console.error(`⚠️ Failed to send chart:`, chartError);
+      // نكمل حتى لو فشل إرسال الرسم البياني
+    }
 
     // التحقق من الاشتراك
     const activeSubscription = await getUserActiveSubscription(user.id);
