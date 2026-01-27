@@ -270,6 +270,8 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
 
   // 1) يجب قرار + صفقة
   if (r.decision !== "PLACE_PENDING" || !r.suggestedTrade) {
+    // ✅ إصلاح 4: إذا النموذج قال NO_TRADE خلّيه كما هو بدون إضافة سبب إضافي
+    if (r.decision === "NO_TRADE") return r as ICTAnalysis;
     r.decision = "NO_TRADE";
     r.reasons = [...r.reasons, "لا يوجد إعداد صفقة صالح"];
     return r as ICTAnalysis;
@@ -402,12 +404,12 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     return r as ICTAnalysis;
   }
 
-  // ✅ إصلاح 7: لا تسمح بصفقة إذا priceLocation غير محدد (اعتبره MID)
+  // ✅ إصلاح 5: اجعل "priceLocation" غير موجود = MID لكن خفّض Score بدل رفض فوري
   const priceLocation = r.priceLocation || "MID";
   if (priceLocation === "MID") {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, "الموقع السعري غير واضح/منتصف الرينج - لا توجد فرصة"];
-    return r as ICTAnalysis;
+    r.score = Math.max(r.score - 1.0, 0);
+    r.confidence = Math.max(r.confidence - 8, 0);
+    r.reasons = [...r.reasons, "تحذير: الموقع السعري غير محسوم (MID) - تم تخفيض التقييم"];
   }
 
   // 8) M5 Conditions (STRICT - MSS إلزامي)
@@ -433,6 +435,14 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
       ...r.reasons,
       "NO_TRADE: لم يحدث MSS أو CHoCH بعد سحب السيولة - Setup غير مكتمل"
     ];
+    return r as ICTAnalysis;
+  }
+  
+  // ✅ إصلاح 3: فرض شرط MSS "بعد السحب" فعلياً
+  const mssAfterSweep = r?.m5Analysis?.mssOccurredAfterSweep === true;
+  if (!mssAfterSweep) {
+    r.decision = "NO_TRADE";
+    r.reasons = [...r.reasons, "NO_TRADE: لم يحدث MSS/CHoCH بعد سحب السيولة (بعد السحب)"];
     return r as ICTAnalysis;
   }
 

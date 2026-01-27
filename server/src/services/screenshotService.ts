@@ -67,19 +67,103 @@ async function getBrowser(): Promise<Browser> {
   return sharedBrowser;
 }
 
+// ✅ دالة حساب مستويات السيولة (Swing High/Low، BSL/SSL)
+function calculateLiquidityLevels(candles: Candle[]): {
+  swingHigh?: number;
+  swingLow?: number;
+  bsl?: number;
+  ssl?: number;
+} {
+  if (!candles || candles.length < 10) {
+    console.log('⚠️ Not enough candles for liquidity calculation');
+    return {};
+  }
+
+  const lookback = Math.min(30, candles.length); // آخر 30 شمعة أو أقل
+  const recentCandles = candles.slice(-lookback);
+
+  // 1. حساب BSL (Buy Side Liquidity) - أعلى قمة في الفترة
+  const bsl = Math.max(...recentCandles.map(c => c.high));
+
+  // 2. حساب SSL (Sell Side Liquidity) - أدنى قاع في الفترة
+  const ssl = Math.min(...recentCandles.map(c => c.low));
+
+  // 3. حساب آخر Swing High (قمة واضحة)
+  // قمة سوينغ = شمعة أعلى من الشمعتين قبلها وبعدها
+  let swingHigh: number | undefined;
+  for (let i = recentCandles.length - 3; i >= 2; i--) {
+    const current = recentCandles[i];
+    const prev1 = recentCandles[i - 1];
+    const prev2 = recentCandles[i - 2];
+    const next1 = recentCandles[i + 1];
+    const next2 = recentCandles[i + 2];
+
+    if (
+      current.high > prev1.high &&
+      current.high > prev2.high &&
+      current.high > next1.high &&
+      current.high > next2.high
+    ) {
+      swingHigh = current.high;
+      break; // أول swing high من اليمين
+    }
+  }
+
+  // 4. حساب آخر Swing Low (قاع واضح)
+  // قاع سوينغ = شمعة أقل من الشمعتين قبلها وبعدها
+  let swingLow: number | undefined;
+  for (let i = recentCandles.length - 3; i >= 2; i--) {
+    const current = recentCandles[i];
+    const prev1 = recentCandles[i - 1];
+    const prev2 = recentCandles[i - 2];
+    const next1 = recentCandles[i + 1];
+    const next2 = recentCandles[i + 2];
+
+    if (
+      current.low < prev1.low &&
+      current.low < prev2.low &&
+      current.low < next1.low &&
+      current.low < next2.low
+    ) {
+      swingLow = current.low;
+      break; // أول swing low من اليمين
+    }
+  }
+
+  console.log('📊 Calculated liquidity levels:', {
+    swingHigh: swingHigh?.toFixed(2) || 'N/A',
+    swingLow: swingLow?.toFixed(2) || 'N/A',
+    bsl: bsl.toFixed(2),
+    ssl: ssl.toFixed(2)
+  });
+
+  return {
+    swingHigh,
+    swingLow,
+    bsl,
+    ssl
+  };
+}
+
 // دالة إنشاء HTML للرسم البياني
 function createChartHTML(
   candles: Candle[],
   currentPrice: number,
   timeframe: 'H1' | 'M5',
-  candleCount: number
+  candleCount: number,
+  liquidityLevels?: {
+    swingHigh?: number;
+    swingLow?: number;
+    bsl?: number;
+    ssl?: number;
+  }
 ): string {
   console.log(`🎨 Creating ${timeframe} HTML with ${candleCount} candles from ${candles.length} available`);
-  
+
   const visibleData = candles.slice(-candleCount);
-  
+
   console.log(`📊 ${timeframe} - Requested: ${candleCount}, Using: ${visibleData.length} candles`);
-  
+
   if (visibleData.length === 0) {
     return '<html><body><div style="color: red;">No data available</div></body></html>';
   }
@@ -103,7 +187,7 @@ function createChartHTML(
   const rightMargin = 40; // مسافة إضافية بعد آخر شمعة
 
   const getY = (price: number) => paddingTop + ((max - price) / range) * chartHeight;
-  
+
   // حساب المساحة المتاحة للشموع مع ترك مسافة على اليمين
   const chartAreaWidth = chartWidth - paddingLeft - paddingRight - rightMargin;
   const candleSpacing = chartAreaWidth / visibleData.length;
@@ -112,26 +196,26 @@ function createChartHTML(
   // بناء SVG للشموع - واضحة ومحسنة
   let candlesSVG = '';
   let wicksCount = 0;
-  
+
   visibleData.forEach((candle, i) => {
     const x = paddingLeft + i * candleSpacing;
     const centerX = x + candleSpacing / 2;
     const isBullish = candle.close >= candle.open;
-    
+
     // ألوان واضحة
     const bullColor = '#02b145e7';  // أخضر واضح
     const bearColor = '#cc3c3cff';  // أحمر واضح
     const color = isBullish ? bullColor : bearColor;
-    
+
     const openY = getY(candle.open);
     const closeY = getY(candle.close);
     const highY = getY(candle.high);
     const lowY = getY(candle.low);
-    
+
     const bodyTop = Math.min(openY, closeY);
     const bodyBottom = Math.max(openY, closeY);
     const bodyHeight = Math.max(bodyBottom - bodyTop, 2);
-    
+
     // الفتيل العلوي - واضح
     if (candle.high > Math.max(candle.open, candle.close)) {
       candlesSVG += `
@@ -139,7 +223,7 @@ function createChartHTML(
               stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
       wicksCount++;
     }
-    
+
     // الفتيل السفلي - واضح
     if (candle.low < Math.min(candle.open, candle.close)) {
       candlesSVG += `
@@ -147,49 +231,49 @@ function createChartHTML(
               stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
       wicksCount++;
     }
-    
+
     // جسم الشمعة - واضح وبسيط
     if (isBullish) {
       // شمعة صاعدة - مجوفة
       candlesSVG += `
-        <rect x="${centerX - candleWidth/2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
+        <rect x="${centerX - candleWidth / 2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
               fill="white" stroke="${color}" stroke-width="2" rx="1"/>`;
     } else {
       // شمعة هابطة - مملوءة
       candlesSVG += `
-        <rect x="${centerX - candleWidth/2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
+        <rect x="${centerX - candleWidth / 2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
               fill="${color}" stroke="${color}" stroke-width="1" rx="1"/>`;
     }
-    
+
     // معالجة الشموع الصغيرة
     if (Math.abs(candle.close - candle.open) < (maxPrice - minPrice) * 0.001) {
       candlesSVG += `
-        <line x1="${centerX - candleWidth/2}" y1="${(bodyTop + bodyBottom)/2}" 
-              x2="${centerX + candleWidth/2}" y2="${(bodyTop + bodyBottom)/2}" 
+        <line x1="${centerX - candleWidth / 2}" y1="${(bodyTop + bodyBottom) / 2}" 
+              x2="${centerX + candleWidth / 2}" y2="${(bodyTop + bodyBottom) / 2}" 
               stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
     }
   });
-  
+
   console.log(`📊 ${timeframe} - Drew ${wicksCount} wicks for ${visibleData.length} candles`);
 
   // خطوط الشبكة والأسعار - تفاصيل أكثر
   let gridLines = '';
   let priceLabels = '';
-  
+
   // نهاية منطقة الشموع (مع المسافة)
   const candlesEndX = paddingLeft + chartAreaWidth;
-  
+
   // زيادة عدد الخطوط من 12 إلى 20 لتفاصيل أفضل
   const gridCount = 20;
-  
+
   for (let i = 0; i <= gridCount; i++) {
     const price = max - (range / gridCount) * i;
     const y = getY(price);
-    
+
     // الخطوط تنتهي عند نهاية منطقة الشموع
     gridLines += `<line x1="${paddingLeft}" y1="${y}" x2="${candlesEndX}" y2="${y}" 
                         stroke="rgba(255,255,255,0.15)" stroke-width="1"/>`;
-    
+
     priceLabels += `<text x="${chartWidth - paddingRight + 15}" y="${y + 6}" 
                           fill="rgba(255,255,255,0.8)" font-size="16" font-weight="bold" font-family="Arial">
                           ${price.toFixed(2)}
@@ -208,6 +292,70 @@ function createChartHTML(
           ${currentPrice.toFixed(2)}
     </text>
   `;
+
+  // ✅ إصلاح 2: رسم مستويات السيولة (Swing High/Low, BSL/SSL)
+  let liquidityLines = '';
+  if (liquidityLevels) {
+    // Swing High (قمة السوينغ) - أزرق فاتح
+    if (liquidityLevels.swingHigh && liquidityLevels.swingHigh >= min && liquidityLevels.swingHigh <= max) {
+      const swingHighY = getY(liquidityLevels.swingHigh);
+      liquidityLines += `
+        <line x1="${paddingLeft}" y1="${swingHighY}" x2="${candlesEndX}" y2="${swingHighY}" 
+              stroke="#60a5fa" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
+        <rect x="${paddingLeft + 5}" y="${swingHighY - 14}" width="110" height="28" 
+              fill="#60a5fa" rx="4" opacity="0.9"/>
+        <text x="${paddingLeft + 60}" y="${swingHighY + 5}" 
+              fill="#000" font-size="13" font-weight="bold" text-anchor="middle" font-family="Arial">
+              Swing High
+        </text>
+      `;
+    }
+
+    // Swing Low (قاع السوينغ) - أزرق فاتح
+    if (liquidityLevels.swingLow && liquidityLevels.swingLow >= min && liquidityLevels.swingLow <= max) {
+      const swingLowY = getY(liquidityLevels.swingLow);
+      liquidityLines += `
+        <line x1="${paddingLeft}" y1="${swingLowY}" x2="${candlesEndX}" y2="${swingLowY}" 
+              stroke="#60a5fa" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
+        <rect x="${paddingLeft + 5}" y="${swingLowY - 14}" width="100" height="28" 
+              fill="#60a5fa" rx="4" opacity="0.9"/>
+        <text x="${paddingLeft + 55}" y="${swingLowY + 5}" 
+              fill="#000" font-size="13" font-weight="bold" text-anchor="middle" font-family="Arial">
+              Swing Low
+        </text>
+      `;
+    }
+
+    // BSL (Buy Side Liquidity) - أحمر
+    if (liquidityLevels.bsl && liquidityLevels.bsl >= min && liquidityLevels.bsl <= max) {
+      const bslY = getY(liquidityLevels.bsl);
+      liquidityLines += `
+        <line x1="${paddingLeft}" y1="${bslY}" x2="${candlesEndX}" y2="${bslY}" 
+              stroke="#ef4444" stroke-width="3" stroke-dasharray="12,6" opacity="0.9"/>
+        <rect x="${paddingLeft + 5}" y="${bslY - 16}" width="70" height="32" 
+              fill="#ef4444" rx="5" opacity="0.95"/>
+        <text x="${paddingLeft + 40}" y="${bslY + 6}" 
+              fill="#fff" font-size="14" font-weight="bold" text-anchor="middle" font-family="Arial">
+              BSL
+        </text>
+      `;
+    }
+
+    // SSL (Sell Side Liquidity) - أخضر
+    if (liquidityLevels.ssl && liquidityLevels.ssl >= min && liquidityLevels.ssl <= max) {
+      const sslY = getY(liquidityLevels.ssl);
+      liquidityLines += `
+        <line x1="${paddingLeft}" y1="${sslY}" x2="${candlesEndX}" y2="${sslY}" 
+              stroke="#10b981" stroke-width="3" stroke-dasharray="12,6" opacity="0.9"/>
+        <rect x="${paddingLeft + 5}" y="${sslY - 16}" width="70" height="32" 
+              fill="#10b981" rx="5" opacity="0.95"/>
+        <text x="${paddingLeft + 40}" y="${sslY + 6}" 
+              fill="#fff" font-size="14" font-weight="bold" text-anchor="middle" font-family="Arial">
+              SSL
+        </text>
+      `;
+    }
+  }
 
   // العنوان والمعلومات
   const title = `${timeframe} Chart - XAUUSD`;
@@ -308,6 +456,9 @@ function createChartHTML(
             <!-- الشموع -->
             ${candlesSVG}
             
+            <!-- ✅ مستويات السيولة (BSL/SSL/Swing) -->
+            ${liquidityLines}
+            
             <!-- خط السعر الحالي -->
             ${currentPriceLine}
             
@@ -343,14 +494,23 @@ async function captureChartFromBrowser(
 ): Promise<string> {
   let page: Page | null = null;
   let browser: Browser | null = null;
-  
+
   try {
     console.log(`📸 Starting ${timeframe} chart capture...`);
-    
+
+    // ✅ حساب مستويات السيولة تلقائياً
+    const liquidityLevels = calculateLiquidityLevels(candles);
+    console.log(`📊 ${timeframe} Liquidity levels:`, {
+      swingHigh: liquidityLevels.swingHigh?.toFixed(2),
+      swingLow: liquidityLevels.swingLow?.toFixed(2),
+      bsl: liquidityLevels.bsl?.toFixed(2),
+      ssl: liquidityLevels.ssl?.toFixed(2)
+    });
+
     // إنشاء متصفح جديد لكل عملية تصوير لتجنب مشاكل Windows
     browser = await puppeteer.launch(BROWSER_CONFIG);
     page = await browser.newPage();
-    
+
     // تعيين حجم الصفحة
     await page.setViewport({
       width: SCREENSHOT_CONFIG.width,
@@ -358,11 +518,11 @@ async function captureChartFromBrowser(
       deviceScaleFactor: SCREENSHOT_CONFIG.deviceScaleFactor
     });
 
-    // إنشاء HTML وتحميله
-    const html = createChartHTML(candles, currentPrice, timeframe, candleCount);
-    
+    // إنشاء HTML وتحميله مع مستويات السيولة
+    const html = createChartHTML(candles, currentPrice, timeframe, candleCount, liquidityLevels);
+
     console.log(`🌐 Loading ${timeframe} chart HTML...`);
-    await page.setContent(html, { 
+    await page.setContent(html, {
       waitUntil: ['networkidle0', 'domcontentloaded'],
       timeout: 20000
     });
@@ -370,12 +530,12 @@ async function captureChartFromBrowser(
     // انتظار تحميل الرسم البياني
     await page.waitForFunction('document.readyState === "complete"', { timeout: 10000 });
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     // التأكد من وجود العناصر
     await page.waitForSelector('svg', { timeout: 10000 });
 
     console.log(`📷 Taking screenshot of ${timeframe} chart...`);
-    
+
     // التقاط الصورة
     const screenshot = await page.screenshot({
       type: SCREENSHOT_CONFIG.type,
@@ -390,7 +550,7 @@ async function captureChartFromBrowser(
     });
 
     console.log(`✅ ${timeframe} screenshot captured: ${screenshot.length} chars`);
-    
+
     return `data:image/png;base64,${screenshot}`;
 
   } catch (error) {
@@ -425,11 +585,11 @@ export const captureRealChartScreenshots = async (
 ): Promise<{ h1Image: string; m5Image: string }> => {
   console.log(`🎯 Starting parallel browser-based chart screenshot capture...`);
   console.log(`📊 Target H1: ${h1CandleCount}, Target M5: ${m5CandleCount}`);
-  
+
   try {
     // التقاط الصورتين بشكل متوازي لتحسين الأداء
     console.log(`📊 Capturing both H1 and M5 charts simultaneously...`);
-    
+
     const [h1Image, m5Image] = await Promise.all([
       captureChartFromBrowser(h1Candles, currentPrice, 'H1', h1CandleCount),   // استخدام العدد المرسل
       captureChartFromBrowser(m5Candles, currentPrice, 'M5', m5CandleCount)    // استخدام العدد المرسل
@@ -450,18 +610,18 @@ export const captureRealChartScreenshots = async (
 // دالة اختبار التقاط صورة من المتصفح - محسنة لـ Windows
 export const testScreenshotCapture = async (): Promise<string> => {
   console.log(`🧪 Testing browser screenshot capture...`);
-  
+
   // بيانات تجريبية
   const testCandles: Candle[] = [];
   const basePrice = 2000;
-  
+
   // إنشاء 30 شمعة تجريبية
   for (let i = 0; i < 30; i++) {
     const open = basePrice + Math.random() * 20 - 10;
     const close = open + Math.random() * 10 - 5;
     const high = Math.max(open, close) + Math.random() * 5;
     const low = Math.min(open, close) - Math.random() * 5;
-    
+
     testCandles.push({
       time: (Date.now() + i * 60000).toString(),
       open,
@@ -470,7 +630,7 @@ export const testScreenshotCapture = async (): Promise<string> => {
       close
     });
   }
-  
+
   try {
     const testImage = await captureChartFromBrowser(testCandles, basePrice + 5, 'H1', 30);
     console.log(`✅ Test browser screenshot successful: ${testImage.length} chars`);
@@ -489,7 +649,7 @@ export const saveChartsToFiles = async (
   outputDir: string = './screenshots'
 ): Promise<{ h1Path: string; m5Path: string }> => {
   console.log(`💾 Saving charts to files in ${outputDir}...`);
-  
+
   try {
     // إنشاء مجلد الصور إذا لم يكن موجوداً
     if (!fs.existsSync(outputDir)) {
@@ -532,10 +692,10 @@ export const createAnimatedChart = async (
   outputPath: string = './animated_chart.gif'
 ): Promise<string> => {
   console.log(`🎬 Creating animated chart for ${symbol} ${timeframe}...`);
-  
+
   try {
     const { getCandles, getCurrentPrice } = await import('../services/oandaService');
-    
+
     // جلب بيانات أكثر للحصول على إطارات متعددة
     const candleCount = timeframe === 'H1' ? 220 : 350;  // أرقام أكبر قليلاً للرسوم المتحركة
     const candles = await getCandles(symbol, timeframe === 'H1' ? '1h' : '5m', candleCount);
@@ -552,12 +712,12 @@ export const createAnimatedChart = async (
     for (let i = 0; i < frames; i++) {
       const startIndex = Math.max(0, candles.length - displayCount - (frames - i - 1) * 5);
       const frameCandles = candles.slice(startIndex, startIndex + displayCount);
-      
+
       if (frameCandles.length > 0) {
         const frameImage = await captureChartFromBrowser(
-          frameCandles, 
-          currentPrice, 
-          timeframe, 
+          frameCandles,
+          currentPrice,
+          timeframe,
           displayCount
         );
         frameImages.push(frameImage);
@@ -565,11 +725,11 @@ export const createAnimatedChart = async (
     }
 
     console.log(`🎬 Created ${frameImages.length} frames for animation`);
-    
+
     // هنا يمكن إضافة مكتبة لإنشاء GIF من الصور
     // مثل sharp أو imagemagick
     // لكن للبساطة سنعيد المسار فقط
-    
+
     return outputPath;
 
   } catch (error) {
