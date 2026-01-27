@@ -93,17 +93,20 @@ function createChartHTML(
   const max = maxPrice + padding;
   const range = (max - min) || 0.01;
 
-  // إعدادات الرسم - حجم عادي
+  // إعدادات الرسم - جودة عالية
   const chartWidth = 1200;
   const chartHeight = 700;
   const paddingTop = 80;
   const paddingBottom = 80;
   const paddingLeft = 100;
-  const paddingRight = 150;
+  const paddingRight = 180; // زيادة المسافة بين آخر شمعة وشريط الأسعار
 
   const getY = (price: number) => paddingTop + ((max - price) / range) * chartHeight;
-  const candleSpacing = (chartWidth - paddingLeft - paddingRight) / visibleData.length;
-  const candleWidth = Math.max(candleSpacing * 0.7, 4); // عرض جيد للشموع
+  
+  // حساب المساحة المتاحة للشموع مع ترك مسافة على اليمين
+  const chartAreaWidth = chartWidth - paddingLeft - paddingRight;
+  const candleSpacing = chartAreaWidth / visibleData.length;
+  const candleWidth = Math.max(candleSpacing * 0.7, 4);
 
   // بناء SVG للشموع - واضحة ومحسنة
   let candlesSVG = '';
