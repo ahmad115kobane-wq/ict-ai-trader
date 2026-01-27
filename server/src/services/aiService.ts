@@ -221,6 +221,12 @@ function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis
     h1Analysis: original.h1Analysis || {},
     m5Analysis: original.m5Analysis || {},
     liquidityPurge: original.liquidityPurge || {},
+    drawOnLiquidity: original.drawOnLiquidity || {
+      direction: "NEUTRAL",
+      target: "",
+      nearestBSL: "",
+      nearestSSL: ""
+    },
     confluences: original.confluences || [],
     reasons: reasons,
     reasoning: original.reasoning || "",
