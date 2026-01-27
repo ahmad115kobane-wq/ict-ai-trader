@@ -1,17 +1,23 @@
 // services/aiService.ts
-// ✅ نسخة ICT متخصصة لتحليل الصورتين (H1 + M5) فقط
+// ✅ نسخة ICT مصححة بالكامل - خالية من الأخطاء المنطقية
 // ✅ تحليل متكامل: H1 للسياق + M5 للدخول
-// ✅ سحب السيولة إلزامي + معايير متوازنة
+// ✅ سحب السيولة إلزامي + معايير صارمة
 
 import { ICTAnalysis, ManagementAdvice } from "../types";
 
-// ===================== Ollama Cloud Config =====================
-const API_KEY = "9a1046cdc1284e0d904876669be18a12.PgNkAnhRaT7G-qQXCp-8x3Q1"; // ⚠️ لا تتركه هنا في الإنتاج
-const BASE_URL = "https://ollama.com";
-const MODEL = "gemma3:27b";
+// ===================== API Config =====================
+// ⚠️ استبدل هذه القيم بـ API صحيح يدعم تحليل الصور
+const API_KEY = process.env.AI_API_KEY || "YOUR_API_KEY";
+const BASE_URL = process.env.AI_BASE_URL || "https://api.openai.com";
+const MODEL = process.env.AI_MODEL || "gpt-4-vision-preview";
 
 // ===================== Helpers =====================
-const round2 = (n: number) => Math.round(n * 100) / 100;
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+const toNumber = (x: any): number => {
+  const n = Number(x);
+  return Number.isFinite(n) && n > 0 ? n : NaN;
+};
 
 const cleanJsonString = (str: string): string => {
   let cleaned = (str || "").trim();
@@ -21,7 +27,6 @@ const cleanJsonString = (str: string): string => {
   return cleaned.trim();
 };
 
-// استخراج JSON حتى لو النموذج كتب كلام قبل/بعد
 const extractJson = (text: string): string => {
   const s = cleanJsonString(text || "");
   const a = s.indexOf("{");
@@ -38,10 +43,17 @@ const safeParseJson = (content: string): any => {
   }
 };
 
-// ===================== ICT System Instruction (STRICT - Professional ICT Trading) =====================
-// 🔴 لا صفقة إلا بعد اكتمال Setup مؤسسي كامل
-// 🔴 MSS إلزامي بعد سحب السيولة
-// 🔴 الدخول فقط من PD Array
+// ===================== Validation Options =====================
+const VALIDATION_OPTIONS = {
+  maxDistancePercent: 0.012,  // 1.2% حد أقصى للمسافة
+  minRR: 1.8,                 // نسبة مخاطرة/عائد أدنى
+  minScore: 6.5,              // تقييم أدنى
+  minConfidence: 65,          // ثقة أدنى
+  minConfluences: 3,          // تلاقيات أدنى
+  maxM5CandlesAgo: 15         // أقصى عدد شموع لسحب M5
+};
+
+// ===================== ICT System Instruction =====================
 export const systemInstruction = `
 أنت "ICT Professional Analyzer" متخصص XAUUSD - تحليل صارم مثل متداول مؤسسي.
 ⚠️ يجب أن تكون جميع النصوص بالعربية فقط.
@@ -50,72 +62,71 @@ export const systemInstruction = `
 🔴 المبدأ الأساسي: لا تعطي صفقة إلا بعد اكتمال Setup ICT مؤسسي كامل
 
 ═══════════════════════════════════════════════════════════════
-(1) الشرط الأول - سحب السيولة (مرن أكثر)
+(1) الشرط الأول - سحب السيولة إلزامي (NO EXCEPTIONS)
 ═══════════════════════════════════════════════════════════════
-⚠️ ابحث عن أي من هذه الأنماط:
+❌ بدون Sweep = NO_TRADE مباشرة
 
-✅ نمط 1: اختراق خط ملون (أحمر/أخضر/أزرق) مع ذيل طويل
-✅ نمط 2: كسر قمة/قاع واضح مع رفض (حتى بدون خط)
-✅ نمط 3: ذيول طويلة عند مستوى مهم (حتى لو لم يكسر)
+تعريف Sweep الصحيح:
+✅ كسر قمة/قاع واضح
+✅ ذيل طويل (50%+ من حجم الشمعة)
+✅ عودة السعر داخل النطاق خلال 1-3 شموع
 
 🔴 أولوية H1:
 - SSL Sweep على H1 → يسمح بالشراء
 - BSL Sweep على H1 → يسمح بالبيع
-- حتى لو كان الرفض بسيط، اعتبره sweep إذا كان واضح
 
-🟡 بديل M5 (إذا لم يحدث على H1):
+🟡 بديل M5 (فقط إذا لم يحدث على H1):
 - SSL Sweep على M5 (محلي) → يسمح بالشراء
 - BSL Sweep على M5 (محلي) → يسمح بالبيع
-- يمكن أن يكون خلال آخر 20 شموع (زدنا من 15)
+- يجب أن يكون حديث (< 15 شموع)
 
-⚠️ كن مرناً: إذا رأيت ذيول طويلة عند قمة/قاع = اعتبره sweep
+⚠️ إذا لم يحدث Sweep على H1 ولا M5 → NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(2) الشرط الثاني - MSS أو CHoCH (مرن)
+(2) الشرط الثاني - MSS إلزامي بعد السحب (CRITICAL)
 ═══════════════════════════════════════════════════════════════
-⚠️ ابحث عن تغيير في الهيكل:
+🔴 هذا أهم شرط - لا تدخل بدون MSS
 
-✅ MSS (Market Structure Shift) - الأفضل
-✅ CHoCH (Change of Character) - مقبول
-✅ BOS قوي مع displacement واضح - مقبول أيضاً
+❌ ممنوع الدخول من ارتداد السيولة فقط
+✅ يجب كسر هيكل السوق (MSS) بعد السحب
 
 للشراء:
-- كسر آخر Lower High (أو قريب منه)
-- إغلاق فوقه
-- حركة صاعدة واضحة
+- يجب كسر آخر Lower High
+- إغلاق واضح فوقه
+- تأكيد تغيير الاتجاه
 
 للبيع:
-- كسر آخر Higher Low (أو قريب منه)
-- إغلاق تحته
-- حركة هابطة واضحة
+- يجب كسر آخر Higher Low
+- إغلاق واضح تحته
+- تأكيد تغيير الاتجاه
 
-⚠️ كن مرناً: إذا رأيت تغيير واضح في الاتجاه = اعتبره MSS
-
-═══════════════════════════════════════════════════════════════
-(3) الشرط الثالث - Displacement (مرن)
-═══════════════════════════════════════════════════════════════
-⚠️ ابحث عن حركة واضحة:
-
-المقبول:
-✅ STRONG - شمعة كبيرة مع FVG واضح (الأفضل)
-✅ MODERATE - شموع متوسطة مع حركة واضحة (مقبول)
-✅ حتى WEAK إذا كان هناك FVG أو OB واضح (مقبول في حالات خاصة)
-
-❌ فقط ارفض إذا كان السوق راكد تماماً بدون أي حركة
+⚠️ CHoCH مقبول أيضاً (تغيير طبيعة السوق)
+❌ BOS فقط = غير كافٍ
+❌ لم يحدث MSS بعد السحب = NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(4) الشرط الرابع - الدخول من PD Array أو رفض قوي
+(3) الشرط الثالث - Displacement حقيقي فقط
 ═══════════════════════════════════════════════════════════════
-⚠️ ابحث عن نقطة دخول:
+❌ ارفض أي حركة بطيئة أو متذبذبة
 
-الأفضل:
-✅ FVG (Fair Value Gap) - ممتاز
-✅ OB (Order Block) واضح - ممتاز
+المقبول فقط:
+✅ شمعة أو أكثر بجسم كبير
+✅ إغلاق قوي
+✅ خلق FVG واضح
+✅ حركة سريعة في اتجاه واحد
 
-مقبول أيضاً:
-✅ رفض قوي من مستوى (ذيول كبيرة)
-✅ ارتداد من منطقة سيولة
-✅ حتى لو لم يكن FVG/OB واضح، إذا كان هناك رفض قوي = مقبول
+❌ WEAK Displacement = NO_TRADE
+
+═══════════════════════════════════════════════════════════════
+(4) الشرط الرابع - الدخول فقط من PD Array
+═══════════════════════════════════════════════════════════════
+❌ لا تدخل من مستوى أفقي فقط
+
+الدخول يجب أن يكون من:
+✅ FVG (Fair Value Gap)
+✅ OB (Order Block) واضح
+
+❌ ارتداد من سعر فقط = مرفوض
 
 ═══════════════════════════════════════════════════════════════
 (5) الشرط الخامس - الموقع السعري
@@ -128,54 +139,7 @@ export const systemInstruction = `
 ❌ MID → NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(6) المنطق النهائي للقرار
-═══════════════════════════════════════════════════════════════
-IF (Liquidity Sweep حدث)
-AND (MSS حدث بعد السحب)
-AND (Displacement ≠ WEAK)
-AND (Entry من FVG أو OB)
-AND (Price في Premium/Discount الصحيح)
-THEN → PLACE_PENDING
-
-ELSE → NO_TRADE
-
-═══════════════════════════════════════════════════════════════
-(7) عند NO_TRADE - لا تعطي أمل
-═══════════════════════════════════════════════════════════════
-❌ لا تقل "انتظر كسر مستوى X"
-❌ لا تقل "ممكن لاحقاً"
-
-✅ فقط اذكر ما الذي لم يكتمل:
-مثال: "NO_TRADE: تم سحب السيولة لكن لم يحدث MSS بعد"
-مثال: "NO_TRADE: حدث MSS لكن لا يوجد FVG للدخول"
-مثال: "NO_TRADE: لم يحدث سحب سيولة أصلاً"
-
-═══════════════════════════════════════════════════════════════
-(8) شروط الصفقة (صارمة)
-═══════════════════════════════════════════════════════════════
-- score >= 6.5 ✅ (رفعنا من 5.5)
-- confidence >= 65 ✅ (رفعنا من 60)
-- RR >= 1.8 ✅ (رفعنا من 1.5)
-- الدخول قريب من السعر الحالي (< 1.2% للذهب) ✅
-- ترتيب SL/TP صحيح ✅
-- التلاقيات >= 3 ✅ (رفعنا من 2)
-- priceLocation: ممنوع MID ✅
-
-═══════════════════════════════════════════════════════════════
-(9) المطلوب منك
-═══════════════════════════════════════════════════════════════
-1. حلّل H1: هل حدث Sweep؟
-2. حلّل M5: هل حدث MSS بعد السحب؟
-3. تحقق من Displacement
-4. تحقق من وجود FVG أو OB
-5. تحقق من الموقع السعري
-6. أعط قرار: PLACE_PENDING أو NO_TRADE
-7. اذكر سبب واحد مؤسسي واضح
-
-⚠️ اشتغل ببطء، ارفض كثير، ولا تعطي صفقة إلا بعد اكتمال Setup كامل
-
-═══════════════════════════════════════════════════════════════
-(10) صيغة JSON الإلزامية
+(6) صيغة JSON الإلزامية
 ═══════════════════════════════════════════════════════════════
 {
   "decision": "PLACE_PENDING" | "NO_TRADE",
@@ -183,27 +147,27 @@ ELSE → NO_TRADE
   "confidence": 0-100,
   "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
   "bias": "وصف سياق H1 بالعربية",
+  "priceLocation": "PREMIUM" | "DISCOUNT" | "MID",
   "h1Analysis": {
     "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
     "allowBuy": true | false,
     "allowSell": true | false,
-    "liquiditySweep": "وصف السحب على H1 بالعربية",
+    "liquiditySweep": "وصف السحب على H1",
     "nearestBSL": "وصف/سعر",
     "nearestSSL": "وصف/سعر"
   },
   "m5Analysis": {
-    "marketStructure": "MSS" | "CHoCH" | "CONSOLIDATION",
+    "marketStructure": "MSS" | "CHoCH" | "BOS" | "CONSOLIDATION",
+    "mssOccurredAfterSweep": true | false,
     "displacement": "STRONG" | "MODERATE" | "WEAK",
     "pdArray": "FVG" | "OB" | "NONE",
-    "readyForEntry": true | false,
-    "mssOccurredAfterSweep": true | false
+    "readyForEntry": true | false
   },
-  "priceLocation": "PREMIUM" | "DISCOUNT" | "MID",
   "liquidityPurge": {
     "h1Sweep": {
       "occurred": true | false,
       "type": "BSL" | "SSL" | "NONE",
-      "levelName": "اسم المستوى بالعربية",
+      "levelName": "اسم المستوى",
       "evidence": {
         "wickRejection": true | false,
         "closedBackInside": true | false,
@@ -213,7 +177,7 @@ ELSE → NO_TRADE
     "m5InternalSweep": {
       "occurred": true | false,
       "type": "BSL" | "SSL" | "NONE",
-      "levelName": "اسم المستوى المحلي بالعربية",
+      "levelName": "اسم المستوى المحلي",
       "isRecent": true | false,
       "evidence": {
         "wickRejection": true | false,
@@ -224,17 +188,9 @@ ELSE → NO_TRADE
     },
     "primarySource": "H1" | "M5" | "NONE"
   },
-  "drawOnLiquidity": {
-    "direction": "BULLISH" | "BEARISH" | "NEUTRAL",
-    "target": "وصف هدف السيولة بالعربية",
-    "nearestBSL": "وصف بالعربية",
-    "nearestSSL": "وصف بالعربية"
-  },
-  "confluences": ["عامل 1 بالعربية", "عامل 2 بالعربية"],
-  "reasons": [
-    "سبب بالعربية مع مستوى سعر وتوجيه واضح"
-  ],
-  "reasoning": "شرح بالعربية يفصل بين H1 (سياق) و M5 (دخول)",
+  "confluences": ["عامل 1", "عامل 2", "عامل 3"],
+  "reasons": ["سبب 1", "سبب 2"],
+  "reasoning": "شرح مفصل",
   "suggestedTrade": {
     "type": "BUY_LIMIT" | "SELL_LIMIT" | "BUY_STOP" | "SELL_STOP",
     "entry": number,
@@ -243,367 +199,444 @@ ELSE → NO_TRADE
     "tp2": number,
     "tp3": number,
     "expiryMinutes": 60,
-    "cancelConditions": ["شرط 1 بالعربية", "شرط 2 بالعربية"]
+    "cancelConditions": ["شرط 1", "شرط 2"]
   }
 }
 `;
-// ===================== STRICT Validator (صارم - متداول محترف) =====================
-function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
-  console.log('');
-  console.log('🔧 Starting validateAndFix...');
-  console.log(`💰 Current Price: ${currentPrice}`);
-  
-  // ✅ معايير متوازنة - جودة جيدة مع مرونة
-  const opts = {
-    maxDistancePercent: 0.015, // 1.5% (أكثر مرونة)
-    minRR: 1.5,                // 1.5 (خففنا من 1.8)
-    minScore: 5.5,             // 5.5 (خففنا من 6.5)
-    minConfidence: 60,         // 60% (خففنا من 65)
-    minConfluences: 2          // 2 تلاقيات (خففنا من 3)
-  };
-  
-  console.log('📋 Validation Criteria:', opts);
 
-  // Defaults
+// ===================== Result Builder =====================
+interface ValidationResult {
+  isValid: boolean;
+  reasons: string[];
+}
+
+function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis {
+  return {
+    decision: "NO_TRADE",
+    score: original.score || 0,
+    confidence: original.confidence || 0,
+    sentiment: original.sentiment || "NEUTRAL",
+    bias: original.bias || "",
+    priceLocation: original.priceLocation || "MID",
+    h1Analysis: original.h1Analysis || {},
+    m5Analysis: original.m5Analysis || {},
+    liquidityPurge: original.liquidityPurge || {},
+    confluences: original.confluences || [],
+    reasons: reasons,
+    reasoning: original.reasoning || "",
+    suggestedTrade: null
+  } as ICTAnalysis;
+}
+
+// ===================== Validation Functions =====================
+
+// 1. التحقق من سحب السيولة
+function validateLiquiditySweep(r: any): ValidationResult {
+  const reasons: string[] = [];
+  
+  const h1Sweep = r.liquidityPurge?.h1Sweep?.occurred === true;
+  const m5Sweep = r.liquidityPurge?.m5InternalSweep?.occurred === true;
+  
+  if (!h1Sweep && !m5Sweep) {
+    reasons.push("❌ لم يحدث سحب سيولة على H1 أو M5 - الشرط الأول غير متوفر");
+    return { isValid: false, reasons };
+  }
+  
+  // التحقق من Evidence لـ H1
+  if (h1Sweep) {
+    const h1Evidence = r.liquidityPurge?.h1Sweep?.evidence || {};
+    if (!h1Evidence.wickRejection && !h1Evidence.closedBackInside) {
+      reasons.push("⚠️ سحب H1 بدون دليل قوي (لا رفض ولا عودة داخل النطاق)");
+    }
+  }
+  
+  // التحقق من M5 إذا كان المصدر الأساسي
+  if (!h1Sweep && m5Sweep) {
+    const m5Evidence = r.liquidityPurge?.m5InternalSweep?.evidence || {};
+    const isRecent = r.liquidityPurge?.m5InternalSweep?.isRecent === true;
+    const candlesAgo = Number(m5Evidence.candlesAgo) || 999;
+    const wickSize = m5Evidence.wickSize;
+    const closedBackInside = m5Evidence.closedBackInside === true;
+    
+    if (!isRecent || candlesAgo > VALIDATION_OPTIONS.maxM5CandlesAgo) {
+      reasons.push(`❌ سحب M5 قديم (${candlesAgo} شموع) - يجب < ${VALIDATION_OPTIONS.maxM5CandlesAgo}`);
+      return { isValid: false, reasons };
+    }
+    
+    const hasStrongWick = wickSize === "LARGE" || (wickSize === "MEDIUM" && closedBackInside);
+    if (!hasStrongWick) {
+      reasons.push("❌ سحب M5 بدون رفض قوي - يجب ذيول واضحة");
+      return { isValid: false, reasons };
+    }
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 2. التحقق من توافق نوع السحب مع الصفقة
+function validateSweepTypeMatch(r: any, isBuy: boolean): ValidationResult {
+  const reasons: string[] = [];
+  
+  const h1Sweep = r.liquidityPurge?.h1Sweep?.occurred === true;
+  const m5Sweep = r.liquidityPurge?.m5InternalSweep?.occurred === true;
+  
+  // تحديد المصدر الأساسي
+  let primarySource = "NONE";
+  let sweepType = "NONE";
+  
+  if (h1Sweep) {
+    primarySource = "H1";
+    sweepType = r.liquidityPurge?.h1Sweep?.type || "NONE";
+  } else if (m5Sweep) {
+    primarySource = "M5";
+    sweepType = r.liquidityPurge?.m5InternalSweep?.type || "NONE";
+  }
+  
+  // تحديث primarySource في البيانات
+  if (r.liquidityPurge) {
+    r.liquidityPurge.primarySource = primarySource;
+  }
+  
+  // التحقق من التوافق
+  if (isBuy && sweepType !== "SSL") {
+    reasons.push(`❌ شراء يتطلب SSL Sweep - الموجود: ${sweepType}`);
+    return { isValid: false, reasons };
+  }
+  
+  if (!isBuy && sweepType !== "BSL") {
+    reasons.push(`❌ بيع يتطلب BSL Sweep - الموجود: ${sweepType}`);
+    return { isValid: false, reasons };
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 3. التحقق من H1 allowBuy/allowSell
+function validateH1Permission(r: any, isBuy: boolean): ValidationResult {
+  const reasons: string[] = [];
+  const h1 = r.h1Analysis || {};
+  const primarySource = r.liquidityPurge?.primarySource || "NONE";
+  
+  // التحقق فقط إذا كان المصدر H1
+  if (primarySource === "H1") {
+    if (isBuy && h1.allowBuy !== true) {
+      reasons.push("❌ سياق H1 لا يسمح بالشراء");
+      return { isValid: false, reasons };
+    }
+    if (!isBuy && h1.allowSell !== true) {
+      reasons.push("❌ سياق H1 لا يسمح بالبيع");
+      return { isValid: false, reasons };
+    }
+  }
+  
+  // إذا كان المصدر M5، تحقق من عدم وجود اتجاه معاكس قوي على H1
+  if (primarySource === "M5") {
+    const h1Bias = h1.bias || "NEUTRAL";
+    if (isBuy && h1Bias === "BEARISH") {
+      reasons.push("❌ H1 هابط بقوة - لا يمكن الشراء بناءً على M5 فقط");
+      return { isValid: false, reasons };
+    }
+    if (!isBuy && h1Bias === "BULLISH") {
+      reasons.push("❌ H1 صاعد بقوة - لا يمكن البيع بناءً على M5 فقط");
+      return { isValid: false, reasons };
+    }
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 4. التحقق من الموقع السعري ✅ إصلاح مهم
+function validatePriceLocation(r: any, isBuy: boolean): ValidationResult {
+  const reasons: string[] = [];
+  const priceLocation = r.priceLocation || "MID";
+  
+  if (priceLocation === "MID") {
+    reasons.push("❌ الموقع السعري في المنتصف - لا فرصة واضحة");
+    return { isValid: false, reasons };
+  }
+  
+  // ✅ إصلاح: التحقق من توافق الموقع مع نوع الصفقة
+  if (isBuy && priceLocation === "PREMIUM") {
+    reasons.push("❌ لا يمكن الشراء في منطقة Premium - يجب الانتظار للـ Discount");
+    return { isValid: false, reasons };
+  }
+  
+  if (!isBuy && priceLocation === "DISCOUNT") {
+    reasons.push("❌ لا يمكن البيع في منطقة Discount - يجب الانتظار للـ Premium");
+    return { isValid: false, reasons };
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 5. التحقق من MSS بعد السحب ✅ إصلاح مهم
+function validateMSSAfterSweep(r: any): ValidationResult {
+  const reasons: string[] = [];
+  const m5 = r.m5Analysis || {};
+  
+  const marketStructure = m5.marketStructure || "CONSOLIDATION";
+  const mssOccurredAfterSweep = m5.mssOccurredAfterSweep === true;
+  
+  // ✅ إصلاح: استخدام mssOccurredAfterSweep
+  const hasValidStructure = marketStructure === "MSS" || marketStructure === "CHoCH";
+  
+  if (!hasValidStructure) {
+    reasons.push(`❌ لم يحدث MSS أو CHoCH - الهيكل الحالي: ${marketStructure}`);
+    return { isValid: false, reasons };
+  }
+  
+  if (!mssOccurredAfterSweep) {
+    reasons.push("❌ MSS لم يحدث بعد سحب السيولة - Setup غير مكتمل");
+    return { isValid: false, reasons };
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 6. التحقق من Displacement
+function validateDisplacement(r: any): ValidationResult {
+  const reasons: string[] = [];
+  const m5 = r.m5Analysis || {};
+  const displacement = m5.displacement || "WEAK";
+  
+  if (displacement === "WEAK") {
+    reasons.push("❌ الإزاحة السعرية ضعيفة (WEAK) - لا حركة مؤسسية");
+    return { isValid: false, reasons };
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 7. التحقق من PD Array
+function validatePDArray(r: any): ValidationResult {
+  const reasons: string[] = [];
+  const m5 = r.m5Analysis || {};
+  const pdArray = m5.pdArray || "NONE";
+  
+  // التحقق من وجود رفض قوي كبديل
+  const h1WickReject = r.liquidityPurge?.h1Sweep?.evidence?.wickRejection === true;
+  const m5WickReject = r.liquidityPurge?.m5InternalSweep?.evidence?.wickRejection === true;
+  const hasStrongReject = h1WickReject || m5WickReject;
+  
+  if (pdArray === "NONE" && !hasStrongReject) {
+    reasons.push("❌ لا يوجد FVG أو OB للدخول - ولا رفض قوي");
+    return { isValid: false, reasons };
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 8. التحقق من التلاقيات
+function validateConfluences(r: any): ValidationResult {
+  const reasons: string[] = [];
+  const confluences = Array.isArray(r.confluences) ? r.confluences : [];
+  
+  if (confluences.length < VALIDATION_OPTIONS.minConfluences) {
+    reasons.push(`❌ التلاقيات غير كافية (${confluences.length}/${VALIDATION_OPTIONS.minConfluences})`);
+    return { isValid: false, reasons };
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 9. التحقق من Score و Confidence
+function validateScoreAndConfidence(r: any): ValidationResult {
+  const reasons: string[] = [];
+  
+  const score = Number(r.score) || 0;
+  const confidence = Number(r.confidence) || 0;
+  
+  if (score < VALIDATION_OPTIONS.minScore) {
+    reasons.push(`❌ التقييم منخفض (${score}/10) - المطلوب >= ${VALIDATION_OPTIONS.minScore}`);
+    return { isValid: false, reasons };
+  }
+  
+  if (confidence < VALIDATION_OPTIONS.minConfidence) {
+    reasons.push(`❌ الثقة منخفضة (${confidence}%) - المطلوب >= ${VALIDATION_OPTIONS.minConfidence}%`);
+    return { isValid: false, reasons };
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 10. التحقق من بيانات الصفقة
+function validateTradeData(t: any, currentPrice: number, isBuy: boolean): ValidationResult {
+  const reasons: string[] = [];
+  
+  // التحقق من نوع الصفقة
+  const allowedTypes = ["BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"];
+  if (!allowedTypes.includes(String(t.type))) {
+    reasons.push(`❌ نوع الصفقة غير مدعوم: ${t.type}`);
+    return { isValid: false, reasons };
+  }
+  
+  // تحويل الأرقام
+  const entry = toNumber(t.entry);
+  const sl = toNumber(t.sl);
+  const tp1 = toNumber(t.tp1);
+  const tp2 = toNumber(t.tp2);
+  const tp3 = toNumber(t.tp3);
+  
+  if ([entry, sl, tp1, tp2, tp3].some(isNaN)) {
+    reasons.push("❌ قيم الصفقة غير صالحة (entry/sl/tp)");
+    return { isValid: false, reasons };
+  }
+  
+  // التحقق من المسافة
+  const dist = Math.abs(entry - currentPrice);
+  const maxDist = currentPrice * VALIDATION_OPTIONS.maxDistancePercent;
+  if (dist > maxDist) {
+    const distPercent = ((dist / currentPrice) * 100).toFixed(2);
+    reasons.push(`❌ الدخول بعيد (${distPercent}%) - المسموح <= ${(VALIDATION_OPTIONS.maxDistancePercent * 100).toFixed(1)}%`);
+    return { isValid: false, reasons };
+  }
+  
+  // التحقق من ترتيب المستويات
+  if (isBuy) {
+    if (!(sl < entry && entry < tp1 && tp1 < tp2 && tp2 < tp3)) {
+      reasons.push("❌ ترتيب مستويات الشراء خاطئ (SL < Entry < TP1 < TP2 < TP3)");
+      return { isValid: false, reasons };
+    }
+  } else {
+    if (!(tp3 < tp2 && tp2 < tp1 && tp1 < entry && entry < sl)) {
+      reasons.push("❌ ترتيب مستويات البيع خاطئ (TP3 < TP2 < TP1 < Entry < SL)");
+      return { isValid: false, reasons };
+    }
+  }
+  
+  // التحقق من RR
+  const risk = Math.abs(entry - sl);
+  const reward1 = Math.abs(tp1 - entry);
+  const rr1 = reward1 / (risk || 0.0001);
+  
+  if (rr1 < VALIDATION_OPTIONS.minRR) {
+    reasons.push(`❌ RR للهدف الأول ضعيف (${rr1.toFixed(2)}) - المطلوب >= ${VALIDATION_OPTIONS.minRR}`);
+    return { isValid: false, reasons };
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// ===================== Main Validator =====================
+function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
+  const allReasons: string[] = [];
+  
+  // تهيئة البيانات
   r = r || {};
   r.reasons = Array.isArray(r.reasons) ? r.reasons : [];
   r.confluences = Array.isArray(r.confluences) ? r.confluences : [];
-  r.score = Number.isFinite(r.score) ? r.score : 0;
-  r.confidence = Number.isFinite(r.confidence) ? r.confidence : 0;
-
-  // 1) يجب قرار + صفقة
+  r.score = Number(r.score) || 0;
+  r.confidence = Number(r.confidence) || 0;
+  
+  // 1. التحقق من وجود قرار وصفقة
   if (r.decision !== "PLACE_PENDING" || !r.suggestedTrade) {
-    // ✅ إصلاح 4: إذا النموذج قال NO_TRADE خلّيه كما هو بدون إضافة سبب إضافي
-    if (r.decision === "NO_TRADE") return r as ICTAnalysis;
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, "لا يوجد إعداد صفقة صالح"];
-    return r as ICTAnalysis;
-  }
-
-  // 2) Score + Confidence
-  if (r.score < opts.minScore) {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, `التقييم منخفض (${r.score}/10) - المطلوب >= ${opts.minScore}`];
-    return r as ICTAnalysis;
-  }
-  if (r.confidence < opts.minConfidence) {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, `الثقة منخفضة (${r.confidence}%) - المطلوب >= ${opts.minConfidence}%`];
-    return r as ICTAnalysis;
-  }
-
-  // 3) Sweep (H1 أولوية، M5 بديل)
-  const h1Sweep = r.liquidityPurge?.h1Sweep?.occurred === true;
-  const m5Sweep = r.liquidityPurge?.m5InternalSweep?.occurred === true;
-  let primarySource = r.liquidityPurge?.primarySource || "NONE";
-  
-  console.log('');
-  console.log('💧 Checking Liquidity Sweep:');
-  console.log(`   - H1 Sweep: ${h1Sweep}`);
-  console.log(`   - M5 Sweep: ${m5Sweep}`);
-  console.log(`   - Primary Source: ${primarySource}`);
-  
-  // ✅ إصلاح 4: تصحيح primarySource تلقائياً عند التضارب
-  if (primarySource === "H1" && !h1Sweep && m5Sweep) {
-    console.log('   ⚠️ Correcting primarySource from H1 to M5');
-    primarySource = "M5";
-  }
-  if (primarySource === "M5" && !m5Sweep && h1Sweep) {
-    console.log('   ⚠️ Correcting primarySource from M5 to H1');
-    primarySource = "H1";
-  }
-  if (!h1Sweep && !m5Sweep) {
-    console.log('   ⚠️ No sweep detected on either timeframe');
-    primarySource = "NONE";
-  }
-  r.liquidityPurge = { ...(r.liquidityPurge || {}), primarySource };
-  
-  // يجب وجود سحب سيولة على H1 أو M5
-  if (!h1Sweep && !m5Sweep) {
-    console.log('   ❌ REJECTED: No liquidity sweep detected');
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, "NO_TRADE: لم يحدث سحب سيولة - الشرط الأول غير متوفر"];
-    return r as ICTAnalysis;
+    return createNoTradeResult(["❌ لا يوجد إعداد صفقة من النموذج"], r);
   }
   
-  console.log('   ✅ Liquidity sweep detected!');
-
-  // تحديد نوع السحب حسب المصدر الأساسي
-  let sweepType = "NONE";
-  if (primarySource === "H1" && h1Sweep) {
-    sweepType = r.liquidityPurge?.h1Sweep?.type || "NONE";
-  } else if (primarySource === "M5" && m5Sweep) {
-    sweepType = r.liquidityPurge?.m5InternalSweep?.type || "NONE";
-    
-    // شروط إضافية لسحب السيولة الداخلي على M5
-    const m5Evidence = r.liquidityPurge?.m5InternalSweep?.evidence || {};
-    const isRecent = r.liquidityPurge?.m5InternalSweep?.isRecent === true;
-    
-    // ✅ إصلاح 6: تحسين منطق wickSize + closedBackInside
-    const closedBackInside = m5Evidence.closedBackInside === true;
-    const wickSize = m5Evidence.wickSize;
-    const hasStrongWick = wickSize === "LARGE" || (wickSize === "MEDIUM" && closedBackInside);
-    
-    // ✅ إصلاح 5: تحويل candlesAgo إلى رقم مضبوط
-    const candlesAgoRaw = m5Evidence.candlesAgo;
-    const candlesAgo = Number.isFinite(Number(candlesAgoRaw)) ? Number(candlesAgoRaw) : 999;
-    
-    if (!isRecent || candlesAgo > 15) {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, `سحب السيولة على M5 قديم (${candlesAgo} شموع) - يجب أن يكون حديث (< 15 شموع)`];
-      return r as ICTAnalysis;
-    }
-    
-    if (!hasStrongWick) {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "سحب السيولة على M5 بدون رفض قوي - يجب وجود ذيول واضحة"];
-      return r as ICTAnalysis;
-    }
-  }
-
-  // 4) H1 allowBuy/allowSell (استعمال فعلي لمنع أخطاء النموذج)
-  const h1 = r.h1Analysis || {};
-  const allowBuy = h1.allowBuy === true;
-  const allowSell = h1.allowSell === true;
-
-  // 5) Trade basics
   const t = r.suggestedTrade;
   const isBuy = String(t.type || "").includes("BUY");
-
-  // 6) توافق نوع السحب مع نوع الصفقة (مع دعم M5)
-  if (isBuy) {
-    if (sweepType !== "SSL") {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, `NO_TRADE: شراء يتطلب SSL Sweep - الموجود: ${sweepType}`];
-      return r as ICTAnalysis;
-    }
-    if (!allowBuy && primarySource === "H1") {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "NO_TRADE: سياق H1 لا يسمح بالشراء"];
-      return r as ICTAnalysis;
-    }
-  } else {
-    if (sweepType !== "BSL") {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, `NO_TRADE: بيع يتطلب BSL Sweep - الموجود: ${sweepType}`];
-      return r as ICTAnalysis;
-    }
-    if (!allowSell && primarySource === "H1") {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "NO_TRADE: سياق H1 لا يسمح بالبيع"];
-      return r as ICTAnalysis;
-    }
-  }
-
-  // 6.5) شروط إضافية عند الاعتماد على M5 فقط
-  if (primarySource === "M5" && !h1Sweep) {
-    // تقليل التقييم قليلاً عند الاعتماد على M5 فقط
-    r.score = Math.max(r.score - 0.5, 0);
-    r.confidence = Math.max(r.confidence - 5, 0);
-    
-    // إضافة تحذير
-    r.reasons = [...r.reasons, "الاعتماد على سحب السيولة الداخلي على M5 (مخاطرة أعلى قليلاً)"];
-    
-    // التأكد من عدم وجود اتجاه قوي معاكس على H1
-    const h1Bias = h1.bias || "NEUTRAL";
-    if (isBuy && h1Bias === "BEARISH") {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "H1 هابط بقوة - لا يمكن الشراء بناءً على M5 فقط"];
-      return r as ICTAnalysis;
-    }
-    if (!isBuy && h1Bias === "BULLISH") {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "H1 صاعد بقوة - لا يمكن البيع بناءً على M5 فقط"];
-      return r as ICTAnalysis;
-    }
-  }
-
-  // 7) Confluences (متوازن - 2 تلاقيات كحد أدنى)
-  if (r.confluences.length < opts.minConfluences) {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, `عدد التلاقيات غير كافٍ (${r.confluences.length}/${opts.minConfluences}) - يجب وجود تلاقيين على الأقل`];
-    return r as ICTAnalysis;
-  }
-
-  // ✅ إصلاح 5: اجعل "priceLocation" غير موجود = MID لكن خفّض Score بدل رفض فوري
-  const priceLocation = r.priceLocation || "MID";
-  if (priceLocation === "MID") {
-    r.score = Math.max(r.score - 1.0, 0);
-    r.confidence = Math.max(r.confidence - 8, 0);
-    r.reasons = [...r.reasons, "تحذير: الموقع السعري غير محسوم (MID) - تم تخفيض التقييم"];
-  }
-
-  // 8) M5 Conditions (STRICT - MSS إلزامي)
-  const m5 = r.m5Analysis || {};
-  const m5Structure = (m5.marketStructure || r.marketStructure || "CONSOLIDATION") as string;
-  const m5Disp = (m5.displacement || r.displacementStrength || "WEAK") as string;
-  const m5Pd = (m5.pdArray || r.pdArrayDetails?.primary || "NONE") as string;
-  const mssOccurred = m5.mssOccurredAfterSweep === true;
-
-  const hasChoCHorMSS = m5Structure === "CHoCH" || m5Structure === "MSS";
-  const dispOk = m5Disp !== "WEAK";
-  const hasPdArray = m5Pd !== "NONE";
   
-  // ✅ إصلاح 1: التحقق من الرفض القوي من المكان الصحيح
-  const h1WickReject = r?.liquidityPurge?.h1Sweep?.evidence?.wickRejection === true;
-  const m5WickReject = r?.liquidityPurge?.m5InternalSweep?.evidence?.wickRejection === true;
-  const hasStrongReject = h1WickReject || m5WickReject;
-
-  // 🔴 الشرط الأهم: MSS بعد السحب (مرن أكثر)
-  if (!hasChoCHorMSS) {
-    r.decision = "NO_TRADE";
-    r.reasons = [
-      ...r.reasons,
-      "NO_TRADE: لم يحدث MSS أو CHoCH أو BOS قوي - Setup غير مكتمل"
-    ];
-    return r as ICTAnalysis;
+  // 2. التحقق من Score و Confidence
+  const scoreCheck = validateScoreAndConfidence(r);
+  if (!scoreCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...scoreCheck.reasons], r);
   }
   
-  // ✅ إصلاح 3: فرض شرط MSS "بعد السحب" (مرن - نقبل حتى لو غير محدد بوضوح)
-  const mssAfterSweep = r?.m5Analysis?.mssOccurredAfterSweep;
-  if (mssAfterSweep === false) {
-    // فقط نرفض إذا النموذج قال صراحة false
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, "NO_TRADE: MSS/CHoCH حدث قبل سحب السيولة (ليس بعده)"];
-    return r as ICTAnalysis;
+  // 3. التحقق من سحب السيولة
+  const sweepCheck = validateLiquiditySweep(r);
+  if (!sweepCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...sweepCheck.reasons], r);
   }
-  // إذا كان true أو undefined = نقبل
-
-  if (!dispOk) {
-    // خففنا: نقبل MODERATE أيضاً، نرفض فقط WEAK
-    if (m5Disp === "WEAK") {
-      r.decision = "NO_TRADE";
-      r.reasons = [
-        ...r.reasons,
-        "NO_TRADE: الإزاحة السعرية ضعيفة جداً (WEAK) - لا توجد حركة واضحة"
-      ];
-      return r as ICTAnalysis;
-    }
-  }
-
-  // لازم PD Array (FVG أو OB) أو Rejection قوي (مرن)
-  if (!hasPdArray && !hasStrongReject) {
-    // خففنا: نقبل حتى بدون PD Array إذا كان هناك أي دليل على رفض
-    r.score = Math.max(r.score - 0.5, 0);
-    r.confidence = Math.max(r.confidence - 5, 0);
-    r.reasons = [
-      ...r.reasons,
-      "تحذير: لا يوجد FVG أو OB واضح - تم تخفيض التقييم"
-    ];
-  }
-
-  // 9) نوع الصفقة المدعوم
-  const allowedTypes = ["BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"];
-  if (!allowedTypes.includes(String(t.type))) {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, `نوع الصفقة غير مدعوم: ${t.type}`];
-    return r as ICTAnalysis;
-  }
-
-  // ✅ إصلاح 3: تأمين الأرقام ضد NaN/0
-  const toNum = (x: any) => {
-    const n = Number(x);
-    return Number.isFinite(n) ? n : NaN;
-  };
+  allReasons.push(...sweepCheck.reasons);
   
-  t.entry = toNum(t.entry);
-  t.sl = toNum(t.sl);
-  t.tp1 = toNum(t.tp1 || t.tp || 0);
-  t.tp2 = toNum(t.tp2 || 0);
-  t.tp3 = toNum(t.tp3 || 0);
-  
-  if (![t.entry, t.sl, t.tp1, t.tp2, t.tp3].every(Number.isFinite)) {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, "قيم الدخول/الوقف/الأهداف غير صالحة (NaN)"];
-    return r as ICTAnalysis;
+  // 4. التحقق من توافق نوع السحب
+  const sweepMatchCheck = validateSweepTypeMatch(r, isBuy);
+  if (!sweepMatchCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...sweepMatchCheck.reasons], r);
   }
   
-  // تقريب الأرقام بعد التحقق
-  t.entry = round2(t.entry);
-  t.sl = round2(t.sl);
-  t.tp1 = round2(t.tp1);
-  t.tp2 = round2(t.tp2);
-  t.tp3 = round2(t.tp3);
-
-  // التحقق من وجود الأهداف الثلاثة
-  if (!t.tp1 || !t.tp2 || !t.tp3) {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, "يجب تحديد 3 أهداف (TP1, TP2, TP3)"];
-    return r as ICTAnalysis;
+  // 5. التحقق من إذن H1
+  const h1Check = validateH1Permission(r, isBuy);
+  if (!h1Check.isValid) {
+    return createNoTradeResult([...r.reasons, ...h1Check.reasons], r);
   }
-
-  // 11) المسافة (2%)
-  const dist = Math.abs(t.entry - currentPrice);
-  const maxDist = currentPrice * opts.maxDistancePercent;
-  if (dist > maxDist) {
-    r.decision = "NO_TRADE";
-    r.reasons = [
-      ...r.reasons,
-      `الدخول بعيد (${((dist / currentPrice) * 100).toFixed(2)}%) - المسموح <= ${(opts.maxDistancePercent * 100).toFixed(1)}%`
-    ];
-    return r as ICTAnalysis;
+  
+  // 6. التحقق من الموقع السعري ✅
+  const locationCheck = validatePriceLocation(r, isBuy);
+  if (!locationCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...locationCheck.reasons], r);
   }
-
-  // 12) ترتيب SL/TP
-  if (isBuy) {
-    if (!(t.sl < t.entry && t.entry < t.tp1 && t.tp1 < t.tp2 && t.tp2 < t.tp3)) {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "ترتيب مستويات الشراء خاطئ (SL < Entry < TP1 < TP2 < TP3)"];
-      return r as ICTAnalysis;
-    }
-  } else {
-    if (!(t.tp3 < t.tp2 && t.tp2 < t.tp1 && t.tp1 < t.entry && t.entry < t.sl)) {
-      r.decision = "NO_TRADE";
-      r.reasons = [...r.reasons, "ترتيب مستويات البيع خاطئ (TP3 < TP2 < TP1 < Entry < SL)"];
-      return r as ICTAnalysis;
-    }
+  
+  // 7. التحقق من MSS ✅
+  const mssCheck = validateMSSAfterSweep(r);
+  if (!mssCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...mssCheck.reasons], r);
   }
-
-  // 13) RR للأهداف الثلاثة
+  
+  // 8. التحقق من Displacement
+  const dispCheck = validateDisplacement(r);
+  if (!dispCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...dispCheck.reasons], r);
+  }
+  
+  // 9. التحقق من PD Array
+  const pdCheck = validatePDArray(r);
+  if (!pdCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...pdCheck.reasons], r);
+  }
+  
+  // 10. التحقق من التلاقيات
+  const confCheck = validateConfluences(r);
+  if (!confCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...confCheck.reasons], r);
+  }
+  
+  // 11. التحقق من بيانات الصفقة
+  const tradeCheck = validateTradeData(t, currentPrice, isBuy);
+  if (!tradeCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...tradeCheck.reasons], r);
+  }
+  
+  // ✅ تقريب الأرقام النهائية
+  t.entry = round2(toNumber(t.entry));
+  t.sl = round2(toNumber(t.sl));
+  t.tp1 = round2(toNumber(t.tp1));
+  t.tp2 = round2(toNumber(t.tp2));
+  t.tp3 = round2(toNumber(t.tp3));
+  
+  // حساب نسب RR
   const risk = Math.abs(t.entry - t.sl);
-  const reward1 = Math.abs(t.tp1 - t.entry);
-  const reward2 = Math.abs(t.tp2 - t.entry);
-  const reward3 = Math.abs(t.tp3 - t.entry);
-  
-  const rr1 = reward1 / (risk || 0.0001);
-  const rr2 = reward2 / (risk || 0.0001);
-  const rr3 = reward3 / (risk || 0.0001);
-  
-  // التحقق من RR للهدف الأول (الحد الأدنى)
-  if (rr1 < opts.minRR) {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, `RR للهدف الأول ضعيف (${rr1.toFixed(2)}) - المطلوب >= ${opts.minRR}`];
-    return r as ICTAnalysis;
-  }
-  
-  // التحقق من أن الأهداف تتصاعد بشكل منطقي
-  if (rr2 <= rr1 || rr3 <= rr2) {
-    r.decision = "NO_TRADE";
-    r.reasons = [...r.reasons, "الأهداف يجب أن تكون متصاعدة (RR1 < RR2 < RR3)"];
-    return r as ICTAnalysis;
-  }
-  
-  // حفظ نسب RR
+  const rr1 = Math.abs(t.tp1 - t.entry) / risk;
+  const rr2 = Math.abs(t.tp2 - t.entry) / risk;
+  const rr3 = Math.abs(t.tp3 - t.entry) / risk;
   t.rrRatio = `TP1: 1:${rr1.toFixed(1)} | TP2: 1:${rr2.toFixed(1)} | TP3: 1:${rr3.toFixed(1)}`;
-
-  // ✅ OK
+  
+  // تقليل التقييم إذا كان المصدر M5 فقط
+  if (r.liquidityPurge?.primarySource === "M5") {
+    r.score = Math.max(r.score - 0.5, 0);
+    r.confidence = Math.max(r.confidence - 5, 0);
+    r.reasons = [...r.reasons, "⚠️ الاعتماد على سحب M5 فقط (مخاطرة أعلى قليلاً)"];
+  }
+  
+  // إضافة التحذيرات
+  r.reasons = [...r.reasons, ...allReasons.filter(r => r.startsWith("⚠️"))];
+  
   return r as ICTAnalysis;
 }
 
 // ===================== API Call Helper =====================
-async function callOllamaChat(payload: any) {
+async function callAIChat(payload: any): Promise<{ content: string }> {
   const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${API_KEY}`
+      "Authorization": `Bearer ${API_KEY}`
     },
     body: JSON.stringify({
       model: MODEL,
       messages: payload.messages,
-      stream: false,
-      temperature: payload.options?.temperature || 0.2,
-      max_tokens: payload.options?.num_predict || 1800
+      max_tokens: payload.max_tokens || 2000,
+      temperature: payload.temperature || 0.2
     })
   });
 
@@ -613,17 +646,12 @@ async function callOllamaChat(payload: any) {
   }
 
   const data = await response.json() as any;
-  
-  // تحويل الرد ليتوافق مع الكود الأصلي
   return {
-    message: {
-      content: data.choices?.[0]?.message?.content || "{}"
-    },
-    response: data.choices?.[0]?.message?.content || "{}"
+    content: data.choices?.[0]?.message?.content || "{}"
   };
 }
 
-// ===================== Multi-Timeframe Analysis (H1 + M5) - الطريقة الوحيدة =====================
+// ===================== Multi-Timeframe Analysis =====================
 export const analyzeMultiTimeframe = async (
   h1Image: string,
   m5Image: string,
@@ -640,161 +668,42 @@ export const analyzeMultiTimeframe = async (
 - الزوج: XAUUSD
 - السعر الحالي: ${currentPrice}
 
-⚠️⚠️⚠️ **تعليمات مهمة جداً قبل البدء** ⚠️⚠️⚠️
-
-**مهمتك:**
-- حلل الشارت بعناية وحدد مستويات السيولة بنفسك
-- ابحث عن القمم والقيعان الواضحة
-- ابحث عن شموع اخترقت هذه المستويات مع ذيول طويلة
-- ابحث عن رفض قوي (wicks) عند المستويات المهمة
-
-**كيف تتعرف على Sweep:**
-1. ابحث عن أعلى قمة وأدنى قاع في آخر 50 شمعة
-2. انظر للشموع التي اخترقت هذه المستويات
-3. ابحث عن **ذيول طويلة** (wicks) - علامة على الرفض
-4. إذا السعر **عاد داخل النطاق** بعد الاختراق = Sweep ✅
-5. **لا تقل "لا يوجد sweep" بسهولة** - ابحث جيداً!
-
-**قاعدة مهمة:**
-- إذا رأيت شموع اخترقت أدنى قاع مع ذيول طويلة = SSL Sweep
-- إذا رأيت شموع اخترقت أعلى قمة مع ذيول طويلة = BSL Sweep
-- حتى لو الاختراق بسيط، إذا كان هناك رفض واضح = اعتبره sweep
-
-═══════════════════════════════════════════════════════════════
-
 الصورة 1: H1 (السياق الأساسي)
-- حلل الشارت وحدد أعلى قمة وأدنى قاع
-- ابحث عن شموع اخترقت هذه المستويات مع رفض قوي (ذيول طويلة)
-- حدّد هل حدث SSL Sweep (كسر أدنى قاع ثم عودة) أو BSL Sweep (كسر أعلى قمة ثم عودة)
-- حدّد allowBuy / allowSell حسب السياق العام
-
 الصورة 2: M5 (الدخول + السيولة الداخلية)
-- حلل الشارت وحدد القمم والقيعان المحلية
-- ابحث عن اختراق هذه المستويات مع رفض قوي
-- حدّد CHoCH أو MSS أو BOS قوي
-- حدّد displacement (حتى MODERATE مقبول)
-- حدّد FVG/OB أو رفض قوي (حتى بدون FVG مقبول)
-- ⚠️ إذا لم يحدث Sweep على H1، ابحث عن سحب سيولة داخلي على M5:
-  * اختراق قمة/قاع محلي
-  * رفض قوي (ذيول واضحة)
-  * عودة السعر داخل النطاق
-  * السحب خلال آخر 20 شموع
-- حدّد نقطة الدخول المعلق (Limit Order) عند FVG أو OB أو منطقة رفض
 
-🔄 أولوية سحب السيولة:
-1. الأولوية الأولى: سحب السيولة على H1
-2. البديل: سحب السيولة الداخلي على M5 (إذا لم يحدث على H1)
-3. إذا لم يحدث على كليهما: NO_TRADE
-
-⚠️ مهم جداً - الصفقات المعلقة:
-- نوع الصفقة: BUY_LIMIT أو SELL_LIMIT (أوامر معلقة فقط)
-- سعر الدخول: عند منطقة FVG أو OB (ليس السعر الحالي)
-- الدخول يجب أن يكون أقل من السعر الحالي للشراء (BUY_LIMIT)
-- الدخول يجب أن يكون أعلى من السعر الحالي للبيع (SELL_LIMIT)
-
-⚠️ مهم جداً - 3 أهداف إجبارية:
-- TP1 (الهدف الأول): أقرب مستوى مقاومة/دعم أو FVG معاكس (محافظ)
-- TP2 (الهدف الثاني): مستوى سيولة متوسط أو OB مهم (متوازن)
-- TP3 (الهدف الثالث): مستوى سيولة رئيسي BSL/SSL على H1 (طموح)
-
-📊 نسب الأهداف الموصى بها:
-- TP1: RR = 1.5 إلى 2.0 (هدف سريع وآمن)
-- TP2: RR = 2.5 إلى 3.5 (هدف متوسط)
-- TP3: RR = 4.0 إلى 6.0 (هدف رئيسي)
-
-💡 يجب أن تكون الأهداف مبنية على:
-- مستويات سيولة واضحة على H1
-- مناطق PD Array معاكسة (FVG/OB)
-- مستويات نفسية مهمة
-- قمم/قيعان سابقة واضحة
-
-🔄 مثال على سحب السيولة الداخلي على M5:
-- السعر يكسر قاع محلي بذيل طويل ثم يعود للأعلى (SSL Sweep)
-- أو السعر يكسر قمة محلية بذيل طويل ثم يعود للأسفل (BSL Sweep)
-- الذيل يجب أن يكون واضح (50%+ من حجم الشمعة)
-- السحب حدث خلال آخر 10-15 شموع على M5
-
-⚠️ كيف تتعرف على سحب السيولة من الصورة:
-1. حدد أعلى قمة وأدنى قاع في آخر 50 شمعة
-2. ابحث عن شموع اخترقت هذه المستويات بذيول طويلة
-3. تحقق أن السعر عاد داخل النطاق بعد الاختراق
-4. إذا وجدت هذا النمط = حدث سحب سيولة ✅
-5. إذا لم تجد اختراق واضح = لم يحدث سحب ❌
-
-⚠️ ملاحظة مهمة جداً:
-- الخطوط الملونة موجودة على الشارت لمساعدتك
-- إذا رأيت شمعة اخترقت خط أخضر (SSL) بذيل طويل ثم عادت = SSL Sweep
-- إذا رأيت شمعة اخترقت خط أحمر (BSL) بذيل طويل ثم عادت = BSL Sweep
-- لا تقل "لم يحدث سحب" إلا إذا لم تجد أي اختراق للخطوط الملونة
-
-⚠️ عند NO_TRADE:
-- قل ماذا ينقص فقط
-- لا تطلب من المستخدم انتظار كسر مستوى أو إعادة التحليل
+⚠️ تذكر:
+1. سحب السيولة إلزامي (H1 أولاً، M5 بديل)
+2. MSS إلزامي بعد السحب (mssOccurredAfterSweep = true)
+3. الدخول من FVG أو OB فقط
+4. BUY في Discount فقط، SELL في Premium فقط
+5. 3 أهداف (TP1, TP2, TP3) بنسب RR متصاعدة
 
 الرد JSON فقط وبالعربية فقط.
 `;
 
-  const data = await callOllamaChat({
-    model: MODEL,
-    messages: [{
-      role: "user",
-      content: userPrompt,
-      images: [cleanH1, cleanM5]
-    }],
-    stream: false,
-    options: { temperature: 0.2, num_predict: 1800 }
-  });
-
-  const content = data.message?.content || data.response || "{}";
-  const parsed = safeParseJson(content);
-  
-  // ✅ إضافة logs تفصيلية لفهم المشكلة
-  console.log('═══════════════════════════════════════════════════════════');
-  console.log('🤖 AI Analysis Result:');
-  console.log('═══════════════════════════════════════════════════════════');
-  console.log(`📊 Decision: ${parsed.decision}`);
-  console.log(`⭐ Score: ${parsed.score}/10`);
-  console.log(`💯 Confidence: ${parsed.confidence}%`);
-  console.log(`📈 Sentiment: ${parsed.sentiment}`);
-  console.log('');
-  console.log('🔍 H1 Analysis:');
-  console.log(`   - Bias: ${parsed.h1Analysis?.bias}`);
-  console.log(`   - Allow Buy: ${parsed.h1Analysis?.allowBuy}`);
-  console.log(`   - Allow Sell: ${parsed.h1Analysis?.allowSell}`);
-  console.log(`   - Liquidity Sweep: ${parsed.h1Analysis?.liquiditySweep}`);
-  console.log('');
-  console.log('🔍 M5 Analysis:');
-  console.log(`   - Market Structure: ${parsed.m5Analysis?.marketStructure}`);
-  console.log(`   - Displacement: ${parsed.m5Analysis?.displacement}`);
-  console.log(`   - PD Array: ${parsed.m5Analysis?.pdArray}`);
-  console.log(`   - MSS After Sweep: ${parsed.m5Analysis?.mssOccurredAfterSweep}`);
-  console.log('');
-  console.log('💧 Liquidity Purge:');
-  console.log(`   - Primary Source: ${parsed.liquidityPurge?.primarySource}`);
-  console.log(`   - H1 Sweep Occurred: ${parsed.liquidityPurge?.h1Sweep?.occurred}`);
-  console.log(`   - H1 Sweep Type: ${parsed.liquidityPurge?.h1Sweep?.type}`);
-  console.log(`   - M5 Sweep Occurred: ${parsed.liquidityPurge?.m5InternalSweep?.occurred}`);
-  console.log(`   - M5 Sweep Type: ${parsed.liquidityPurge?.m5InternalSweep?.type}`);
-  console.log('');
-  console.log('📍 Price Location: ' + parsed.priceLocation);
-  console.log('');
-  console.log('❌ Reasons for NO_TRADE:');
-  if (parsed.reasons && parsed.reasons.length > 0) {
-    parsed.reasons.forEach((reason: string, i: number) => {
-      console.log(`   ${i + 1}. ${reason}`);
+  try {
+    const data = await callAIChat({
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: userPrompt },
+          { type: "image_url", image_url: { url: `data:image/png;base64,${cleanH1}` } },
+          { type: "image_url", image_url: { url: `data:image/png;base64,${cleanM5}` } }
+        ]
+      }],
+      temperature: 0.2,
+      max_tokens: 2000
     });
-  } else {
-    console.log('   (no reasons provided)');
+
+    const parsed = safeParseJson(data.content);
+    return validateAndFix(parsed, currentPrice);
+  } catch (error) {
+    console.error("Analysis Error:", error);
+    return createNoTradeResult(["❌ خطأ في الاتصال بالنموذج"]);
   }
-  console.log('');
-  console.log('💭 Reasoning:');
-  console.log(`   ${parsed.reasoning || 'N/A'}`);
-  console.log('═══════════════════════════════════════════════════════════');
-  
-  return validateAndFix(parsed, currentPrice);
 };
 
-// ===================== Trade Monitoring (Optional) =====================
+// ===================== Trade Monitoring =====================
 export const monitorActiveTrade = async (
   base64Image: string,
   trade: { symbol: string; entryPrice: number },
@@ -802,11 +711,14 @@ export const monitorActiveTrade = async (
 ): Promise<ManagementAdvice> => {
   const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
 
-  const data = await callOllamaChat({
-    model: MODEL,
-    messages: [{
-      role: "user",
-      content: `أنت مدير مخاطر ICT محترف.
+  try {
+    const data = await callAIChat({
+      messages: [{
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `أنت مدير مخاطر ICT محترف.
 راقب علامات الانعكاس والسيولة فقط.
 الصفقة: ${trade.symbol} | دخول: ${trade.entryPrice} | السعر الحالي: ${currentPrice}
 
@@ -816,59 +728,59 @@ export const monitorActiveTrade = async (
   "reversalProbability": 0-100,
   "message": "شرح بالعربية",
   "actionRequired": "الإجراء بالعربية"
-}`,
-      images: [cleanBase64]
-    }],
-    stream: false,
-    options: { temperature: 0.25, num_predict: 700 }
-  });
+}`
+          },
+          { type: "image_url", image_url: { url: `data:image/png;base64,${cleanBase64}` } }
+        ]
+      }],
+      temperature: 0.25,
+      max_tokens: 700
+    });
 
-  const content = data.message?.content || data.response || "{}";
-  return (safeParseJson(content) as ManagementAdvice) || {
-    status: "HOLD",
-    reversalProbability: 50,
-    message: "لم أتمكن من استخراج رد صالح",
-    actionRequired: "أعد المحاولة"
-  };
+    return safeParseJson(data.content) as ManagementAdvice;
+  } catch {
+    return {
+      status: "HOLD",
+      reversalProbability: 50,
+      message: "خطأ في التحليل",
+      actionRequired: "أعد المحاولة"
+    };
+  }
 };
 
-// ===================== Chat (Optional) =====================
+// ===================== Chat =====================
 export const chatWithAI = async (
   message: string,
   analysis: ICTAnalysis | null,
   currentPrice: number
 ): Promise<string> => {
   const context = analysis
-    ? `
-القرار: ${analysis.decision}
-الاتجاه: ${analysis.sentiment}
-التقييم: ${analysis.score}/10
-الثقة: ${analysis.confidence}%
-${analysis.suggestedTrade ? `صفقة: ${analysis.suggestedTrade.type} | Entry ${analysis.suggestedTrade.entry} | SL ${analysis.suggestedTrade.sl} | TP1 ${analysis.suggestedTrade.tp1} | TP2 ${analysis.suggestedTrade.tp2} | TP3 ${analysis.suggestedTrade.tp3}` : ""}
-`
+    ? `القرار: ${analysis.decision} | الاتجاه: ${analysis.sentiment} | التقييم: ${analysis.score}/10`
     : "لا يوجد تحليل حالي";
 
-  const data = await callOllamaChat({
-    model: MODEL,
-    messages: [{
-      role: "user",
-      content: `أنت مساعد تداول ICT بالعربية فقط.
+  try {
+    const data = await callAIChat({
+      messages: [{
+        role: "user",
+        content: `أنت مساعد تداول ICT بالعربية.
 السعر الحالي: ${currentPrice}
-
 ${context}
 
-سؤال المستخدم: ${message}
+سؤال: ${message}
 
-أجب باختصار وبالعربية فقط.`
-    }],
-    stream: false,
-    options: { temperature: 0.45, num_predict: 400 }
-  });
+أجب باختصار وبالعربية.`
+      }],
+      temperature: 0.45,
+      max_tokens: 400
+    });
 
-  return data.message?.content || data.response || "عذراً، لم أتمكن من الرد.";
+    return data.content || "عذراً، لم أتمكن من الرد.";
+  } catch {
+    return "خطأ في الاتصال.";
+  }
 };
 
-// ===================== Follow Up Trade (Optional) =====================
+// ===================== Follow Up Trade =====================
 export const followUpTrade = async (
   h1Image: string,
   m5Image: string,
@@ -880,120 +792,69 @@ export const followUpTrade = async (
     const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
     const cleanM5 = m5Image.replace(/^data:image\/\w+;base64,/, "");
 
-    // حساب الوقت المنقضي منذ إعطاء الصفقة
     const now = new Date();
-    const timeDiff = now.getTime() - tradeTimestamp.getTime();
-    const minutesPassed = Math.floor(timeDiff / 60000);
-    const hoursPassed = Math.floor(minutesPassed / 60);
-    const timePassedStr = hoursPassed > 0 
-      ? `${hoursPassed} ساعة و ${minutesPassed % 60} دقيقة`
+    const minutesPassed = Math.floor((now.getTime() - tradeTimestamp.getTime()) / 60000);
+    const timePassedStr = minutesPassed >= 60
+      ? `${Math.floor(minutesPassed / 60)} ساعة و ${minutesPassed % 60} دقيقة`
       : `${minutesPassed} دقيقة`;
 
-    // ✅ إصلاح 2: تصحيح followUpTrade (tp → tp1,tp2,tp3)
-    const entry = originalAnalysis.suggestedTrade?.entry || 0;
-    const sl = originalAnalysis.suggestedTrade?.sl || 0;
-    const tp1 = originalAnalysis.suggestedTrade?.tp1 || 0;
-    const tp2 = originalAnalysis.suggestedTrade?.tp2 || 0;
-    const tp3 = originalAnalysis.suggestedTrade?.tp3 || 0;
-    const isBuy = originalAnalysis.suggestedTrade?.type.includes('BUY') || false;
-    
-    // هل تم تفعيل الصفقة؟
-    let tradeStatus = 'لم تُفعّل بعد';
-    let currentPnL = 0;
-    
-    if (isBuy) {
-      if (currentPrice <= entry) {
-        tradeStatus = 'تم التفعيل ✅';
-        currentPnL = currentPrice - entry;
-      }
-    } else {
-      if (currentPrice >= entry) {
-        tradeStatus = 'تم التفعيل ✅';
-        currentPnL = entry - currentPrice;
-      }
-    }
-    
-    // حساب المسافة من SL و TP (استخدام TP1 كهدف قريب)
-    const distanceToSL = Math.abs(currentPrice - sl);
-    const distanceToTP1 = Math.abs(currentPrice - tp1);
-    const distanceToTP2 = Math.abs(currentPrice - tp2);
-    const distanceToTP3 = Math.abs(currentPrice - tp3);
-    const slPercent = ((distanceToSL / currentPrice) * 100).toFixed(2);
-    const tp1Percent = ((distanceToTP1 / currentPrice) * 100).toFixed(2);
-    const tp2Percent = ((distanceToTP2 / currentPrice) * 100).toFixed(2);
-    const tp3Percent = ((distanceToTP3 / currentPrice) * 100).toFixed(2);
+    const t = originalAnalysis.suggestedTrade;
+    const entry = t?.entry || 0;
+    const sl = t?.sl || 0;
+    const tp1 = t?.tp1 || 0;
+    const tp2 = t?.tp2 || 0;
+    const tp3 = t?.tp3 || 0;
+    const isBuy = t?.type?.includes('BUY') || false;
 
-    const data = await callOllamaChat({
-      model: MODEL,
+    let tradeStatus = 'لم تُفعّل بعد';
+    if (isBuy ? currentPrice <= entry : currentPrice >= entry) {
+      tradeStatus = 'تم التفعيل ✅';
+    }
+
+    const data = await callAIChat({
       messages: [{
         role: "user",
-        content: `أنت مدير مخاطر ICT محترف. راجع الصفقة وقدم نصيحة بالعربية فقط.
+        content: [
+          {
+            type: "text",
+            text: `أنت مدير مخاطر ICT. راجع الصفقة:
 
-═══════════════════════════════════════════════════════════════
-                    📋 بيانات الصفقة
-═══════════════════════════════════════════════════════════════
-
-⏰ وقت إعطاء الصفقة: ${tradeTimestamp.toLocaleString('ar-EG')}
 ⏱️ الوقت المنقضي: ${timePassedStr}
 📊 حالة الصفقة: ${tradeStatus}
+💰 السعر الحالي: ${currentPrice}
+📈 النوع: ${isBuy ? 'شراء' : 'بيع'}
+🎯 Entry: ${entry} | SL: ${sl}
+✅ TP1: ${tp1} | TP2: ${tp2} | TP3: ${tp3}
 
-💰 السعر الحالي: ${currentPrice.toFixed(2)}
-📈 نوع الصفقة: ${isBuy ? 'شراء (BUY)' : 'بيع (SELL)'}
-🎯 سعر الدخول: ${entry.toFixed(2)}
-🛑 وقف الخسارة: ${sl.toFixed(2)} (${slPercent}% بعيد)
-✅ الأهداف:
-   TP1: ${tp1.toFixed(2)} (${tp1Percent}% بعيد)
-   TP2: ${tp2.toFixed(2)} (${tp2Percent}% بعيد)
-   TP3: ${tp3.toFixed(2)} (${tp3Percent}% بعيد)
-
-${tradeStatus === 'تم التفعيل ✅' ? `📊 الربح/الخسارة الحالية: ${currentPnL > 0 ? '+' : ''}${currentPnL.toFixed(2)} نقطة` : ''}
-
-═══════════════════════════════════════════════════════════════
-                    📝 التحليل الأصلي
-═══════════════════════════════════════════════════════════════
-
-${originalAnalysis.reasoning || originalAnalysis.bias}
-الأسباب: ${originalAnalysis.reasons?.join(' | ') || 'غير متوفر'}
-
-رد بصيغة JSON:
+رد JSON:
 {
-  "shouldExit": true أو false,
-  "reason": "شرح مفصل بالعربية لماذا يجب الاستمرار أو الخروج",
-  "advice": "نصيحة مختصرة بالعربية مع إيموجي مناسب",
-  "tradeActivated": true أو false,
-  "riskLevel": "منخفض" أو "متوسط" أو "مرتفع"
-}`,
-        images: [cleanH1, cleanM5]
+  "shouldExit": true | false,
+  "reason": "شرح بالعربية",
+  "advice": "نصيحة مختصرة",
+  "riskLevel": "منخفض" | "متوسط" | "مرتفع"
+}`
+          },
+          { type: "image_url", image_url: { url: `data:image/png;base64,${cleanH1}` } },
+          { type: "image_url", image_url: { url: `data:image/png;base64,${cleanM5}` } }
+        ]
       }],
-      stream: false,
-      options: { temperature: 0.2 }
+      temperature: 0.2,
+      max_tokens: 500
     });
 
-    const content = data.message?.content || data.response || "{}";
-    const parsed = safeParseJson(content);
-    
-    // بناء النصيحة النهائية بالعربية
+    const parsed = safeParseJson(data.content);
     const emoji = parsed.shouldExit ? '⚠️' : '✅';
-    const action = parsed.shouldExit ? 'اخرج من الصفقة' : 'استمر في الصفقة';
-    const risk = parsed.riskLevel || 'غير محدد';
-    
-    const fullAdvice = `${emoji} ${action}
-
-📊 حالة الصفقة: ${tradeStatus}
-⏱️ منذ: ${timePassedStr}
-⚡ مستوى المخاطرة: ${risk}
-
-📝 ${parsed.reason || 'لا يوجد تفاصيل'}`;
+    const action = parsed.shouldExit ? 'اخرج من الصفقة' : 'استمر';
 
     return {
-      advice: fullAdvice,
+      advice: `${emoji} ${action}\n📊 ${tradeStatus}\n⏱️ ${timePassedStr}\n⚡ ${parsed.riskLevel || 'غير محدد'}\n📝 ${parsed.reason || ''}`,
       shouldExit: parsed.shouldExit || false,
-      reason: parsed.reason || "لا يوجد سبب محدد"
+      reason: parsed.reason || "لا يوجد سبب"
     };
   } catch (error) {
     console.error('Follow-up Error:', error);
     return {
-      advice: '❌ حدث خطأ في التحليل. حاول مرة أخرى.',
+      advice: '❌ خطأ في التحليل',
       shouldExit: false,
       reason: 'خطأ في الاتصال'
     };
