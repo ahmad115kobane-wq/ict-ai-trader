@@ -1,18 +1,23 @@
 // services/aiService.ts
 // ✅ نسخة ICT مصححة بالكامل - خالية من الأخطاء المنطقية
 // ✅ تحليل متكامل: H1 للسياق + M5 للدخول
-// ✅ سحب السيولة إلزامي + معايير صارمة
+// ✅ سحب السيولة إلزامي + معايير متوازنة
+// 🔄 Version: 2.1.0 - Enhanced sweep detection + relaxed criteria
 
 import { ICTAnalysis, ManagementAdvice } from "../types";
 
 // ===================== Environment Variables =====================
 declare const process: any;
 
+console.log("🚀 aiService v2.1.0 loaded - Enhanced sweep detection");
+
 // ===================== API Config =====================
 // ⚠️ يقرأ من OLLAMA_API_KEY و OLLAMA_BASE_URL في Railway
 const API_KEY = process?.env?.OLLAMA_API_KEY || process?.env?.AI_API_KEY || "YOUR_API_KEY";
 const BASE_URL = process?.env?.OLLAMA_BASE_URL || process?.env?.AI_BASE_URL || "https://api.openai.com";
 const MODEL = process?.env?.OLLAMA_MODEL || process?.env?.AI_MODEL || "llama3.2-vision";
+
+console.log(`📍 API Config: ${BASE_URL} | Model: ${MODEL}`);
 
 // ===================== Helpers =====================
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -55,6 +60,8 @@ const VALIDATION_OPTIONS = {
   minConfluences: 2,          // تلاقيات أدنى (كان 3)
   maxM5CandlesAgo: 20         // أقصى عدد شموع لسحب M5 (كان 15)
 };
+
+console.log("⚙️ Validation Options:", JSON.stringify(VALIDATION_OPTIONS, null, 2));
 
 // ===================== ICT System Instruction =====================
 export const systemInstruction = `
