@@ -249,6 +249,10 @@ ELSE → NO_TRADE
 `;
 // ===================== STRICT Validator (صارم - متداول محترف) =====================
 function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
+  console.log('');
+  console.log('🔧 Starting validateAndFix...');
+  console.log(`💰 Current Price: ${currentPrice}`);
+  
   // ✅ معايير متوازنة - جودة جيدة مع مرونة
   const opts = {
     maxDistancePercent: 0.015, // 1.5% (أكثر مرونة)
@@ -257,6 +261,8 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     minConfidence: 60,         // 60% (خففنا من 65)
     minConfluences: 2          // 2 تلاقيات (خففنا من 3)
   };
+  
+  console.log('📋 Validation Criteria:', opts);
 
   // Defaults
   r = r || {};
@@ -291,18 +297,36 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   const m5Sweep = r.liquidityPurge?.m5InternalSweep?.occurred === true;
   let primarySource = r.liquidityPurge?.primarySource || "NONE";
   
+  console.log('');
+  console.log('💧 Checking Liquidity Sweep:');
+  console.log(`   - H1 Sweep: ${h1Sweep}`);
+  console.log(`   - M5 Sweep: ${m5Sweep}`);
+  console.log(`   - Primary Source: ${primarySource}`);
+  
   // ✅ إصلاح 4: تصحيح primarySource تلقائياً عند التضارب
-  if (primarySource === "H1" && !h1Sweep && m5Sweep) primarySource = "M5";
-  if (primarySource === "M5" && !m5Sweep && h1Sweep) primarySource = "H1";
-  if (!h1Sweep && !m5Sweep) primarySource = "NONE";
+  if (primarySource === "H1" && !h1Sweep && m5Sweep) {
+    console.log('   ⚠️ Correcting primarySource from H1 to M5');
+    primarySource = "M5";
+  }
+  if (primarySource === "M5" && !m5Sweep && h1Sweep) {
+    console.log('   ⚠️ Correcting primarySource from M5 to H1');
+    primarySource = "H1";
+  }
+  if (!h1Sweep && !m5Sweep) {
+    console.log('   ⚠️ No sweep detected on either timeframe');
+    primarySource = "NONE";
+  }
   r.liquidityPurge = { ...(r.liquidityPurge || {}), primarySource };
   
   // يجب وجود سحب سيولة على H1 أو M5
   if (!h1Sweep && !m5Sweep) {
+    console.log('   ❌ REJECTED: No liquidity sweep detected');
     r.decision = "NO_TRADE";
     r.reasons = [...r.reasons, "NO_TRADE: لم يحدث سحب سيولة - الشرط الأول غير متوفر"];
     return r as ICTAnalysis;
   }
+  
+  console.log('   ✅ Liquidity sweep detected!');
 
   // تحديد نوع السحب حسب المصدر الأساسي
   let sweepType = "NONE";
@@ -723,6 +747,50 @@ export const analyzeMultiTimeframe = async (
 
   const content = data.message?.content || data.response || "{}";
   const parsed = safeParseJson(content);
+  
+  // ✅ إضافة logs تفصيلية لفهم المشكلة
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🤖 AI Analysis Result:');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log(`📊 Decision: ${parsed.decision}`);
+  console.log(`⭐ Score: ${parsed.score}/10`);
+  console.log(`💯 Confidence: ${parsed.confidence}%`);
+  console.log(`📈 Sentiment: ${parsed.sentiment}`);
+  console.log('');
+  console.log('🔍 H1 Analysis:');
+  console.log(`   - Bias: ${parsed.h1Analysis?.bias}`);
+  console.log(`   - Allow Buy: ${parsed.h1Analysis?.allowBuy}`);
+  console.log(`   - Allow Sell: ${parsed.h1Analysis?.allowSell}`);
+  console.log(`   - Liquidity Sweep: ${parsed.h1Analysis?.liquiditySweep}`);
+  console.log('');
+  console.log('🔍 M5 Analysis:');
+  console.log(`   - Market Structure: ${parsed.m5Analysis?.marketStructure}`);
+  console.log(`   - Displacement: ${parsed.m5Analysis?.displacement}`);
+  console.log(`   - PD Array: ${parsed.m5Analysis?.pdArray}`);
+  console.log(`   - MSS After Sweep: ${parsed.m5Analysis?.mssOccurredAfterSweep}`);
+  console.log('');
+  console.log('💧 Liquidity Purge:');
+  console.log(`   - Primary Source: ${parsed.liquidityPurge?.primarySource}`);
+  console.log(`   - H1 Sweep Occurred: ${parsed.liquidityPurge?.h1Sweep?.occurred}`);
+  console.log(`   - H1 Sweep Type: ${parsed.liquidityPurge?.h1Sweep?.type}`);
+  console.log(`   - M5 Sweep Occurred: ${parsed.liquidityPurge?.m5InternalSweep?.occurred}`);
+  console.log(`   - M5 Sweep Type: ${parsed.liquidityPurge?.m5InternalSweep?.type}`);
+  console.log('');
+  console.log('📍 Price Location: ' + parsed.priceLocation);
+  console.log('');
+  console.log('❌ Reasons for NO_TRADE:');
+  if (parsed.reasons && parsed.reasons.length > 0) {
+    parsed.reasons.forEach((reason: string, i: number) => {
+      console.log(`   ${i + 1}. ${reason}`);
+    });
+  } else {
+    console.log('   (no reasons provided)');
+  }
+  console.log('');
+  console.log('💭 Reasoning:');
+  console.log(`   ${parsed.reasoning || 'N/A'}`);
+  console.log('═══════════════════════════════════════════════════════════');
+  
   return validateAndFix(parsed, currentPrice);
 };
 
