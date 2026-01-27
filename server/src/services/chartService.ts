@@ -43,8 +43,8 @@ export const renderDualCharts = async (
   h1Candles: Candle[],
   m5Candles: Candle[],
   currentPrice: number,
-  h1CandleCount: number = 199,
-  m5CandleCount: number = 300
+  h1CandleCount: number = 130,
+  m5CandleCount: number = 220
 ): Promise<{ h1Image: string; m5Image: string }> => {
   console.log(`📸 Using real screenshot capture for charts...`);
   console.log(`📊 H1 Candles: ${h1Candles.length}, Target: ${h1CandleCount}`);
@@ -84,14 +84,14 @@ const renderDualChartsSVG = (
   const h1Image = renderCandlestickChartSVG(h1Candles, currentPrice, {
     width: 800,
     height: 300,
-    candleCount: 199,  // 199 شمعة للساعة
+    candleCount: 130,  // 130 شمعة للساعة
     timeframe: 'H1'
   });
 
   const m5Image = renderCandlestickChartSVG(m5Candles, currentPrice, {
     width: 800,
     height: 300,
-    candleCount: 300,  // 300 شمعة لـ5 دقائق
+    candleCount: 220,  // 220 شمعة لـ5 دقائق
     timeframe: 'M5'
   });
 
@@ -107,7 +107,7 @@ const renderCandlestickChartSVG = (
   const {
     width = 800,
     height = 300,
-    candleCount = 199,  // تغيير القيمة الافتراضية
+    candleCount = 130,  // تغيير القيمة الافتراضية
     timeframe = 'H1'
   } = options;
 

@@ -94,8 +94,8 @@ app.get('/test-parallel', async (req, res) => {
 
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
-      getCandles(symbol, '1h', 199),  // 199 شمعة للساعة
-      getCandles(symbol, '5m', 300),  // 300 شمعة لـ5 دقائق
+      getCandles(symbol, '1h', 130),  // 130 شمعة للساعة
+      getCandles(symbol, '5m', 220),  // 220 شمعة لـ5 دقائق
       getCurrentPrice(symbol)
     ]);
 
@@ -105,7 +105,7 @@ app.get('/test-parallel', async (req, res) => {
 
     // التقاط الصور المتوازي
     const startTime = Date.now();
-    const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 199, 300);
+    const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 130, 220);
     const endTime = Date.now();
 
     const html = `
@@ -162,8 +162,8 @@ app.get('/save-charts', async (req, res) => {
 
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
-      getCandles(symbol, '1h', 199),  // 199 شمعة للساعة
-      getCandles(symbol, '5m', 300),  // 300 شمعة لـ 5 دقائق
+      getCandles(symbol, '1h', 130),  // 130 شمعة للساعة
+      getCandles(symbol, '5m', 220),  // 220 شمعة لـ 5 دقائق
       getCurrentPrice(symbol)
     ]);
 
@@ -620,8 +620,8 @@ app.get('/test-analysis', async (req, res) => {
 
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
-      getCandles(symbol, '1h', 199),
-      getCandles(symbol, '5m', 300),
+      getCandles(symbol, '1h', 130),
+      getCandles(symbol, '5m', 220),
       getCurrentPrice(symbol)
     ]);
 
@@ -632,7 +632,7 @@ app.get('/test-analysis', async (req, res) => {
     console.log(`📈 Test Data fetched: ${h1Candles.length} H1, ${m5Candles.length} M5, Price: ${currentPrice}`);
 
     // رسم الشارتات
-    const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice, 199, 300);
+    const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice, 130, 220);
 
     console.log(`🖼️ Test Charts rendered: H1=${h1Image.length} chars, M5=${m5Image.length} chars`);
 
@@ -671,8 +671,8 @@ app.get('/chart', async (req, res) => {
 
     // جلب البيانات بالعدد المطلوب
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
-      getCandles(symbol, '1h', 199),  // 199 شمعة للساعة
-      getCandles(symbol, '5m', 300),  // 300 شمعة لـ 5 دقائق
+      getCandles(symbol, '1h', 130),  // 130 شمعة للساعة
+      getCandles(symbol, '5m', 220),  // 220 شمعة لـ 5 دقائق
       getCurrentPrice(symbol)
     ]);
 
@@ -681,7 +681,7 @@ app.get('/chart', async (req, res) => {
     }
 
     // رسم الشارتات باستخدام التقاط الصور الفعلية
-    const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice, 199, 300);
+    const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice, 130, 220);
 
     // إنشاء صفحة HTML لعرض الشارتات
     const html = `
@@ -1785,8 +1785,8 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
 
     try {
       [h1Candles, m5Candles, currentPrice] = await Promise.all([
-        getCandles(symbol, '1h', 199),  // 199 شمعة للساعة
-        getCandles(symbol, '5m', 300),  // 300 شمعة لـ 5 دقائق
+        getCandles(symbol, '1h', 130),  // 130 شمعة للساعة
+        getCandles(symbol, '5m', 220),  // 220 شمعة لـ 5 دقائق
         getCurrentPrice(symbol)
       ]);
     } catch (dataError) {
@@ -1813,7 +1813,7 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
     console.log(`📊 Auto Analysis: H1 candles: ${h1Candles.length}, M5 candles: ${m5Candles.length}`);
 
     // رسم الشارتات باستخدام التقاط الصور الفعلية
-    const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice, 199, 300);
+    const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice, 130, 220);
 
     // التحليل
     const analysis = await analyzeMultiTimeframe(h1Image, m5Image, currentPrice);

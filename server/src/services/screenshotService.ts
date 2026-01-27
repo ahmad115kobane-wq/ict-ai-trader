@@ -420,8 +420,8 @@ export const captureRealChartScreenshots = async (
   h1Candles: Candle[],
   m5Candles: Candle[],
   currentPrice: number,
-  h1CandleCount: number = 199,
-  m5CandleCount: number = 300
+  h1CandleCount: number = 130,
+  m5CandleCount: number = 220
 ): Promise<{ h1Image: string; m5Image: string }> => {
   console.log(`🎯 Starting parallel browser-based chart screenshot capture...`);
   console.log(`📊 Target H1: ${h1CandleCount}, Target M5: ${m5CandleCount}`);
@@ -497,7 +497,7 @@ export const saveChartsToFiles = async (
     }
 
     // التقاط الصور
-    const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 199, 300);
+    const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 130, 220);
 
     // تحويل base64 إلى buffer
     const h1Buffer = Buffer.from(h1Image.replace('data:image/png;base64,', ''), 'base64');
@@ -546,7 +546,7 @@ export const createAnimatedChart = async (
     }
 
     const frameImages: string[] = [];
-    const displayCount = timeframe === 'H1' ? 199 : 300;  // استخدام الأرقام الجديدة
+    const displayCount = timeframe === 'H1' ? 130 : 220;  // استخدام الأرقام الجديدة
 
     // إنشاء إطارات متعددة بعرض بيانات متزايدة
     for (let i = 0; i < frames; i++) {
