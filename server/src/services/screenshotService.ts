@@ -120,7 +120,7 @@ function createChartHTML(
     
     // ألوان واضحة
     const bullColor = '#02b145e7';  // أخضر واضح
-    const bearColor = '#da0f0fff';  // أحمر واضح
+    const bearColor = '#cc3c3cff';  // أحمر واضح
     const color = isBullish ? bullColor : bearColor;
     
     const openY = getY(candle.open);
@@ -172,15 +172,18 @@ function createChartHTML(
   
   console.log(`📊 ${timeframe} - Drew ${wicksCount} wicks for ${visibleData.length} candles`);
 
-  // خطوط الشبكة والأسعار - بسيطة وواضحة
+  // خطوط الشبكة والأسعار - تفاصيل أكثر
   let gridLines = '';
   let priceLabels = '';
   
   // نهاية منطقة الشموع (مع المسافة)
   const candlesEndX = paddingLeft + chartAreaWidth;
   
-  for (let i = 0; i <= 12; i++) {
-    const price = max - (range / 12) * i;
+  // زيادة عدد الخطوط من 12 إلى 20 لتفاصيل أفضل
+  const gridCount = 20;
+  
+  for (let i = 0; i <= gridCount; i++) {
+    const price = max - (range / gridCount) * i;
     const y = getY(price);
     
     // الخطوط تنتهي عند نهاية منطقة الشموع
