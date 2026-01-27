@@ -418,7 +418,7 @@ function createChartHTML(
         </text>`;
     });
 
-    // رسم Liquidity Sweeps (علامات تحذيرية)
+    // رسم Liquidity Sweeps (علامات تحذيرية - بدون خلفية)
     liquidityData.sweeps.forEach(sweep => {
       const sweepY = getY(sweep.level);
       const color = sweep.type === 'BSL_SWEEP' ? '#ef4444' : '#22c55e';
@@ -427,10 +427,9 @@ function createChartHTML(
       
       if (sweep.confirmed) {
         liquidityLines += `
-          <rect x="${candlesEndX - 120}" y="${sweepY - 15}" width="110" height="30" 
-                fill="${color}" rx="5" opacity="0.9"/>
           <text x="${candlesEndX - 65}" y="${sweepY + 5}" 
-                fill="white" font-size="12" font-weight="bold" text-anchor="middle" font-family="Arial">
+                fill="${color}" font-size="12" font-weight="bold" text-anchor="middle" font-family="Arial"
+                stroke="white" stroke-width="0.5">
                 ${icon} ${label}
           </text>`;
       }
