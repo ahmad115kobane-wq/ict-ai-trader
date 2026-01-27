@@ -175,11 +175,16 @@ function createChartHTML(
   // خطوط الشبكة والأسعار - بسيطة وواضحة
   let gridLines = '';
   let priceLabels = '';
+  
+  // نهاية منطقة الشموع (مع المسافة)
+  const candlesEndX = paddingLeft + chartAreaWidth;
+  
   for (let i = 0; i <= 12; i++) {
     const price = max - (range / 12) * i;
     const y = getY(price);
     
-    gridLines += `<line x1="${paddingLeft}" y1="${y}" x2="${chartWidth - paddingRight}" y2="${y}" 
+    // الخطوط تنتهي عند نهاية منطقة الشموع
+    gridLines += `<line x1="${paddingLeft}" y1="${y}" x2="${candlesEndX}" y2="${y}" 
                         stroke="rgba(255,255,255,0.15)" stroke-width="1"/>`;
     
     priceLabels += `<text x="${chartWidth - paddingRight + 15}" y="${y + 6}" 
@@ -191,7 +196,7 @@ function createChartHTML(
   // خط السعر الحالي - واضح
   const currentPriceY = getY(currentPrice);
   const currentPriceLine = `
-    <line x1="${paddingLeft}" y1="${currentPriceY}" x2="${chartWidth - paddingRight}" y2="${currentPriceY}" 
+    <line x1="${paddingLeft}" y1="${currentPriceY}" x2="${candlesEndX}" y2="${currentPriceY}" 
           stroke="#fbbf24" stroke-width="3" stroke-dasharray="8,6"/>
     <rect x="${chartWidth - paddingRight + 10}" y="${currentPriceY - 18}" width="120" height="36" 
           fill="#fbbf24" rx="6"/>
@@ -290,7 +295,7 @@ function createChartHTML(
             
             <!-- خلفية الرسم البياني -->
             <rect x="${paddingLeft}" y="${paddingTop}" 
-                  width="${chartWidth - paddingLeft - paddingRight}" 
+                  width="${chartAreaWidth}" 
                   height="${chartHeight}" 
                   fill="url(#bgGradient)" rx="8"/>
             
@@ -308,7 +313,7 @@ function createChartHTML(
             
             <!-- إطار الرسم البياني -->
             <rect x="${paddingLeft}" y="${paddingTop}" 
-                  width="${chartWidth - paddingLeft - paddingRight}" 
+                  width="${chartAreaWidth}" 
                   height="${chartHeight}" 
                   fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" rx="8"/>
         </svg>
