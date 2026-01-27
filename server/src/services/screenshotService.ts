@@ -354,7 +354,7 @@ function createChartHTML(
       liquidityLines += `
         <line x1="${paddingLeft}" y1="${bslY}" x2="${candlesEndX}" y2="${bslY}" 
               stroke="#ef4444" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
-        <text x="${paddingLeft + 10}" y="${bslY - 8}" 
+        <text x="${candlesEndX + 10}" y="${bslY + 5}" 
               fill="#ef4444" font-size="14" font-weight="bold" font-family="Arial">
               BSL ${liquidityData.bsl.toFixed(2)}
         </text>`;
@@ -366,7 +366,7 @@ function createChartHTML(
       liquidityLines += `
         <line x1="${paddingLeft}" y1="${sslY}" x2="${candlesEndX}" y2="${sslY}" 
               stroke="#22c55e" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
-        <text x="${paddingLeft + 10}" y="${sslY + 18}" 
+        <text x="${candlesEndX + 10}" y="${sslY + 5}" 
               fill="#22c55e" font-size="14" font-weight="bold" font-family="Arial">
               SSL ${liquidityData.ssl.toFixed(2)}
         </text>`;
@@ -400,7 +400,7 @@ function createChartHTML(
       liquidityLines += `
         <line x1="${paddingLeft}" y1="${eqhY}" x2="${candlesEndX}" y2="${eqhY}" 
               stroke="#f97316" stroke-width="3" opacity="0.6"/>
-        <text x="${paddingLeft + 10}" y="${eqhY - 8}" 
+        <text x="${candlesEndX + 10}" y="${eqhY + 5}" 
               fill="#f97316" font-size="12" font-weight="bold" font-family="Arial">
               ⚠️ EQH
         </text>`;
@@ -412,7 +412,7 @@ function createChartHTML(
       liquidityLines += `
         <line x1="${paddingLeft}" y1="${eqlY}" x2="${candlesEndX}" y2="${eqlY}" 
               stroke="#a855f7" stroke-width="3" opacity="0.6"/>
-        <text x="${paddingLeft + 10}" y="${eqlY + 18}" 
+        <text x="${candlesEndX + 10}" y="${eqlY + 5}" 
               fill="#a855f7" font-size="12" font-weight="bold" font-family="Arial">
               ⚠️ EQL
         </text>`;
