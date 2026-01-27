@@ -41,7 +41,7 @@ const BROWSER_CONFIG = {
 };
 
 const SCREENSHOT_CONFIG = {
-  width: 1400,
+  width: 1540,  // زيادة 10% (1400 * 1.1)
   height: 900,
   deviceScaleFactor: 3,  // جودة عالية جداً (3x resolution) - Retina Display
   type: 'png' as const,
@@ -94,7 +94,7 @@ function createChartHTML(
   const range = (max - min) || 0.01;
 
   // إعدادات الرسم - جودة عالية
-  const chartWidth = 1200;
+  const chartWidth = 1320; // زيادة 10% (1200 * 1.1)
   const chartHeight = 700;
   const paddingTop = 80;
   const paddingBottom = 80;
@@ -119,8 +119,8 @@ function createChartHTML(
     const isBullish = candle.close >= candle.open;
     
     // ألوان واضحة
-    const bullColor = '#00C896';  // أخضر واضح
-    const bearColor = '#FF5252';  // أحمر واضح
+    const bullColor = '#02b145e7';  // أخضر واضح
+    const bearColor = '#da0f0fff';  // أحمر واضح
     const color = isBullish ? bullColor : bearColor;
     
     const openY = getY(candle.open);
