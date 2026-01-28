@@ -107,7 +107,7 @@ const renderCandlestickChartSVG = (
   const {
     width = 800,
     height = 300,
-    candleCount = 100,  // تغيير القيمة الافتراضية
+    candleCount = 100,  // 100 شمعة للساعة (افتراضي)
     timeframe = 'H1'
   } = options;
 

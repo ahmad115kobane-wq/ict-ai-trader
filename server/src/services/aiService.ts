@@ -1,15 +1,15 @@
 // services/aiService.ts
-// ✅ نسخة ICT محسّنة - مرونة أكبر مع الحفاظ على الجودة
+// ✅ نسخة ICT مصححة بالكامل - خالية من الأخطاء المنطقية
 // ✅ تحليل متكامل: H1 للسياق + M5 للدخول
-// ✅ صفقات قريبة من السعر الحالي + عدة صفقات يومياً
-// 🔄 Version: 3.0.0 - Enhanced flexibility + closer entries + more trades
+// ✅ سحب السيولة إلزامي + معايير متوازنة
+// 🔄 Version: 2.1.0 - Enhanced sweep detection + relaxed criteria
 
 import { ICTAnalysis, ManagementAdvice } from "../types";
 
 // ===================== Environment Variables =====================
 declare const process: any;
 
-console.log("🚀 aiService v3.0.0 loaded - Enhanced flexibility for more trades");
+console.log("🚀 aiService v2.1.0 loaded - Enhanced sweep detection");
 
 // ===================== API Config =====================
 // ⚠️ يقرأ من OLLAMA_API_KEY و OLLAMA_BASE_URL في Railway
@@ -52,122 +52,127 @@ const safeParseJson = (content: string): any => {
 };
 
 // ===================== Validation Options =====================
-// ✅ تم تخفيف المعايير لتوليد صفقات أكثر مع الحفاظ على جودة عالية
 const VALIDATION_OPTIONS = {
-  maxDistancePercent: 0.008,  // 0.8% حد أقصى للمسافة - صفقات قريبة جداً
-  minRR: 1.2,                 // نسبة مخاطرة/عائد أدنى - أكثر مرونة
-  minScore: 5.0,              // تقييم أدنى - مخفض لصفقات أكثر
-  minConfidence: 55,          // ثقة أدنى - مخفضة
-  minConfluences: 1,          // تلاقية واحدة كافية
-  maxM5CandlesAgo: 30,        // أقصى عدد شموع لسحب M5 - أكثر مرونة
-  
-  // ✅ إعدادات جديدة لتحسين جودة الصفقات
-  oteZone: { min: 0.618, max: 0.79 },  // منطقة OTE (فيبوناتشي)
-  killzones: {
-    london: { start: 7, end: 11 },      // جلسة لندن (UTC)
-    newYork: { start: 13, end: 17 },    // جلسة نيويورك (UTC)
-    overlap: { start: 13, end: 16 }     // تداخل الجلسات (أفضل وقت)
-  },
-  
-  // ✅ إعدادات الأهداف
-  tpMultipliers: {
-    tp1: 1.5,   // TP1 = 1.5x المخاطرة
-    tp2: 2.5,   // TP2 = 2.5x المخاطرة
-    tp3: 4.0    // TP3 = 4x المخاطرة
-  }
+  maxDistancePercent: 0.015,  // 1.5% حد أقصى للمسافة (كان 1.2%)
+  minRR: 1.5,                 // نسبة مخاطرة/عائد أدنى (كان 1.8)
+  minScore: 5.5,              // تقييم أدنى (كان 6.5)
+  minConfidence: 60,          // ثقة أدنى (كان 65)
+  minConfluences: 2,          // تلاقيات أدنى (كان 3)
+  maxM5CandlesAgo: 20         // أقصى عدد شموع لسحب M5 (كان 15)
 };
 
-console.log("⚙️ Validation Options (Enhanced v3.0):", JSON.stringify(VALIDATION_OPTIONS, null, 2));
+console.log("⚙️ Validation Options:", JSON.stringify(VALIDATION_OPTIONS, null, 2));
 
 // ===================== ICT System Instruction =====================
 export const systemInstruction = `
-أنت "ICT Professional Analyzer" متخصص XAUUSD - تحليل مؤسسي مرن يهدف لتوليد صفقات عالية الجودة.
+أنت "ICT Professional Analyzer" متخصص XAUUSD - تحليل صارم مثل متداول مؤسسي.
 ⚠️ يجب أن تكون جميع النصوص بالعربية فقط.
 ⚠️ يجب أن ترد بصيغة JSON فقط بدون أي نص خارجي.
 
-🎯 الهدف: توليد صفقات معلقة قريبة من السعر الحالي بنسبة نجاح عالية
+🔴 المبدأ الأساسي: لا تعطي صفقة إلا بعد اكتمال Setup ICT مؤسسي كامل
 
 ═══════════════════════════════════════════════════════════════
-(1) سحب السيولة (Liquidity Sweep) - مهم لكن ليس إلزامي 100%
+(1) الشرط الأول - سحب السيولة إلزامي (NO EXCEPTIONS)
 ═══════════════════════════════════════════════════════════════
-🔍 ابحث عن أي من العلامات التالية:
+❌ بدون Sweep = NO_TRADE مباشرة
 
-✅ علامات BSL Sweep (سحب سيولة الشراء) → يسمح بالبيع:
-- السعر يكسر قمة سابقة ثم يغلق تحتها
-- ذيل علوي طويل يظهر الرفض
-- انعكاس هبوطي بعد الكسر
+🔍 كيف تتعرف على Sweep (سحب السيولة):
 
-✅ علامات SSL Sweep (سحب سيولة البيع) → يسمح بالشراء:
-- السعر يكسر قاع سابق ثم يغلق فوقه
-- ذيل سفلي طويل يظهر الرفض
-- انعكاس صعودي بعد الكسر
+✅ علامات BSL Sweep (Buy Side Liquidity - سحب سيولة الشراء):
+- السعر يكسر قمة واضحة (High سابق)
+- يتجاوز القمة بـ 5-20 نقطة
+- ذيل علوي طويل (upper wick) يظهر الرفض
+- الشمعة تغلق تحت القمة المكسورة (عودة داخل النطاق)
+- يحدث انعكاس هبوطي بعدها مباشرة
+→ هذا يسمح بالبيع (SELL)
 
-⚠️ بديل مقبول إذا لم يحدث sweep واضح:
-- رفض من منطقة سيولة قوية (ذيول طويلة)
-- تشكل نموذج انعكاسي عند مستوى مهم
-- إذا وجدت 3+ تلاقيات أخرى، يمكن القبول
+✅ علامات SSL Sweep (Sell Side Liquidity - سحب سيولة البيع):
+- السعر يكسر قاع واضح (Low سابق)
+- يتجاوز القاع بـ 5-20 نقطة
+- ذيل سفلي طويل (lower wick) يظهر الرفض
+- الشمعة تغلق فوق القاع المكسور (عودة داخل النطاق)
+- يحدث انعكاس صعودي بعدها مباشرة
+→ هذا يسمح بالشراء (BUY)
 
-═══════════════════════════════════════════════════════════════
-(2) هيكل السوق (Market Structure) - مرن
-═══════════════════════════════════════════════════════════════
-✅ الأفضل: MSS (Market Structure Shift) أو CHoCH
-✅ مقبول: BOS (Break of Structure) مع تأكيد
-✅ مقبول: ارتداد من منطقة OTE (62-79% فيبوناتشي)
+⚠️ ابحث بعناية في الصورة:
+- راجع آخر 10-20 شمعة على H1
+- راجع آخر 30-50 شمعة على M5
+- ابحث عن القمم والقيعان الواضحة
+- تحقق من وجود ذيول طويلة عند كسرها
+- تأكد من عودة السعر داخل النطاق
 
-للشراء: كسر آخر Lower High أو ارتداد من Discount
-للبيع: كسر آخر Higher Low أو ارتداد من Premium
+🔴 أولوية H1:
+- SSL Sweep على H1 → يسمح بالشراء
+- BSL Sweep على H1 → يسمح بالبيع
 
-═══════════════════════════════════════════════════════════════
-(3) Displacement - مرونة أكبر
-═══════════════════════════════════════════════════════════════
-✅ STRONG: شمعة كبيرة جداً مع FVG واضح (الأفضل)
-✅ MODERATE: حركة واضحة في اتجاه واحد (مقبول)
-⚠️ WEAK: مقبول إذا كانت هناك تلاقيات قوية أخرى
+🟡 بديل M5 (فقط إذا لم يحدث على H1):
+- SSL Sweep على M5 (محلي) → يسمح بالشراء
+- BSL Sweep على M5 (محلي) → يسمح بالبيع
+- يجب أن يكون حديث (< 15 شموع)
 
-═══════════════════════════════════════════════════════════════
-(4) الدخول من PD Arrays - مرن
-═══════════════════════════════════════════════════════════════
-✅ FVG (Fair Value Gap) - الأفضل
-✅ OB (Order Block) - ممتاز
-✅ Breaker Block - مقبول
-✅ Mitigation Block - مقبول
-✅ OTE Zone (62-79% فيبوناتشي) - ممتاز
-✅ منطقة رفض قوي (ذيول طويلة) - مقبول
+⚠️ إذا لم تجد أي Sweep واضح على H1 أو M5:
+- ضع occurred: false
+- ضع type: "NONE"
+- القرار النهائي: NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(5) الموقع السعري - مرن
+(2) الشرط الثاني - MSS إلزامي بعد السحب (CRITICAL)
 ═══════════════════════════════════════════════════════════════
-✅ BUY → Discount أو MID السفلي
-✅ SELL → Premium أو MID العلوي
-⚠️ MID → مقبول مع تلاقيات قوية
+🔴 هذا أهم شرط - لا تدخل بدون MSS
+
+❌ ممنوع الدخول من ارتداد السيولة فقط
+✅ يجب كسر هيكل السوق (MSS) بعد السحب
+
+للشراء:
+- يجب كسر آخر Lower High
+- إغلاق واضح فوقه
+- تأكيد تغيير الاتجاه
+
+للبيع:
+- يجب كسر آخر Higher Low
+- إغلاق واضح تحته
+- تأكيد تغيير الاتجاه
+
+⚠️ CHoCH مقبول أيضاً (تغيير طبيعة السوق)
+❌ BOS فقط = غير كافٍ
+❌ لم يحدث MSS بعد السحب = NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(6) أوقات التداول المفضلة (Killzones)
+(3) الشرط الثالث - Displacement حقيقي فقط
 ═══════════════════════════════════════════════════════════════
-🟢 جلسة لندن: 07:00-11:00 UTC
-🟢 جلسة نيويورك: 13:00-17:00 UTC
-🟢 تداخل الجلسات: 13:00-16:00 UTC (الأفضل)
+❌ ارفض أي حركة بطيئة أو متذبذبة
+
+المقبول فقط:
+✅ شمعة أو أكثر بجسم كبير
+✅ إغلاق قوي
+✅ خلق FVG واضح
+✅ حركة سريعة في اتجاه واحد
+
+❌ WEAK Displacement = NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(7) حساب الدخول والأهداف
+(4) الشرط الرابع - الدخول فقط من PD Array
 ═══════════════════════════════════════════════════════════════
-🎯 نقطة الدخول:
-- يجب أن تكون قريبة جداً من السعر الحالي (< 0.5% أفضل)
-- في منطقة OTE أو PD Array
-- BUY_LIMIT: تحت السعر الحالي قليلاً
-- SELL_LIMIT: فوق السعر الحالي قليلاً
+❌ لا تدخل من مستوى أفقي فقط
 
-🎯 وقف الخسارة:
-- خلف آخر swing high/low
-- يجب أن يكون منطقياً (ليس بعيد جداً)
+الدخول يجب أن يكون من:
+✅ FVG (Fair Value Gap)
+✅ OB (Order Block) واضح
 
-🎯 الأهداف (3 أهداف إلزامية):
-- TP1: 1.5x المخاطرة (هدف سريع)
-- TP2: 2.5x المخاطرة (هدف متوسط)
-- TP3: 4x المخاطرة (هدف بعيد)
+❌ ارتداد من سعر فقط = مرفوض
 
 ═══════════════════════════════════════════════════════════════
-(8) صيغة JSON الإلزامية
+(5) الشرط الخامس - الموقع السعري
+═══════════════════════════════════════════════════════════════
+❌ لا شراء في Premium
+❌ لا بيع في Discount
+
+✅ BUY → Discount فقط
+✅ SELL → Premium فقط
+❌ MID → NO_TRADE
+
+═══════════════════════════════════════════════════════════════
+(6) صيغة JSON الإلزامية
 ═══════════════════════════════════════════════════════════════
 {
   "decision": "PLACE_PENDING" | "NO_TRADE",
@@ -180,7 +185,7 @@ export const systemInstruction = `
     "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
     "allowBuy": true | false,
     "allowSell": true | false,
-    "liquiditySweep": "وصف السحب أو 'لم يحدث'",
+    "liquiditySweep": "وصف السحب على H1 أو 'لم يحدث'",
     "nearestBSL": "وصف/سعر",
     "nearestSSL": "وصف/سعر"
   },
@@ -188,14 +193,14 @@ export const systemInstruction = `
     "marketStructure": "MSS" | "CHoCH" | "BOS" | "CONSOLIDATION",
     "mssOccurredAfterSweep": true | false,
     "displacement": "STRONG" | "MODERATE" | "WEAK",
-    "pdArray": "FVG" | "OB" | "BREAKER" | "MITIGATION" | "OTE" | "NONE",
+    "pdArray": "FVG" | "OB" | "NONE",
     "readyForEntry": true | false
   },
   "liquidityPurge": {
     "h1Sweep": {
       "occurred": true | false,
       "type": "BSL" | "SSL" | "NONE",
-      "levelName": "اسم المستوى",
+      "levelName": "اسم المستوى أو 'لا يوجد'",
       "evidence": {
         "wickRejection": true | false,
         "closedBackInside": true | false,
@@ -205,7 +210,7 @@ export const systemInstruction = `
     "m5InternalSweep": {
       "occurred": true | false,
       "type": "BSL" | "SSL" | "NONE",
-      "levelName": "اسم المستوى",
+      "levelName": "اسم المستوى المحلي أو 'لا يوجد'",
       "isRecent": true | false,
       "evidence": {
         "wickRejection": true | false,
@@ -216,7 +221,7 @@ export const systemInstruction = `
     },
     "primarySource": "H1" | "M5" | "NONE"
   },
-  "confluences": ["عامل 1", "عامل 2"],
+  "confluences": ["عامل 1", "عامل 2", "عامل 3"],
   "reasons": ["سبب 1", "سبب 2"],
   "reasoning": "شرح مفصل",
   "suggestedTrade": {
@@ -227,14 +232,11 @@ export const systemInstruction = `
     "tp2": number,
     "tp3": number,
     "expiryMinutes": 60,
-    "cancelConditions": ["شرط 1"]
+    "cancelConditions": ["شرط 1", "شرط 2"]
   }
 }
 
-🔴 مهم جداً:
-- أعطِ صفقة إذا وجدت 2+ تلاقيات حتى لو لم يكتمل كل الشروط
-- الهدف هو توليد صفقات قريبة بنسبة نجاح عالية
-- لا تكن متشدداً جداً - السوق لا يعطي setup مثالي دائماً
+🔴 تذكر: إذا لم تجد Sweep واضح = NO_TRADE فوراً
 `;
 
 // ===================== Result Builder =====================
@@ -268,61 +270,55 @@ function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis
 
 // ===================== Validation Functions =====================
 
-// 1. التحقق من سحب السيولة - أكثر مرونة
+// 1. التحقق من سحب السيولة
 function validateLiquiditySweep(r: any): ValidationResult {
   const reasons: string[] = [];
   
   const h1Sweep = r.liquidityPurge?.h1Sweep?.occurred === true;
   const m5Sweep = r.liquidityPurge?.m5InternalSweep?.occurred === true;
-  const confluences = Array.isArray(r.confluences) ? r.confluences.length : 0;
   
-  // ✅ مرونة: السماح بدون sweep إذا كانت هناك تلاقيات كثيرة
   if (!h1Sweep && !m5Sweep) {
-    if (confluences >= 3) {
-      reasons.push("⚠️ لم يحدث سحب سيولة واضح - لكن يوجد تلاقيات قوية (مقبول)");
-      return { isValid: true, reasons };
-    }
-    
-    // تحقق من وجود رفض قوي كبديل
-    const h1WickReject = r.liquidityPurge?.h1Sweep?.evidence?.wickRejection === true;
-    const m5WickReject = r.liquidityPurge?.m5InternalSweep?.evidence?.wickRejection === true;
-    
-    if (h1WickReject || m5WickReject) {
-      reasons.push("⚠️ يوجد رفض قوي من مستوى سيولة (مقبول كبديل للـ sweep)");
-      return { isValid: true, reasons };
-    }
-    
-    reasons.push("❌ لم يحدث سحب سيولة ولا رفض قوي ولا تلاقيات كافية");
+    reasons.push("❌ لم يحدث سحب سيولة على H1 أو M5 - الشرط الأول غير متوفر");
     return { isValid: false, reasons };
   }
   
-  // التحقق من M5 إذا كان المصدر الأساسي - أكثر مرونة
+  // التحقق من Evidence لـ H1
+  if (h1Sweep) {
+    const h1Evidence = r.liquidityPurge?.h1Sweep?.evidence || {};
+    if (!h1Evidence.wickRejection && !h1Evidence.closedBackInside) {
+      reasons.push("⚠️ سحب H1 بدون دليل قوي (لا رفض ولا عودة داخل النطاق)");
+    }
+  }
+  
+  // التحقق من M5 إذا كان المصدر الأساسي
   if (!h1Sweep && m5Sweep) {
     const m5Evidence = r.liquidityPurge?.m5InternalSweep?.evidence || {};
     const isRecent = r.liquidityPurge?.m5InternalSweep?.isRecent === true;
     const candlesAgo = Number(m5Evidence.candlesAgo) || 999;
+    const wickSize = m5Evidence.wickSize;
+    const closedBackInside = m5Evidence.closedBackInside === true;
     
-    if (!isRecent && candlesAgo > VALIDATION_OPTIONS.maxM5CandlesAgo) {
-      // مرونة: السماح إذا كان الرفض قوي
-      if (m5Evidence.wickSize === "LARGE") {
-        reasons.push(`⚠️ سحب M5 قديم (${candlesAgo} شموع) لكن الرفض قوي جداً`);
-      } else {
-        reasons.push(`❌ سحب M5 قديم جداً (${candlesAgo} شموع)`);
-        return { isValid: false, reasons };
-      }
+    if (!isRecent || candlesAgo > VALIDATION_OPTIONS.maxM5CandlesAgo) {
+      reasons.push(`❌ سحب M5 قديم (${candlesAgo} شموع) - يجب < ${VALIDATION_OPTIONS.maxM5CandlesAgo}`);
+      return { isValid: false, reasons };
+    }
+    
+    const hasStrongWick = wickSize === "LARGE" || (wickSize === "MEDIUM" && closedBackInside);
+    if (!hasStrongWick) {
+      reasons.push("❌ سحب M5 بدون رفض قوي - يجب ذيول واضحة");
+      return { isValid: false, reasons };
     }
   }
   
   return { isValid: true, reasons };
 }
 
-// 2. التحقق من توافق نوع السحب مع الصفقة - أكثر مرونة
+// 2. التحقق من توافق نوع السحب مع الصفقة
 function validateSweepTypeMatch(r: any, isBuy: boolean): ValidationResult {
   const reasons: string[] = [];
   
   const h1Sweep = r.liquidityPurge?.h1Sweep?.occurred === true;
   const m5Sweep = r.liquidityPurge?.m5InternalSweep?.occurred === true;
-  const confluences = Array.isArray(r.confluences) ? r.confluences.length : 0;
   
   // تحديد المصدر الأساسي
   let primarySource = "NONE";
@@ -341,272 +337,181 @@ function validateSweepTypeMatch(r: any, isBuy: boolean): ValidationResult {
     r.liquidityPurge.primarySource = primarySource;
   }
   
-  // ✅ مرونة: السماح إذا لم يكن هناك sweep واضح لكن هناك تلاقيات
-  if (sweepType === "NONE" && confluences >= 2) {
-    reasons.push("⚠️ لا يوجد sweep واضح لكن التلاقيات كافية");
-    return { isValid: true, reasons };
-  }
-  
   // التحقق من التوافق
-  if (isBuy && sweepType !== "SSL" && sweepType !== "NONE") {
-    reasons.push(`⚠️ شراء يفضل SSL Sweep - الموجود: ${sweepType} (مقبول مع حذر)`);
-    // لا نرفض، فقط تحذير
+  if (isBuy && sweepType !== "SSL") {
+    reasons.push(`❌ شراء يتطلب SSL Sweep - الموجود: ${sweepType}`);
+    return { isValid: false, reasons };
   }
   
-  if (!isBuy && sweepType !== "BSL" && sweepType !== "NONE") {
-    reasons.push(`⚠️ بيع يفضل BSL Sweep - الموجود: ${sweepType} (مقبول مع حذر)`);
-    // لا نرفض، فقط تحذير
+  if (!isBuy && sweepType !== "BSL") {
+    reasons.push(`❌ بيع يتطلب BSL Sweep - الموجود: ${sweepType}`);
+    return { isValid: false, reasons };
   }
   
   return { isValid: true, reasons };
 }
 
-// 3. التحقق من H1 allowBuy/allowSell - أكثر مرونة
+// 3. التحقق من H1 allowBuy/allowSell
 function validateH1Permission(r: any, isBuy: boolean): ValidationResult {
   const reasons: string[] = [];
   const h1 = r.h1Analysis || {};
   const primarySource = r.liquidityPurge?.primarySource || "NONE";
-  const confluences = Array.isArray(r.confluences) ? r.confluences.length : 0;
   
-  // ✅ مرونة أكبر: تحذير بدلاً من رفض
+  // التحقق فقط إذا كان المصدر H1
   if (primarySource === "H1") {
     if (isBuy && h1.allowBuy !== true) {
-      if (confluences >= 3) {
-        reasons.push("⚠️ H1 لا يسمح بالشراء صراحة لكن التلاقيات قوية");
-      } else {
-        reasons.push("❌ سياق H1 لا يسمح بالشراء");
-        return { isValid: false, reasons };
-      }
+      reasons.push("❌ سياق H1 لا يسمح بالشراء");
+      return { isValid: false, reasons };
     }
     if (!isBuy && h1.allowSell !== true) {
-      if (confluences >= 3) {
-        reasons.push("⚠️ H1 لا يسمح بالبيع صراحة لكن التلاقيات قوية");
-      } else {
-        reasons.push("❌ سياق H1 لا يسمح بالبيع");
-        return { isValid: false, reasons };
-      }
+      reasons.push("❌ سياق H1 لا يسمح بالبيع");
+      return { isValid: false, reasons };
     }
   }
   
   // إذا كان المصدر M5، تحقق من عدم وجود اتجاه معاكس قوي على H1
   if (primarySource === "M5") {
     const h1Bias = h1.bias || "NEUTRAL";
-    // مرونة: NEUTRAL مقبول دائماً
     if (isBuy && h1Bias === "BEARISH") {
-      if (confluences >= 4) {
-        reasons.push("⚠️ H1 هابط لكن التلاقيات قوية جداً (مخاطرة)");
-      } else {
-        reasons.push("❌ H1 هابط بقوة - لا يمكن الشراء");
-        return { isValid: false, reasons };
-      }
+      reasons.push("❌ H1 هابط بقوة - لا يمكن الشراء بناءً على M5 فقط");
+      return { isValid: false, reasons };
     }
     if (!isBuy && h1Bias === "BULLISH") {
-      if (confluences >= 4) {
-        reasons.push("⚠️ H1 صاعد لكن التلاقيات قوية جداً (مخاطرة)");
-      } else {
-        reasons.push("❌ H1 صاعد بقوة - لا يمكن البيع");
-        return { isValid: false, reasons };
-      }
+      reasons.push("❌ H1 صاعد بقوة - لا يمكن البيع بناءً على M5 فقط");
+      return { isValid: false, reasons };
     }
   }
   
   return { isValid: true, reasons };
 }
 
-// 4. التحقق من الموقع السعري ✅ أكثر مرونة
+// 4. التحقق من الموقع السعري ✅ إصلاح مهم
 function validatePriceLocation(r: any, isBuy: boolean): ValidationResult {
   const reasons: string[] = [];
   const priceLocation = r.priceLocation || "MID";
-  const confluences = Array.isArray(r.confluences) ? r.confluences.length : 0;
   
-  // ✅ MID مقبول الآن مع تخفيض بسيط
+  // ✅ تخفيف: MID يخفض Score بدلاً من الرفض الفوري
   if (priceLocation === "MID") {
-    r.score = Math.max((r.score || 0) - 0.5, 0);  // تخفيض أقل
-    r.confidence = Math.max((r.confidence || 0) - 5, 0);
-    reasons.push("⚠️ الموقع السعري في المنتصف (MID) - تم تخفيض التقييم قليلاً");
+    r.score = Math.max((r.score || 0) - 1.0, 0);
+    r.confidence = Math.max((r.confidence || 0) - 8, 0);
+    reasons.push("⚠️ الموقع السعري في المنتصف (MID) - تم تخفيض التقييم");
   }
   
-  // ✅ مرونة أكبر: السماح بالتداول العكسي مع تلاقيات قوية
+  // ✅ إصلاح: التحقق من توافق الموقع مع نوع الصفقة
   if (isBuy && priceLocation === "PREMIUM") {
-    if (confluences >= 4) {
-      r.score = Math.max((r.score || 0) - 1, 0);
-      reasons.push("⚠️ شراء في Premium مع تلاقيات قوية (مخاطرة عالية)");
-    } else {
-      reasons.push("❌ لا يمكن الشراء في Premium - انتظر Discount");
-      return { isValid: false, reasons };
-    }
+    reasons.push("❌ لا يمكن الشراء في منطقة Premium - يجب الانتظار للـ Discount");
+    return { isValid: false, reasons };
   }
   
   if (!isBuy && priceLocation === "DISCOUNT") {
-    if (confluences >= 4) {
-      r.score = Math.max((r.score || 0) - 1, 0);
-      reasons.push("⚠️ بيع في Discount مع تلاقيات قوية (مخاطرة عالية)");
-    } else {
-      reasons.push("❌ لا يمكن البيع في Discount - انتظر Premium");
-      return { isValid: false, reasons };
-    }
+    reasons.push("❌ لا يمكن البيع في منطقة Discount - يجب الانتظار للـ Premium");
+    return { isValid: false, reasons };
   }
   
   return { isValid: true, reasons };
 }
 
-// 5. التحقق من MSS بعد السحب - أكثر مرونة
+// 5. التحقق من MSS بعد السحب ✅ إصلاح مهم
 function validateMSSAfterSweep(r: any): ValidationResult {
   const reasons: string[] = [];
   const m5 = r.m5Analysis || {};
-  const confluences = Array.isArray(r.confluences) ? r.confluences.length : 0;
   
   const marketStructure = m5.marketStructure || "CONSOLIDATION";
   const mssOccurredAfterSweep = m5.mssOccurredAfterSweep === true;
   
-  // ✅ توسيع المقبول: MSS, CHoCH, أو حتى BOS مع تأكيد
-  const hasValidStructure = ["MSS", "CHoCH", "BOS"].includes(marketStructure);
+  // ✅ إصلاح: استخدام mssOccurredAfterSweep
+  const hasValidStructure = marketStructure === "MSS" || marketStructure === "CHoCH";
   
   if (!hasValidStructure) {
-    if (confluences >= 3) {
-      reasons.push("⚠️ لم يحدث كسر هيكل واضح لكن التلاقيات قوية");
-      return { isValid: true, reasons };
-    }
-    reasons.push(`❌ الهيكل الحالي: ${marketStructure} - غير كافٍ`);
+    reasons.push(`❌ لم يحدث MSS أو CHoCH - الهيكل الحالي: ${marketStructure}`);
     return { isValid: false, reasons };
   }
   
-  // ✅ مرونة: BOS مقبول مع تحذير
-  if (marketStructure === "BOS") {
-    reasons.push("⚠️ BOS فقط - ليس مثالياً لكن مقبول");
-  }
-  
-  // ✅ مرونة: السماح بدون تأكيد MSS بعد السحب إذا كانت التلاقيات قوية
   if (!mssOccurredAfterSweep) {
-    if (confluences >= 2 || hasValidStructure) {
-      reasons.push("⚠️ MSS لم يُؤكد بعد السحب - لكن الهيكل واضح");
-    } else {
-      reasons.push("❌ MSS لم يحدث بعد السحب والتلاقيات ضعيفة");
-      return { isValid: false, reasons };
-    }
+    reasons.push("❌ MSS لم يحدث بعد سحب السيولة - Setup غير مكتمل");
+    return { isValid: false, reasons };
   }
   
   return { isValid: true, reasons };
 }
 
-// 6. التحقق من Displacement - أكثر مرونة
+// 6. التحقق من Displacement
 function validateDisplacement(r: any): ValidationResult {
   const reasons: string[] = [];
   const m5 = r.m5Analysis || {};
   const displacement = m5.displacement || "WEAK";
-  const confluences = Array.isArray(r.confluences) ? r.confluences.length : 0;
   
-  // ✅ مرونة: WEAK مقبول مع تلاقيات قوية
   if (displacement === "WEAK") {
-    if (confluences >= 3) {
-      r.score = Math.max((r.score || 0) - 0.5, 0);
-      reasons.push("⚠️ الإزاحة ضعيفة لكن التلاقيات تعوض (مقبول)");
-      return { isValid: true, reasons };
-    }
-    reasons.push("❌ الإزاحة السعرية ضعيفة (WEAK) والتلاقيات غير كافية");
+    reasons.push("❌ الإزاحة السعرية ضعيفة (WEAK) - لا حركة مؤسسية");
     return { isValid: false, reasons };
   }
   
+  // ✅ قبول MODERATE أيضاً (ليس فقط STRONG)
   if (displacement === "MODERATE") {
-    reasons.push("✅ الإزاحة السعرية متوسطة (MODERATE) - جيد");
-  }
-  
-  if (displacement === "STRONG") {
-    reasons.push("✅ الإزاحة السعرية قوية (STRONG) - ممتاز");
+    reasons.push("⚠️ الإزاحة السعرية متوسطة (MODERATE) - مقبول لكن ليس مثالي");
   }
   
   return { isValid: true, reasons };
 }
 
-// 7. التحقق من PD Array - أكثر مرونة
+// 7. التحقق من PD Array
 function validatePDArray(r: any): ValidationResult {
   const reasons: string[] = [];
   const m5 = r.m5Analysis || {};
   const pdArray = m5.pdArray || "NONE";
-  const confluences = Array.isArray(r.confluences) ? r.confluences.length : 0;
   
   // التحقق من وجود رفض قوي كبديل
   const h1WickReject = r.liquidityPurge?.h1Sweep?.evidence?.wickRejection === true;
   const m5WickReject = r.liquidityPurge?.m5InternalSweep?.evidence?.wickRejection === true;
   const hasStrongReject = h1WickReject || m5WickReject;
   
-  // ✅ توسيع المقبول لتشمل أنواع PD Arrays الإضافية
-  const validPDArrays = ["FVG", "OB", "BREAKER", "MITIGATION", "OTE"];
-  
-  if (validPDArrays.includes(pdArray)) {
-    reasons.push(`✅ دخول من ${pdArray} - ممتاز`);
-    return { isValid: true, reasons };
-  }
-  
+  // ✅ تخفيف: تحذير بدلاً من رفض إذا كان هناك رفض قوي
   if (pdArray === "NONE") {
     if (hasStrongReject) {
-      reasons.push("✅ رفض قوي من مستوى سيولة (بديل جيد لـ PD Array)");
-      return { isValid: true, reasons };
+      reasons.push("⚠️ لا يوجد FVG أو OB واضح - لكن يوجد رفض قوي (مقبول)");
+    } else {
+      reasons.push("❌ لا يوجد FVG أو OB للدخول - ولا رفض قوي");
+      return { isValid: false, reasons };
     }
-    
-    if (confluences >= 2) {
-      reasons.push("⚠️ لا يوجد PD Array واضح لكن التلاقيات كافية");
-      return { isValid: true, reasons };
-    }
-    
-    reasons.push("❌ لا يوجد FVG/OB/رفض قوي - الدخول غير محدد");
-    return { isValid: false, reasons };
   }
   
   return { isValid: true, reasons };
 }
 
-// 8. التحقق من التلاقيات - أكثر مرونة
+// 8. التحقق من التلاقيات
 function validateConfluences(r: any): ValidationResult {
   const reasons: string[] = [];
   const confluences = Array.isArray(r.confluences) ? r.confluences : [];
   
-  // ✅ مرونة: تلاقية واحدة كافية مع تحذير
-  if (confluences.length === 0) {
-    reasons.push("❌ لا توجد تلاقيات على الإطلاق");
-    return { isValid: false, reasons };
-  }
-  
   if (confluences.length < VALIDATION_OPTIONS.minConfluences) {
-    reasons.push(`⚠️ التلاقيات قليلة (${confluences.length}) - مقبول لكن ليس مثالي`);
-  } else {
-    reasons.push(`✅ التلاقيات جيدة (${confluences.length})`);
+    reasons.push(`❌ التلاقيات غير كافية (${confluences.length}/${VALIDATION_OPTIONS.minConfluences})`);
+    return { isValid: false, reasons };
   }
   
   return { isValid: true, reasons };
 }
 
-// 9. التحقق من Score و Confidence - أكثر مرونة
+// 9. التحقق من Score و Confidence
 function validateScoreAndConfidence(r: any): ValidationResult {
   const reasons: string[] = [];
   
   const score = Number(r.score) || 0;
   const confidence = Number(r.confidence) || 0;
-  const confluences = Array.isArray(r.confluences) ? r.confluences.length : 0;
   
-  // ✅ مرونة: السماح بتقييم أقل مع تلاقيات قوية
   if (score < VALIDATION_OPTIONS.minScore) {
-    if (confluences >= 3 && score >= 4) {
-      reasons.push(`⚠️ التقييم منخفض قليلاً (${score}/10) لكن التلاقيات قوية`);
-    } else {
-      reasons.push(`❌ التقييم منخفض جداً (${score}/10) - المطلوب >= ${VALIDATION_OPTIONS.minScore}`);
-      return { isValid: false, reasons };
-    }
+    reasons.push(`❌ التقييم منخفض (${score}/10) - المطلوب >= ${VALIDATION_OPTIONS.minScore}`);
+    return { isValid: false, reasons };
   }
   
   if (confidence < VALIDATION_OPTIONS.minConfidence) {
-    if (confluences >= 3 && confidence >= 45) {
-      reasons.push(`⚠️ الثقة منخفضة قليلاً (${confidence}%) لكن التلاقيات قوية`);
-    } else {
-      reasons.push(`❌ الثقة منخفضة جداً (${confidence}%) - المطلوب >= ${VALIDATION_OPTIONS.minConfidence}%`);
-      return { isValid: false, reasons };
-    }
+    reasons.push(`❌ الثقة منخفضة (${confidence}%) - المطلوب >= ${VALIDATION_OPTIONS.minConfidence}%`);
+    return { isValid: false, reasons };
   }
   
   return { isValid: true, reasons };
 }
 
-// 10. التحقق من بيانات الصفقة - تحسين للصفقات القريبة
+// 10. التحقق من بيانات الصفقة
 function validateTradeData(t: any, currentPrice: number, isBuy: boolean): ValidationResult {
   const reasons: string[] = [];
   
@@ -618,90 +523,47 @@ function validateTradeData(t: any, currentPrice: number, isBuy: boolean): Valida
   }
   
   // تحويل الأرقام
-  let entry = toNumber(t.entry);
-  let sl = toNumber(t.sl);
-  let tp1 = toNumber(t.tp1);
-  let tp2 = toNumber(t.tp2);
-  let tp3 = toNumber(t.tp3);
+  const entry = toNumber(t.entry);
+  const sl = toNumber(t.sl);
+  const tp1 = toNumber(t.tp1);
+  const tp2 = toNumber(t.tp2);
+  const tp3 = toNumber(t.tp3);
   
   if ([entry, sl, tp1, tp2, tp3].some(isNaN)) {
     reasons.push("❌ قيم الصفقة غير صالحة (entry/sl/tp)");
     return { isValid: false, reasons };
   }
   
-  // ✅ تعديل نقطة الدخول لتكون قريبة جداً
+  // التحقق من المسافة
   const dist = Math.abs(entry - currentPrice);
   const maxDist = currentPrice * VALIDATION_OPTIONS.maxDistancePercent;
-  
   if (dist > maxDist) {
-    // تعديل تلقائي للدخول ليكون أقرب
-    const adjustment = currentPrice * 0.002; // 0.2% من السعر الحالي
-    if (isBuy) {
-      // BUY_LIMIT: تحت السعر الحالي
-      entry = round2(currentPrice - adjustment);
-      if (sl >= entry) sl = round2(entry - (currentPrice * 0.005)); // SL 0.5% تحت الدخول
-    } else {
-      // SELL_LIMIT: فوق السعر الحالي
-      entry = round2(currentPrice + adjustment);
-      if (sl <= entry) sl = round2(entry + (currentPrice * 0.005)); // SL 0.5% فوق الدخول
-    }
-    
-    // إعادة حساب الأهداف بناءً على الدخول الجديد
-    const risk = Math.abs(entry - sl);
-    if (isBuy) {
-      tp1 = round2(entry + (risk * VALIDATION_OPTIONS.tpMultipliers.tp1));
-      tp2 = round2(entry + (risk * VALIDATION_OPTIONS.tpMultipliers.tp2));
-      tp3 = round2(entry + (risk * VALIDATION_OPTIONS.tpMultipliers.tp3));
-    } else {
-      tp1 = round2(entry - (risk * VALIDATION_OPTIONS.tpMultipliers.tp1));
-      tp2 = round2(entry - (risk * VALIDATION_OPTIONS.tpMultipliers.tp2));
-      tp3 = round2(entry - (risk * VALIDATION_OPTIONS.tpMultipliers.tp3));
-    }
-    
-    // تحديث القيم
-    t.entry = entry;
-    t.sl = sl;
-    t.tp1 = tp1;
-    t.tp2 = tp2;
-    t.tp3 = tp3;
-    
-    reasons.push(`✅ تم تعديل الدخول ليكون أقرب للسعر الحالي (${entry})`);
+    const distPercent = ((dist / currentPrice) * 100).toFixed(2);
+    reasons.push(`❌ الدخول بعيد (${distPercent}%) - المسموح <= ${(VALIDATION_OPTIONS.maxDistancePercent * 100).toFixed(1)}%`);
+    return { isValid: false, reasons };
   }
   
   // التحقق من ترتيب المستويات
   if (isBuy) {
     if (!(sl < entry && entry < tp1 && tp1 < tp2 && tp2 < tp3)) {
-      // محاولة إصلاح الترتيب
-      const risk = Math.abs(entry - sl) || (currentPrice * 0.005);
-      t.tp1 = round2(entry + (risk * VALIDATION_OPTIONS.tpMultipliers.tp1));
-      t.tp2 = round2(entry + (risk * VALIDATION_OPTIONS.tpMultipliers.tp2));
-      t.tp3 = round2(entry + (risk * VALIDATION_OPTIONS.tpMultipliers.tp3));
-      reasons.push("✅ تم إصلاح ترتيب أهداف الشراء");
+      reasons.push("❌ ترتيب مستويات الشراء خاطئ (SL < Entry < TP1 < TP2 < TP3)");
+      return { isValid: false, reasons };
     }
   } else {
     if (!(tp3 < tp2 && tp2 < tp1 && tp1 < entry && entry < sl)) {
-      // محاولة إصلاح الترتيب
-      const risk = Math.abs(sl - entry) || (currentPrice * 0.005);
-      t.tp1 = round2(entry - (risk * VALIDATION_OPTIONS.tpMultipliers.tp1));
-      t.tp2 = round2(entry - (risk * VALIDATION_OPTIONS.tpMultipliers.tp2));
-      t.tp3 = round2(entry - (risk * VALIDATION_OPTIONS.tpMultipliers.tp3));
-      reasons.push("✅ تم إصلاح ترتيب أهداف البيع");
+      reasons.push("❌ ترتيب مستويات البيع خاطئ (TP3 < TP2 < TP1 < Entry < SL)");
+      return { isValid: false, reasons };
     }
   }
   
   // التحقق من RR
-  const risk = Math.abs(t.entry - t.sl);
-  const reward1 = Math.abs(t.tp1 - t.entry);
+  const risk = Math.abs(entry - sl);
+  const reward1 = Math.abs(tp1 - entry);
   const rr1 = reward1 / (risk || 0.0001);
   
   if (rr1 < VALIDATION_OPTIONS.minRR) {
-    // تعديل TP1 لتحقيق الحد الأدنى من RR
-    if (isBuy) {
-      t.tp1 = round2(t.entry + (risk * VALIDATION_OPTIONS.minRR));
-    } else {
-      t.tp1 = round2(t.entry - (risk * VALIDATION_OPTIONS.minRR));
-    }
-    reasons.push(`✅ تم تعديل TP1 لتحقيق RR >= ${VALIDATION_OPTIONS.minRR}`);
+    reasons.push(`❌ RR للهدف الأول ضعيف (${rr1.toFixed(2)}) - المطلوب >= ${VALIDATION_OPTIONS.minRR}`);
+    return { isValid: false, reasons };
   }
   
   return { isValid: true, reasons };

@@ -45,10 +45,11 @@ const Dashboard: React.FC<DashboardProps> = ({ mt5Config, setAppState }) => {
       if (sym === 'XAUUSD') sym = 'XAUUSDT'; else if (sym.endsWith('USD')) sym += 'T';
       
       try {
-        // تصحيح الروابط لضمان جلب 100 شمعة كاملة من Binance Futures
+        // تصحيح الروابط لضمان جلب الشموع كاملة من Binance Futures
+        // H1 = 100 شمعة، M5 = 140 شمعة
         const [h1Raw, m5Raw] = await Promise.all([
           fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=1h&limit=100`).then(r => r.json()),
-          fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=5m&limit=100`).then(r => r.json())
+          fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=5m&limit=140`).then(r => r.json())
         ]);
         
         const map = (d: any) => Array.isArray(d) ? d.map(c => ({ 

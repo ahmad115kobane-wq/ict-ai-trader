@@ -620,8 +620,8 @@ app.get('/test-analysis', async (req, res) => {
 
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
-      getCandles(symbol, '1h', 100),
-      getCandles(symbol, '5m', 140),
+      getCandles(symbol, '1h', 100),  // 100 شمعة للساعة
+      getCandles(symbol, '5m', 140),  // 140 شمعة لـ5 دقائق
       getCurrentPrice(symbol)
     ]);
 
@@ -800,7 +800,7 @@ app.get('/chart', async (req, res) => {
                 <p><strong>الرمز:</strong> XAUUSD (الذهب مقابل الدولار)</p>
                 <p><strong>السعر الحالي:</strong> $${currentPrice.toFixed(2)}</p>
                 <p><strong>آخر تحديث:</strong> ${new Date().toLocaleString('ar-EG')}</p>
-                <p><strong>عدد الشموع:</strong> 100 شمعة لكل إطار زمني</p>
+                <p><strong>عدد الشموع:</strong> H1 = 100 شمعة، M5 = 140 شمعة</p>
                 <p><strong>H1:</strong> إطار الساعة - للسياق العام والاتجاه</p>
                 <p><strong>M5:</strong> إطار 5 دقائق - للدخول والتوقيت</p>
             </div>

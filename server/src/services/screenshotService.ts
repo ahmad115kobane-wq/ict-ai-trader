@@ -1,7 +1,6 @@
 // services/screenshotService.ts
 // ✅ خدمة التقاط الصور الفعلية من متصفح حقيقي
 // ✅ فتح الرسم البياني في متصفح وتصويره
-// ✅ v3.0 - Enhanced liquidity detection for more trading opportunities
 
 import puppeteer, { Browser, Page } from 'puppeteer';
 import { Candle } from '../types';
@@ -86,7 +85,7 @@ interface LiquiditySweep {
   confirmed: boolean;                // هل تم تأكيد الارتداد؟
 }
 
-// ✅ دالة حساب مستويات السيولة المحسنة v3.0 - أكثر حساسية للكشف عن المزيد من الفرص
+// ✅ دالة حساب مستويات السيولة المحسنة (Swing High/Low، BSL/SSL، Sweeps)
 function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
   const result: LiquidityAnalysis = {
     swingHighs: [],
@@ -103,59 +102,47 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
     return result;
   }
 
-  // ✅ زيادة lookback لـ 50 شمعة للحصول على المزيد من مستويات السيولة
-  const lookback = Math.min(50, candles.length);
+  // ✅ 1. تغيير lookback من 50 إلى 30 (أحدث وأدق)
+  const lookback = Math.min(30, candles.length); // آخر 30 شمعة فقط
   const recentCandles = candles.slice(-lookback);
 
   // حساب النطاق السعري للمستويات
   const allPrices = recentCandles.flatMap(c => [c.high, c.low]);
   const priceRange = Math.max(...allPrices) - Math.min(...allPrices);
   
-  // ✅ تقليل minDiff لاكتشاف المزيد من القمم/القيعان (0.2% بدلاً من 0.5%)
-  const minDiff = priceRange * 0.002;
+  // ✅ 3. إضافة minDiff للـ Swing Detection (فرق أدنى 0.5% من النطاق)
+  const minDiff = priceRange * 0.005; // 0.5% فرق أدنى لاعتبار القمة/القاع مهم
 
-  // ✅ كشف Swing Points مع حساسية أعلى
+  // ✅ 2. كشف Swing Points مع minDiff (قمم/قيعان مهمة فقط)
   for (let i = 1; i < recentCandles.length - 1; i++) {
     const prev = recentCandles[i - 1];
     const current = recentCandles[i];
     const next = recentCandles[i + 1];
 
-    // Swing High: أعلى من الجيران
+    // Swing High: أعلى من الجيران بفرق واضح
     if (current.high > prev.high + minDiff && current.high > next.high + minDiff) {
       result.swingHighs.push(current.high);
     }
-    // ✅ إضافة: كشف القمم الصغيرة أيضاً (بدون minDiff) للسيولة المحلية
-    else if (current.high > prev.high && current.high > next.high) {
-      // قمة صغيرة - مهمة للسيولة المحلية
-      if (!result.swingHighs.includes(current.high)) {
-        result.swingHighs.push(current.high);
-      }
-    }
 
-    // Swing Low: أقل من الجيران
+    // Swing Low: أقل من الجيران بفرق واضح
     if (current.low < prev.low - minDiff && current.low < next.low - minDiff) {
       result.swingLows.push(current.low);
     }
-    // ✅ إضافة: كشف القيعان الصغيرة أيضاً
-    else if (current.low < prev.low && current.low < next.low) {
-      if (!result.swingLows.includes(current.low)) {
-        result.swingLows.push(current.low);
-      }
-    }
   }
 
-  // ✅ أخذ أعلى 4 Swing Highs كـ BSL (بدلاً من 2)
+  // ✅ 2. حساب BSL/SSL من Swing Points (أدق بكثير!)
+  // أخذ أعلى 2 Swing Highs كـ BSL
   const sortedSwingHighs = [...result.swingHighs].sort((a, b) => b - a);
-  result.bsl = sortedSwingHighs.slice(0, 4);
+  result.bsl = sortedSwingHighs.slice(0, 2);
   
-  // ✅ أخذ أدنى 4 Swing Lows كـ SSL (بدلاً من 2)
+  // أخذ أدنى 2 Swing Lows كـ SSL
   const sortedSwingLows = [...result.swingLows].sort((a, b) => a - b);
-  result.ssl = sortedSwingLows.slice(0, 4);
+  result.ssl = sortedSwingLows.slice(0, 2);
 
-  // كشف القمم/القيعان المتساوية
+  // ✅ 4. تقليل tolerance من 0.002 إلى 0.001 (أدق)
   const maxBsl = result.bsl.length > 0 ? Math.max(...result.bsl) : 0;
   const minSsl = result.ssl.length > 0 ? Math.min(...result.ssl) : 0;
-  const tolerance = (maxBsl - minSsl) * 0.002; // تسامح 0.2%
+  const tolerance = (maxBsl - minSsl) * 0.001; // 0.1% تسامح (أدق)
 
   for (let i = 0; i < result.swingHighs.length; i++) {
     for (let j = i + 1; j < result.swingHighs.length; j++) {
@@ -177,26 +164,24 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
     }
   }
 
-  // ✅ كشف سحب السيولة المحسّن - حساسية أعلى
-  for (let i = 1; i < recentCandles.length; i++) {
+  // ✅ 4. كشف سحب السيولة (Liquidity Sweeps) مع فحص الذيل
+  for (let i = 2; i < recentCandles.length; i++) {
     const candle = recentCandles[i];
 
+    // ✅ 5. إضافة فحص الذيل في Sweep Detection (تحسين)
     const upperWick = candle.high - Math.max(candle.open, candle.close);
     const lowerWick = Math.min(candle.open, candle.close) - candle.low;
-    const bodySize = Math.abs(candle.close - candle.open) || 0.01;
-    const totalRange = candle.high - candle.low;
+    const bodySize = Math.abs(candle.close - candle.open);
 
-    // ✅ كشف BSL Sweep بحساسية أعلى
+    // كشف BSL Sweep (سحب سيولة الشراء) مع فحص الذيل
     for (const swingHigh of result.swingHighs) {
-      // الشمعة تخترق القمة
-      if (candle.high > swingHigh) {
-        // ✅ معايير أكثر مرونة للـ sweep
-        const hasWick = upperWick > 0;
-        const closedBelow = candle.close < swingHigh;
-        const wickRatio = upperWick / totalRange;
+      // الشمعة تخترق القمة ثم تغلق تحتها
+      if (candle.high > swingHigh && candle.close < swingHigh) {
+        // ✅ فحص قوة الذيل: يجب أن يكون الذيل العلوي واضح
+        const hasStrongWick = upperWick > bodySize * 0.3; // الذيل أكبر من 30% من الجسم
         
-        // قبول الـ sweep إذا: ذيل واضح أو إغلاق تحت المستوى
-        if (hasWick && (closedBelow || wickRatio > 0.2)) {
+        if (hasStrongWick) {
+          // تأكيد: الشمعة التالية تغلق تحت القمة
           const isConfirmed = i < recentCandles.length - 1 &&
             recentCandles[i + 1].close < swingHigh;
 
@@ -204,22 +189,20 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
             type: 'BSL_SWEEP',
             level: swingHigh,
             sweepCandle: i,
-            confirmed: isConfirmed || closedBelow
+            confirmed: isConfirmed
           });
         }
       }
     }
 
-    // ✅ كشف SSL Sweep بحساسية أعلى
+    // كشف SSL Sweep (سحب سيولة البيع) مع فحص الذيل
     for (const swingLow of result.swingLows) {
-      // الشمعة تخترق القاع
-      if (candle.low < swingLow) {
-        const hasWick = lowerWick > 0;
-        const closedAbove = candle.close > swingLow;
-        const wickRatio = lowerWick / totalRange;
+      // الشمعة تخترق القاع ثم تغلق فوقه
+      if (candle.low < swingLow && candle.close > swingLow) {
+        // ✅ فحص قوة الذيل: يجب أن يكون الذيل السفلي واضح
+        const hasStrongWick = lowerWick > bodySize * 0.3; // الذيل أكبر من 30% من الجسم
         
-        // قبول الـ sweep إذا: ذيل واضح أو إغلاق فوق المستوى
-        if (hasWick && (closedAbove || wickRatio > 0.2)) {
+        if (hasStrongWick) {
           const isConfirmed = i < recentCandles.length - 1 &&
             recentCandles[i + 1].close > swingLow;
 
@@ -227,32 +210,19 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
             type: 'SSL_SWEEP',
             level: swingLow,
             sweepCandle: i,
-            confirmed: isConfirmed || closedAbove
+            confirmed: isConfirmed
           });
         }
       }
     }
   }
 
-  // ✅ إزالة التكرارات من الـ sweeps
-  const uniqueSweeps: LiquiditySweep[] = [];
-  const seenLevels = new Set<string>();
-  for (const sweep of result.sweeps) {
-    const key = `${sweep.type}_${sweep.level.toFixed(2)}`;
-    if (!seenLevels.has(key)) {
-      seenLevels.add(key);
-      uniqueSweeps.push(sweep);
-    }
-  }
-  result.sweeps = uniqueSweeps;
-
-  console.log('📊 Liquidity Analysis v3.0:', {
+  console.log('📊 Liquidity Analysis:', {
     swingHighs: result.swingHighs.length,
     swingLows: result.swingLows.length,
     bsl: result.bsl.map(b => b.toFixed(2)),
     ssl: result.ssl.map(s => s.toFixed(2)),
     sweeps: result.sweeps.length,
-    confirmedSweeps: result.sweeps.filter(s => s.confirmed).length,
     equalHighs: result.equalHighs.length,
     equalLows: result.equalLows.length
   });
@@ -873,7 +843,7 @@ export const createAnimatedChart = async (
     }
 
     const frameImages: string[] = [];
-    const displayCount = timeframe === 'H1' ? 100 : 140;  // استخدام الأرقام الجديدة
+    const displayCount = timeframe === 'H1' ? 100 : 140;  // 100 شمعة للساعة، 140 شمعة لـ5 دقائق
 
     // إنشاء إطارات متعددة بعرض بيانات متزايدة
     for (let i = 0; i < frames; i++) {
@@ -932,8 +902,7 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-process.on('exit', () => {
-  console.log('Process exiting, browser cleanup should have been handled by SIGINT/SIGTERM handlers');
-  // Note: Cannot use async operations in 'exit' event - cleanup must be synchronous
-  // The browser should already be closed by SIGINT/SIGTERM handlers
+process.on('exit', async () => {
+  console.log('Process exiting, closing browser...');
+  await closeBrowser();
 });
