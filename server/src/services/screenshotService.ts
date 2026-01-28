@@ -454,9 +454,17 @@ function createChartHTML(
     const bslSweeps = liquidityData.sweeps.filter(s => s.type === 'BSL_SWEEP' && s.confirmed);
     const sslSweeps = liquidityData.sweeps.filter(s => s.type === 'SSL_SWEEP' && s.confirmed);
     
+    // إزالة التكرار: أخذ مستويات فريدة فقط
+    const uniqueBslSweeps = bslSweeps.filter((sweep, index, self) => 
+      index === self.findIndex(s => Math.abs(s.level - sweep.level) < 0.5)
+    );
+    const uniqueSslSweeps = sslSweeps.filter((sweep, index, self) => 
+      index === self.findIndex(s => Math.abs(s.level - sweep.level) < 0.5)
+    );
+    
     // أخذ آخر 2 من كل نوع
-    const lastBslSweeps = bslSweeps.slice(-2);
-    const lastSslSweeps = sslSweeps.slice(-2);
+    const lastBslSweeps = uniqueBslSweeps.slice(-2);
+    const lastSslSweeps = uniqueSslSweeps.slice(-2);
     
     // رسم آخر 2 BSL Sweep
     lastBslSweeps.forEach((sweep, index) => {
