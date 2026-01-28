@@ -165,7 +165,7 @@ export const systemInstruction = `
    - Bullish FVG: فجوة صعودية - ندخل شراء عند عودة السعر إليها
    - Bearish FVG: فجوة هبوطية - ندخل بيع عند عودة السعر إليها
    - نقطة الدخول المثالية: منتصف الفجوة (50%)
-   - يجب ألا تكون الفجوة ملئت بالكامل (fillPercentage < 80%)
+   - يجب ألا تكون الفجوة قد تم ملؤها بالكامل (fillPercentage < 80%)
 
 ✅ OB (Order Block) - كتلة الأوامر:
    - آخر شمعة معاكسة قبل الحركة القوية (Displacement)
@@ -529,17 +529,24 @@ function validatePDArray(r: any): ValidationResult {
       // تحذير لكن مقبول بشرط وجود رفض قوي
       reasons.push("⚠️ لا يوجد FVG أو OB واضح - لكن يوجد رفض قوي (مقبول بحذر)");
       // تخفيض Score بسبب غياب منطقة الدخول المحددة
-      if (r.score) r.score = Math.max(r.score - 1, 0);
-      if (r.confidence) r.confidence = Math.max(r.confidence - 10, 0);
+      if (r.score !== undefined) r.score = Math.max(r.score - 1, 0);
+      if (r.confidence !== undefined) r.confidence = Math.max(r.confidence - 10, 0);
     } else {
       reasons.push("❌ لا يوجد FVG أو OB للدخول - شرط إلزامي غير متوفر");
       return { isValid: false, reasons };
     }
   }
   
-  // ✅ التحقق من تفاصيل FVG إذا كان موجوداً
+  // ✅ التحقق من تفاصيل FVG إذا كان pdArray يتطلب FVG
   if (pdArray === "FVG" || pdArray === "FVG_IN_OB") {
-    if (fvgDetails.exists === true) {
+    // التحقق من وجود تفاصيل FVG
+    if (!fvgDetails.exists) {
+      // عند عدم وجود تفاصيل، نتحقق من وجود رفض قوي كبديل
+      if (!hasStrongReject) {
+        reasons.push(`⚠️ pdArray = ${pdArray} لكن لا توجد تفاصيل FVG - تحذير`);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+      }
+    } else {
       // التحقق من صحة FVG
       if (fvgDetails.isFilled === true || (fvgDetails.fillPercentage && fvgDetails.fillPercentage >= 80)) {
         reasons.push("❌ FVG تم ملؤها بالكامل (fillPercentage >= 80%) - غير صالحة للدخول");
@@ -548,7 +555,7 @@ function validatePDArray(r: any): ValidationResult {
       
       if (fvgDetails.candlesAgo && fvgDetails.candlesAgo > 50) {
         reasons.push("⚠️ FVG قديمة (> 50 شمعة) - صلاحية منخفضة");
-        if (r.score) r.score = Math.max(r.score - 0.5, 0);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
       }
       
       if (fvgDetails.isValid === false) {
@@ -562,9 +569,16 @@ function validatePDArray(r: any): ValidationResult {
     }
   }
   
-  // ✅ التحقق من تفاصيل OB إذا كان موجوداً
+  // ✅ التحقق من تفاصيل OB إذا كان pdArray يتطلب OB
   if (pdArray === "OB" || pdArray === "FVG_IN_OB") {
-    if (obDetails.exists === true) {
+    // التحقق من وجود تفاصيل OB
+    if (!obDetails.exists) {
+      // عند عدم وجود تفاصيل، نتحقق من وجود رفض قوي كبديل
+      if (!hasStrongReject) {
+        reasons.push(`⚠️ pdArray = ${pdArray} لكن لا توجد تفاصيل OB - تحذير`);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+      }
+    } else {
       // التحقق من صحة OB
       if (obDetails.isBreaker === true) {
         reasons.push("❌ OB تحول إلى Breaker Block - غير صالح للدخول");
@@ -573,12 +587,12 @@ function validatePDArray(r: any): ValidationResult {
       
       if (obDetails.hasBeenTested === true) {
         reasons.push("⚠️ OB تم اختباره سابقاً - صلاحية منخفضة");
-        if (r.score) r.score = Math.max(r.score - 0.5, 0);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
       }
       
       if (obDetails.candlesAgo && obDetails.candlesAgo > 100) {
         reasons.push("⚠️ OB قديم (> 100 شمعة) - صلاحية منخفضة");
-        if (r.score) r.score = Math.max(r.score - 0.5, 0);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
       }
       
       if (obDetails.isValid === false) {
@@ -592,19 +606,24 @@ function validatePDArray(r: any): ValidationResult {
     }
   }
   
-  // ✅ التحقق من منطقة الدخول إذا كانت محددة
+  // ✅ التحقق الخاص بـ FVG_IN_OB - يجب أن يكون كلاهما موجوداً
+  if (pdArray === "FVG_IN_OB") {
+    if (!fvgDetails.exists || !obDetails.exists) {
+      reasons.push("⚠️ FVG_IN_OB يتطلب وجود كل من FVG و OB - أحدهما مفقود");
+      if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+    } else {
+      reasons.push("⭐ FVG داخل OB = إشارة قوية جداً");
+      if (r.score !== undefined) r.score = Math.min(r.score + 0.5, 10);
+      if (r.confidence !== undefined) r.confidence = Math.min(r.confidence + 5, 100);
+    }
+  }
+  
+  // ✅ التحقق من منطقة الدخول إذا كانت محددة (معلومات إضافية)
   if (entryZone.isValid === true) {
     const zoneType = entryZone.type === "FVG" ? "FVG" : 
                      entryZone.type === "OB" ? "OB" : 
                      entryZone.type === "FVG_IN_OB" ? "FVG داخل OB" : "غير محدد";
     reasons.push(`✅ منطقة الدخول: ${zoneType} - ${entryZone.description || ''}`);
-    
-    // FVG_IN_OB هو الأفضل - زيادة الثقة
-    if (entryZone.type === "FVG_IN_OB") {
-      reasons.push("⭐ FVG داخل OB = إشارة قوية جداً");
-      if (r.score) r.score = Math.min(r.score + 0.5, 10);
-      if (r.confidence) r.confidence = Math.min(r.confidence + 5, 100);
-    }
   }
   
   return { isValid: true, reasons };
@@ -718,53 +737,48 @@ function validateEntryInZone(t: any, r: any, isBuy: boolean): ValidationResult {
     return { isValid: true, reasons };
   }
   
-  // التحقق من منطقة الدخول العامة
+  let hasValidatedEntry = false;
+  const tolerance = entry * 0.001; // هامش 0.1% للتسامح
+  
+  // التحقق من entryZone إذا كانت موجودة
   if (entryZone.isValid === true && entryZone.topPrice && entryZone.bottomPrice) {
     const top = Number(entryZone.topPrice);
     const bottom = Number(entryZone.bottomPrice);
     
-    // إضافة هامش 0.1% للتسامح
-    const tolerance = entry * 0.001;
-    
     if (entry < bottom - tolerance || entry > top + tolerance) {
       reasons.push(`⚠️ سعر الدخول (${entry.toFixed(2)}) خارج منطقة الـ ${entryZone.type} (${bottom.toFixed(2)} - ${top.toFixed(2)})`);
-      // تحذير بدلاً من رفض - لأن AI قد يكون اختار نقطة دخول محسنة
-      if (r.score) r.score = Math.max(r.score - 0.5, 0);
+      if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
     } else {
-      // سعر الدخول داخل المنطقة - ممتاز
       reasons.push(`✅ سعر الدخول داخل منطقة الـ ${entryZone.type}`);
     }
-    return { isValid: true, reasons };
+    hasValidatedEntry = true;
   }
   
-  // التحقق من FVG إذا كان pdArray = FVG
-  if ((pdArray === "FVG" || pdArray === "FVG_IN_OB") && fvgDetails.exists === true) {
+  // التحقق من FVG إذا لم يتم التحقق عبر entryZone و pdArray يتطلب FVG
+  if (!hasValidatedEntry && (pdArray === "FVG" || pdArray === "FVG_IN_OB") && fvgDetails.exists === true) {
     const fvgTop = Number(fvgDetails.topPrice) || 0;
     const fvgBottom = Number(fvgDetails.bottomPrice) || 0;
     
     if (fvgTop > 0 && fvgBottom > 0) {
-      const tolerance = entry * 0.001;
-      
       if (entry < fvgBottom - tolerance || entry > fvgTop + tolerance) {
         reasons.push(`⚠️ سعر الدخول (${entry.toFixed(2)}) خارج FVG (${fvgBottom.toFixed(2)} - ${fvgTop.toFixed(2)})`);
-        if (r.score) r.score = Math.max(r.score - 0.3, 0);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.3, 0);
       } else {
         reasons.push(`✅ سعر الدخول داخل FVG`);
       }
+      hasValidatedEntry = true;
     }
   }
   
-  // التحقق من OB إذا كان pdArray = OB
-  if ((pdArray === "OB" || pdArray === "FVG_IN_OB") && obDetails.exists === true) {
+  // التحقق من OB إذا لم يتم التحقق عبر entryZone و pdArray يتطلب OB
+  if (!hasValidatedEntry && (pdArray === "OB" || pdArray === "FVG_IN_OB") && obDetails.exists === true) {
     const obTop = Number(obDetails.topPrice) || 0;
     const obBottom = Number(obDetails.bottomPrice) || 0;
     
     if (obTop > 0 && obBottom > 0) {
-      const tolerance = entry * 0.001;
-      
       if (entry < obBottom - tolerance || entry > obTop + tolerance) {
         reasons.push(`⚠️ سعر الدخول (${entry.toFixed(2)}) خارج OB (${obBottom.toFixed(2)} - ${obTop.toFixed(2)})`);
-        if (r.score) r.score = Math.max(r.score - 0.3, 0);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.3, 0);
       } else {
         reasons.push(`✅ سعر الدخول داخل OB`);
       }
