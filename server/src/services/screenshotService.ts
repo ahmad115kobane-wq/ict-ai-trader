@@ -902,7 +902,8 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-process.on('exit', async () => {
-  console.log('Process exiting, closing browser...');
-  await closeBrowser();
+process.on('exit', () => {
+  console.log('Process exiting, browser cleanup should have been handled by SIGINT/SIGTERM handlers');
+  // Note: Cannot use async operations in 'exit' event - cleanup must be synchronous
+  // The browser should already be closed by SIGINT/SIGTERM handlers
 });
