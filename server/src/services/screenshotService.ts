@@ -71,8 +71,8 @@ async function getBrowser(): Promise<Browser> {
 interface LiquidityAnalysis {
   swingHighs: number[];      // جميع القمم
   swingLows: number[];       // جميع القيعان
-  bsl: number;               // Buy Side Liquidity
-  ssl: number;               // Sell Side Liquidity
+  bsl: number[];             // Buy Side Liquidity (آخر 2 مستوى)
+  ssl: number[];             // Sell Side Liquidity (آخر 2 مستوى)
   sweeps: LiquiditySweep[];  // سحب السيولة المكتشفة
   equalHighs: number[];      // القمم المتساوية (EQH)
   equalLows: number[];       // القيعان المتساوية (EQL)
@@ -90,8 +90,8 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
   const result: LiquidityAnalysis = {
     swingHighs: [],
     swingLows: [],
-    bsl: 0,
-    ssl: 0,
+    bsl: [],
+    ssl: [],
     sweeps: [],
     equalHighs: [],
     equalLows: []
@@ -102,33 +102,48 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
     return result;
   }
 
-  const lookback = Math.min(50, candles.length); // آخر 50 شمعة
+  // ✅ 1. تغيير lookback من 50 إلى 30 (أحدث وأدق)
+  const lookback = Math.min(30, candles.length); // آخر 30 شمعة فقط
   const recentCandles = candles.slice(-lookback);
 
-  // 1. حساب BSL و SSL
-  result.bsl = Math.max(...recentCandles.map(c => c.high));
-  result.ssl = Math.min(...recentCandles.map(c => c.low));
+  // حساب النطاق السعري للمستويات
+  const allPrices = recentCandles.flatMap(c => [c.high, c.low]);
+  const priceRange = Math.max(...allPrices) - Math.min(...allPrices);
+  
+  // ✅ 3. إضافة minDiff للـ Swing Detection (فرق أدنى 0.5% من النطاق)
+  const minDiff = priceRange * 0.005; // 0.5% فرق أدنى لاعتبار القمة/القاع مهم
 
-  // 2. كشف Swing Points بمرونة أكبر (شمعة واحدة قبل وبعد)
+  // ✅ 2. كشف Swing Points مع minDiff (قمم/قيعان مهمة فقط)
   for (let i = 1; i < recentCandles.length - 1; i++) {
     const prev = recentCandles[i - 1];
     const current = recentCandles[i];
     const next = recentCandles[i + 1];
 
-    // Swing High: أعلى من الجيران
-    if (current.high > prev.high && current.high > next.high) {
+    // Swing High: أعلى من الجيران بفرق واضح
+    if (current.high > prev.high + minDiff && current.high > next.high + minDiff) {
       result.swingHighs.push(current.high);
     }
 
-    // Swing Low: أقل من الجيران  
-    if (current.low < prev.low && current.low < next.low) {
+    // Swing Low: أقل من الجيران بفرق واضح
+    if (current.low < prev.low - minDiff && current.low < next.low - minDiff) {
       result.swingLows.push(current.low);
     }
   }
 
-  // 3. كشف القمم/القيعان المتساوية (Equal Highs/Lows) - مناطق سيولة قوية
-  const tolerance = (result.bsl - result.ssl) * 0.002; // 0.2% تسامح
+  // ✅ 2. حساب BSL/SSL من Swing Points (أدق بكثير!)
+  // أخذ أعلى 2 Swing Highs كـ BSL
+  const sortedSwingHighs = [...result.swingHighs].sort((a, b) => b - a);
+  result.bsl = sortedSwingHighs.slice(0, 2);
   
+  // أخذ أدنى 2 Swing Lows كـ SSL
+  const sortedSwingLows = [...result.swingLows].sort((a, b) => a - b);
+  result.ssl = sortedSwingLows.slice(0, 2);
+
+  // ✅ 4. تقليل tolerance من 0.002 إلى 0.001 (أدق)
+  const maxBsl = result.bsl.length > 0 ? Math.max(...result.bsl) : 0;
+  const minSsl = result.ssl.length > 0 ? Math.min(...result.ssl) : 0;
+  const tolerance = (maxBsl - minSsl) * 0.001; // 0.1% تسامح (أدق)
+
   for (let i = 0; i < result.swingHighs.length; i++) {
     for (let j = i + 1; j < result.swingHighs.length; j++) {
       if (Math.abs(result.swingHighs[i] - result.swingHighs[j]) <= tolerance) {
@@ -149,41 +164,55 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
     }
   }
 
-  // 4. ✅ كشف سحب السيولة (Liquidity Sweeps)
+  // ✅ 4. كشف سحب السيولة (Liquidity Sweeps) مع فحص الذيل
   for (let i = 2; i < recentCandles.length; i++) {
     const candle = recentCandles[i];
-    const prevCandle = recentCandles[i - 1];
-    
-    // كشف BSL Sweep (سحب سيولة الشراء)
-    // الشمعة تخترق القمة السابقة ثم تغلق تحتها
+
+    // ✅ 5. إضافة فحص الذيل في Sweep Detection (تحسين)
+    const upperWick = candle.high - Math.max(candle.open, candle.close);
+    const lowerWick = Math.min(candle.open, candle.close) - candle.low;
+    const bodySize = Math.abs(candle.close - candle.open);
+
+    // كشف BSL Sweep (سحب سيولة الشراء) مع فحص الذيل
     for (const swingHigh of result.swingHighs) {
+      // الشمعة تخترق القمة ثم تغلق تحتها
       if (candle.high > swingHigh && candle.close < swingHigh) {
-        // تأكيد: الشمعة التالية تغلق تحت القمة
-        const isConfirmed = i < recentCandles.length - 1 && 
-                           recentCandles[i + 1].close < swingHigh;
+        // ✅ فحص قوة الذيل: يجب أن يكون الذيل العلوي واضح
+        const hasStrongWick = upperWick > bodySize * 0.3; // الذيل أكبر من 30% من الجسم
         
-        result.sweeps.push({
-          type: 'BSL_SWEEP',
-          level: swingHigh,
-          sweepCandle: i,
-          confirmed: isConfirmed
-        });
+        if (hasStrongWick) {
+          // تأكيد: الشمعة التالية تغلق تحت القمة
+          const isConfirmed = i < recentCandles.length - 1 &&
+            recentCandles[i + 1].close < swingHigh;
+
+          result.sweeps.push({
+            type: 'BSL_SWEEP',
+            level: swingHigh,
+            sweepCandle: i,
+            confirmed: isConfirmed
+          });
+        }
       }
     }
 
-    // كشف SSL Sweep (سحب سيولة البيع)
-    // الشمعة تخترق القاع السابق ثم تغلق فوقه
+    // كشف SSL Sweep (سحب سيولة البيع) مع فحص الذيل
     for (const swingLow of result.swingLows) {
+      // الشمعة تخترق القاع ثم تغلق فوقه
       if (candle.low < swingLow && candle.close > swingLow) {
-        const isConfirmed = i < recentCandles.length - 1 && 
-                           recentCandles[i + 1].close > swingLow;
+        // ✅ فحص قوة الذيل: يجب أن يكون الذيل السفلي واضح
+        const hasStrongWick = lowerWick > bodySize * 0.3; // الذيل أكبر من 30% من الجسم
         
-        result.sweeps.push({
-          type: 'SSL_SWEEP',
-          level: swingLow,
-          sweepCandle: i,
-          confirmed: isConfirmed
-        });
+        if (hasStrongWick) {
+          const isConfirmed = i < recentCandles.length - 1 &&
+            recentCandles[i + 1].close > swingLow;
+
+          result.sweeps.push({
+            type: 'SSL_SWEEP',
+            level: swingLow,
+            sweepCandle: i,
+            confirmed: isConfirmed
+          });
+        }
       }
     }
   }
@@ -191,8 +220,8 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
   console.log('📊 Liquidity Analysis:', {
     swingHighs: result.swingHighs.length,
     swingLows: result.swingLows.length,
-    bsl: result.bsl.toFixed(2),
-    ssl: result.ssl.toFixed(2),
+    bsl: result.bsl.map(b => b.toFixed(2)),
+    ssl: result.ssl.map(s => s.toFixed(2)),
     sweeps: result.sweeps.length,
     equalHighs: result.equalHighs.length,
     equalLows: result.equalLows.length
@@ -346,31 +375,33 @@ function createChartHTML(
 
   // ✅ رسم مستويات السيولة
   let liquidityLines = '';
-  
+
   if (liquidityData) {
-    // رسم BSL (خط أحمر منقط)
-    if (liquidityData.bsl) {
-      const bslY = getY(liquidityData.bsl);
+    // رسم آخر 2 BSL (خطوط حمراء منقطة)
+    liquidityData.bsl.forEach((bslLevel, index) => {
+      const bslY = getY(bslLevel);
+      const opacity = index === 0 ? 0.9 : 0.7; // الأول أوضح
       liquidityLines += `
         <line x1="${paddingLeft}" y1="${bslY}" x2="${candlesEndX}" y2="${bslY}" 
-              stroke="#ef4444" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
+              stroke="#ef4444" stroke-width="2" stroke-dasharray="10,5" opacity="${opacity}"/>
         <text x="${candlesEndX + 10}" y="${bslY + 5}" 
               fill="#ef4444" font-size="14" font-weight="bold" font-family="Arial">
-              BSL ${liquidityData.bsl.toFixed(2)}
+              BSL ${index + 1}: ${bslLevel.toFixed(2)}
         </text>`;
-    }
+    });
 
-    // رسم SSL (خط أخضر منقط)
-    if (liquidityData.ssl) {
-      const sslY = getY(liquidityData.ssl);
+    // رسم آخر 2 SSL (خطوط خضراء منقطة)
+    liquidityData.ssl.forEach((sslLevel, index) => {
+      const sslY = getY(sslLevel);
+      const opacity = index === 0 ? 0.9 : 0.7; // الأول أوضح
       liquidityLines += `
         <line x1="${paddingLeft}" y1="${sslY}" x2="${candlesEndX}" y2="${sslY}" 
-              stroke="#22c55e" stroke-width="2" stroke-dasharray="10,5" opacity="0.8"/>
+              stroke="#22c55e" stroke-width="2" stroke-dasharray="10,5" opacity="${opacity}"/>
         <text x="${candlesEndX + 10}" y="${sslY + 5}" 
               fill="#22c55e" font-size="14" font-weight="bold" font-family="Arial">
-              SSL ${liquidityData.ssl.toFixed(2)}
+              SSL ${index + 1}: ${sslLevel.toFixed(2)}
         </text>`;
-    }
+    });
 
     // رسم آخر 3 Swing Highs (دوائر حمراء)
     const recentSwingHighs = liquidityData.swingHighs.slice(-3);
@@ -418,21 +449,37 @@ function createChartHTML(
         </text>`;
     });
 
-    // رسم Liquidity Sweeps (علامات تحذيرية - بدون خلفية)
-    liquidityData.sweeps.forEach(sweep => {
+    // رسم آخر 2 Liquidity Sweeps فقط (علامات تحذيرية - بدون خلفية)
+    // فصل BSL Sweeps و SSL Sweeps
+    const bslSweeps = liquidityData.sweeps.filter(s => s.type === 'BSL_SWEEP' && s.confirmed);
+    const sslSweeps = liquidityData.sweeps.filter(s => s.type === 'SSL_SWEEP' && s.confirmed);
+    
+    // أخذ آخر 2 من كل نوع
+    const lastBslSweeps = bslSweeps.slice(-2);
+    const lastSslSweeps = sslSweeps.slice(-2);
+    
+    // رسم آخر 2 BSL Sweep
+    lastBslSweeps.forEach((sweep, index) => {
       const sweepY = getY(sweep.level);
-      const color = sweep.type === 'BSL_SWEEP' ? '#ef4444' : '#22c55e';
-      const icon = sweep.type === 'BSL_SWEEP' ? '🔻' : '🔺';
-      const label = sweep.type === 'BSL_SWEEP' ? 'BSL SWEPT!' : 'SSL SWEPT!';
-      
-      if (sweep.confirmed) {
-        liquidityLines += `
-          <text x="${candlesEndX - 65}" y="${sweepY + 5}" 
-                fill="${color}" font-size="12" font-weight="bold" text-anchor="middle" font-family="Arial"
-                stroke="white" stroke-width="0.5">
-                ${icon} ${label}
-          </text>`;
-      }
+      const opacity = index === 1 ? 1.0 : 0.8; // الأحدث أوضح
+      liquidityLines += `
+        <text x="${candlesEndX + 10}" y="${sweepY + 5}" 
+              fill="#ef4444" font-size="12" font-weight="bold" text-anchor="start" font-family="Arial"
+              stroke="white" stroke-width="0.5" opacity="${opacity}">
+              🔻 BSL SWEPT!
+        </text>`;
+    });
+    
+    // رسم آخر 2 SSL Sweep
+    lastSslSweeps.forEach((sweep, index) => {
+      const sweepY = getY(sweep.level);
+      const opacity = index === 1 ? 1.0 : 0.8; // الأحدث أوضح
+      liquidityLines += `
+        <text x="${candlesEndX + 10}" y="${sweepY + 5}" 
+              fill="#22c55e" font-size="12" font-weight="bold" text-anchor="start" font-family="Arial"
+              stroke="white" stroke-width="0.5" opacity="${opacity}">
+              🔺 SSL SWEPT!
+        </text>`;
     });
   }
 
@@ -582,8 +629,8 @@ async function captureChartFromBrowser(
     console.log(`📊 ${timeframe} Liquidity Analysis:`, {
       swingHighs: liquidityAnalysis.swingHighs.length,
       swingLows: liquidityAnalysis.swingLows.length,
-      bsl: liquidityAnalysis.bsl?.toFixed(2),
-      ssl: liquidityAnalysis.ssl?.toFixed(2),
+      bsl: liquidityAnalysis.bsl.map(b => b.toFixed(2)),
+      ssl: liquidityAnalysis.ssl.map(s => s.toFixed(2)),
       sweeps: liquidityAnalysis.sweeps.length,
       equalHighs: liquidityAnalysis.equalHighs.length,
       equalLows: liquidityAnalysis.equalLows.length
