@@ -17,7 +17,7 @@
 // ✅ الدخول من Order Block قوي أو FVG متميز
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { ICTAnalysis, ManagementAdvice } from "../types";
+import { ICTAnalysis, ManagementAdvice, KillzoneInfo } from "../types";
 
 // ===================== Environment Variables =====================
 declare const process: any;
@@ -65,17 +65,36 @@ const safeParseJson = (content: string): any => {
 };
 
 // ===================== Validation Options =====================
-// 🔧 معايير متوازنة - ليست صارمة جداً ولا متساهلة جداً
-const VALIDATION_OPTIONS = {
-  maxDistancePercent: 0.012,  // 1.2% حد أقصى للمسافة (للحصول على دخول أفضل)
-  minRR: 1.8,                 // نسبة مخاطرة/عائد أدنى (1:1.8 لأهداف معقولة)
-  minScore: 6.0,              // تقييم أدنى (6/10 للتوازن)
-  minConfidence: 65,          // ثقة أدنى (65% موثوقية جيدة)
-  minConfluences: 2,          // تلاقيات أدنى (على الأقل عاملين)
+// 🔧 معايير محسّنة للحصول على إشارات أكثر موثوقية
+// 📌 هذه المعايير أكثر صرامة قليلاً من السابقة لتصفية الإشارات الضعيفة
+
+// Type for OB strength
+type OBStrength = 'STRONG' | 'MEDIUM' | 'WEAK';
+
+const VALIDATION_OPTIONS: {
+  maxDistancePercent: number;
+  minRR: number;
+  minScore: number;
+  minConfidence: number;
+  minConfluences: number;
+  maxM5CandlesAgo: number;
+  requireKillzone: boolean;
+  requireHTFAlignment: boolean;
+  obMinStrength: OBStrength;
+  killzonePenalty: number;
+  neutralH1Penalty: number;
+} = {
+  maxDistancePercent: 0.012,  // 1.2% حد أقصى للمسافة (لدخول أقرب للسعر الحالي)
+  minRR: 1.8,                 // نسبة مخاطرة/عائد أدنى (1:1.8 - جيدة للذهب)
+  minScore: 6.0,              // تقييم أدنى (6/10 - يتطلب معظم الشروط)
+  minConfidence: 65,          // ثقة أدنى (65% - موثوقية جيدة)
+  minConfluences: 2,          // تلاقيات أدنى (على الأقل عاملين متوافقين)
   maxM5CandlesAgo: 15,        // أقصى عدد شموع لسحب M5 (15 شمعة = ساعة و15 دقيقة)
-  requireKillzone: true,      // يجب أن يكون الدخول في وقت Killzone نشط
-  requireHTFAlignment: true,  // يجب توافق الاتجاه مع H1
-  obMinStrength: 'MEDIUM'     // الحد الأدنى لقوة Order Block
+  requireKillzone: true,      // تحذير إذا كان خارج Killzone (لا يرفض)
+  requireHTFAlignment: true,  // يجب توافق الاتجاه مع H1 (يرفض إذا معاكس)
+  obMinStrength: 'MEDIUM',    // الحد الأدنى لقوة Order Block
+  killzonePenalty: 0.5,       // خصم من Score عند خارج Killzone
+  neutralH1Penalty: 1.0       // خصم من Score عند H1 محايد
 };
 
 console.log("⚙️ Validation Options (Enhanced v2.2):", JSON.stringify(VALIDATION_OPTIONS, null, 2));
@@ -83,14 +102,7 @@ console.log("⚙️ Validation Options (Enhanced v2.2):", JSON.stringify(VALIDAT
 // ===================== Killzone / Session Management =====================
 // 📌 أوقات الجلسات الرئيسية (بتوقيت UTC)
 // يُعد الدخول خلال هذه الأوقات أكثر أماناً بسبب حجم التداول العالي
-
-interface KillzoneInfo {
-  isActive: boolean;
-  session: 'ASIA' | 'LONDON' | 'NY_AM' | 'NY_PM' | 'OFF_HOURS';
-  quality: 'HIGH' | 'MEDIUM' | 'LOW';
-  minutesToEnd: number;
-  description: string;
-}
+// ⚠️ ملاحظة: الأوقات ثابتة ولا تراعي التوقيت الصيفي (DST)
 
 /**
  * الحصول على معلومات الـ Killzone الحالية
@@ -873,7 +885,8 @@ function validateScoreAndConfidence(r: any): ValidationResult {
 }
 
 // 10. التحقق من Killzone (جلسة التداول)
-function validateKillzone(): ValidationResult {
+// 📌 يُطبق خصم على Score إذا كان خارج Killzone
+function validateKillzone(r: any): ValidationResult {
   const reasons: string[] = [];
   
   // الحصول على معلومات الجلسة الحالية
@@ -883,12 +896,20 @@ function validateKillzone(): ValidationResult {
   if (VALIDATION_OPTIONS.requireKillzone) {
     if (!killzone.isActive) {
       reasons.push(`⚠️ خارج أوقات التداول النشطة - ${killzone.description}`);
-      // لا نرفض الصفقة لكن نخفض التقييم
-      return { isValid: true, reasons }; // تحذير فقط
+      // تطبيق خصم على Score
+      if (r.score !== undefined) {
+        r.score = Math.max(r.score - VALIDATION_OPTIONS.killzonePenalty, 0);
+        reasons.push(`📉 تم خصم ${VALIDATION_OPTIONS.killzonePenalty} من التقييم`);
+      }
+      return { isValid: true, reasons }; // تحذير فقط، لا نرفض
     }
     
     if (killzone.quality === 'LOW') {
       reasons.push(`⚠️ جودة الجلسة منخفضة - ${killzone.description}`);
+      // خصم أقل لجودة منخفضة
+      if (r.score !== undefined) {
+        r.score = Math.max(r.score - (VALIDATION_OPTIONS.killzonePenalty * 0.5), 0);
+      }
     } else if (killzone.quality === 'HIGH') {
       reasons.push(`✅ جلسة ممتازة للتداول - ${killzone.description}`);
     } else {
@@ -905,6 +926,7 @@ function validateKillzone(): ValidationResult {
 }
 
 // 11. التحقق من توافق الاتجاه مع H1 (HTF Alignment)
+// 📌 يرفض إذا كان الاتجاه معاكس، ويخصم من Score إذا محايد
 function validateHTFAlignment(r: any, isBuy: boolean): ValidationResult {
   const reasons: string[] = [];
   const h1 = r.h1Analysis || {};
@@ -925,9 +947,17 @@ function validateHTFAlignment(r: any, isBuy: boolean): ValidationResult {
       return { isValid: false, reasons };
     }
     
-    // تحذير إذا كان H1 محايد
+    // تطبيق خصم إذا كان H1 محايد
     if (h1Bias === "NEUTRAL") {
       reasons.push("⚠️ H1 محايد - الصفقة مقبولة لكن بحذر");
+      // تطبيق خصم على Score
+      if (r.score !== undefined) {
+        r.score = Math.max(r.score - VALIDATION_OPTIONS.neutralH1Penalty, 0);
+        reasons.push(`📉 تم خصم ${VALIDATION_OPTIONS.neutralH1Penalty} من التقييم بسبب H1 محايد`);
+      }
+      if (r.confidence !== undefined) {
+        r.confidence = Math.max(r.confidence - 10, 0);
+      }
     }
     
     // مكافأة إذا كان التوافق قوي
@@ -1243,9 +1273,9 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   }
   
   // 11. التحقق من Killzone (جلسة التداول) - v2.2
-  const killzoneCheck = validateKillzone();
+  const killzoneCheck = validateKillzone(r);
   allReasons.push(...killzoneCheck.reasons);
-  // لا نرفض الصفقة بسبب Killzone، فقط تحذير
+  // يطبق خصم على Score ولكن لا يرفض الصفقة
   
   // 12. التحقق من توافق الاتجاه مع H1 (HTF Alignment) - v2.2
   const htfCheck = validateHTFAlignment(r, isBuy);
