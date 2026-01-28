@@ -151,15 +151,39 @@ export const systemInstruction = `
 ❌ WEAK Displacement = NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(4) الشرط الرابع - الدخول فقط من PD Array
+(4) الشرط الرابع - الدخول فقط من FVG أو OB (إلزامي)
 ═══════════════════════════════════════════════════════════════
+🔴 هذا شرط إلزامي - الدخول يجب أن يكون من FVG أو OB
+
 ❌ لا تدخل من مستوى أفقي فقط
-
-الدخول يجب أن يكون من:
-✅ FVG (Fair Value Gap)
-✅ OB (Order Block) واضح
-
+❌ لا تدخل من رقم دائري فقط
 ❌ ارتداد من سعر فقط = مرفوض
+
+✅ FVG (Fair Value Gap) - فجوة القيمة العادلة:
+   - تتكون عندما يكون هناك فجوة بين ذيل الشمعة الأولى وذيل الشمعة الثالثة
+   - الشمعة الثانية تخلق حركة قوية (Displacement)
+   - Bullish FVG: فجوة صعودية - ندخل شراء عند عودة السعر إليها
+   - Bearish FVG: فجوة هبوطية - ندخل بيع عند عودة السعر إليها
+   - نقطة الدخول المثالية: منتصف الفجوة (50%)
+   - يجب ألا تكون الفجوة قد تم ملؤها بالكامل (fillPercentage < 80%)
+
+✅ OB (Order Block) - كتلة الأوامر:
+   - آخر شمعة معاكسة قبل الحركة القوية (Displacement)
+   - Bullish OB: آخر شمعة هابطة قبل صعود قوي - ندخل شراء من منطقتها
+   - Bearish OB: آخر شمعة صاعدة قبل هبوط قوي - ندخل بيع من منطقتها
+   - نقطة الدخول المثالية: 50% من OB (mitigationLevel)
+   - يجب ألا يكون OB تم كسره (isBreaker = false)
+
+✅ FVG داخل OB (الأفضل):
+   - عندما توجد FVG داخل منطقة OB = إشارة قوية جداً
+   - نقطة الدخول: منتصف FVG
+   - هذا يعطي أعلى درجة ثقة
+
+🔍 كيفية تحديد منطقة الدخول:
+1. ابحث عن FVG في منطقة الـ Discount (للشراء) أو Premium (للبيع)
+2. ابحث عن OB لم يتم اختباره بعد
+3. إذا وجدت FVG داخل OB = الأفضل
+4. حدد نقطة الدخول عند منتصف المنطقة
 
 ═══════════════════════════════════════════════════════════════
 (5) الشرط الخامس - الموقع السعري
@@ -193,8 +217,38 @@ export const systemInstruction = `
     "marketStructure": "MSS" | "CHoCH" | "BOS" | "CONSOLIDATION",
     "mssOccurredAfterSweep": true | false,
     "displacement": "STRONG" | "MODERATE" | "WEAK",
-    "pdArray": "FVG" | "OB" | "NONE",
-    "readyForEntry": true | false
+    "pdArray": "FVG" | "OB" | "FVG_IN_OB" | "NONE",
+    "readyForEntry": true | false,
+    "fvgDetails": {
+      "exists": true | false,
+      "type": "BULLISH" | "BEARISH" | "NONE",
+      "topPrice": number,
+      "bottomPrice": number,
+      "midPrice": number,
+      "isFilled": true | false,
+      "fillPercentage": 0-100,
+      "candlesAgo": number,
+      "isValid": true | false
+    },
+    "obDetails": {
+      "exists": true | false,
+      "type": "BULLISH" | "BEARISH" | "NONE",
+      "topPrice": number,
+      "bottomPrice": number,
+      "mitigationLevel": number,
+      "isBreaker": true | false,
+      "candlesAgo": number,
+      "hasBeenTested": true | false,
+      "isValid": true | false
+    },
+    "entryZone": {
+      "type": "FVG" | "OB" | "FVG_IN_OB" | "NONE",
+      "topPrice": number,
+      "bottomPrice": number,
+      "optimalEntry": number,
+      "isValid": true | false,
+      "description": "وصف منطقة الدخول بالعربية"
+    }
   },
   "liquidityPurge": {
     "h1Sweep": {
@@ -454,25 +508,122 @@ function validateDisplacement(r: any): ValidationResult {
   return { isValid: true, reasons };
 }
 
-// 7. التحقق من PD Array
+// 7. التحقق من PD Array (FVG أو OB) - شرط إلزامي للدخول
 function validatePDArray(r: any): ValidationResult {
   const reasons: string[] = [];
   const m5 = r.m5Analysis || {};
   const pdArray = m5.pdArray || "NONE";
+  const entryZone = m5.entryZone || {};
+  const fvgDetails = m5.fvgDetails || {};
+  const obDetails = m5.obDetails || {};
   
   // التحقق من وجود رفض قوي كبديل
   const h1WickReject = r.liquidityPurge?.h1Sweep?.evidence?.wickRejection === true;
   const m5WickReject = r.liquidityPurge?.m5InternalSweep?.evidence?.wickRejection === true;
   const hasStrongReject = h1WickReject || m5WickReject;
   
-  // ✅ تخفيف: تحذير بدلاً من رفض إذا كان هناك رفض قوي
-  if (pdArray === "NONE") {
+  // ✅ التحقق من وجود منطقة دخول صالحة (FVG أو OB)
+  if (pdArray === "NONE" || pdArray === undefined) {
+    // لا يوجد FVG أو OB
     if (hasStrongReject) {
-      reasons.push("⚠️ لا يوجد FVG أو OB واضح - لكن يوجد رفض قوي (مقبول)");
+      // تحذير لكن مقبول بشرط وجود رفض قوي
+      reasons.push("⚠️ لا يوجد FVG أو OB واضح - لكن يوجد رفض قوي (مقبول بحذر)");
+      // تخفيض Score بسبب غياب منطقة الدخول المحددة
+      if (r.score !== undefined) r.score = Math.max(r.score - 1, 0);
+      if (r.confidence !== undefined) r.confidence = Math.max(r.confidence - 10, 0);
     } else {
-      reasons.push("❌ لا يوجد FVG أو OB للدخول - ولا رفض قوي");
+      reasons.push("❌ لا يوجد FVG أو OB للدخول - شرط إلزامي غير متوفر");
       return { isValid: false, reasons };
     }
+  }
+  
+  // ✅ التحقق من تفاصيل FVG إذا كان pdArray يتطلب FVG
+  if (pdArray === "FVG" || pdArray === "FVG_IN_OB") {
+    // التحقق من وجود تفاصيل FVG
+    if (!fvgDetails.exists) {
+      // عند عدم وجود تفاصيل، نتحقق من وجود رفض قوي كبديل
+      if (!hasStrongReject) {
+        reasons.push(`⚠️ pdArray = ${pdArray} لكن لا توجد تفاصيل FVG - تحذير`);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+      }
+    } else {
+      // التحقق من صحة FVG
+      if (fvgDetails.isFilled === true || (fvgDetails.fillPercentage && fvgDetails.fillPercentage >= 80)) {
+        reasons.push("❌ FVG تم ملؤها بالكامل (fillPercentage >= 80%) - غير صالحة للدخول");
+        return { isValid: false, reasons };
+      }
+      
+      if (fvgDetails.candlesAgo && fvgDetails.candlesAgo > 50) {
+        reasons.push("⚠️ FVG قديمة (> 50 شمعة) - صلاحية منخفضة");
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+      }
+      
+      if (fvgDetails.isValid === false) {
+        reasons.push("❌ FVG غير صالحة للدخول حسب التحليل");
+        return { isValid: false, reasons };
+      }
+      
+      // إضافة تفاصيل FVG للأسباب
+      const fvgType = fvgDetails.type === "BULLISH" ? "صعودية" : "هبوطية";
+      reasons.push(`✅ FVG ${fvgType} صالحة: ${fvgDetails.bottomPrice?.toFixed(2)} - ${fvgDetails.topPrice?.toFixed(2)}`);
+    }
+  }
+  
+  // ✅ التحقق من تفاصيل OB إذا كان pdArray يتطلب OB
+  if (pdArray === "OB" || pdArray === "FVG_IN_OB") {
+    // التحقق من وجود تفاصيل OB
+    if (!obDetails.exists) {
+      // عند عدم وجود تفاصيل، نتحقق من وجود رفض قوي كبديل
+      if (!hasStrongReject) {
+        reasons.push(`⚠️ pdArray = ${pdArray} لكن لا توجد تفاصيل OB - تحذير`);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+      }
+    } else {
+      // التحقق من صحة OB
+      if (obDetails.isBreaker === true) {
+        reasons.push("❌ OB تحول إلى Breaker Block - غير صالح للدخول");
+        return { isValid: false, reasons };
+      }
+      
+      if (obDetails.hasBeenTested === true) {
+        reasons.push("⚠️ OB تم اختباره سابقاً - صلاحية منخفضة");
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+      }
+      
+      if (obDetails.candlesAgo && obDetails.candlesAgo > 100) {
+        reasons.push("⚠️ OB قديم (> 100 شمعة) - صلاحية منخفضة");
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+      }
+      
+      if (obDetails.isValid === false) {
+        reasons.push("❌ OB غير صالح للدخول حسب التحليل");
+        return { isValid: false, reasons };
+      }
+      
+      // إضافة تفاصيل OB للأسباب
+      const obType = obDetails.type === "BULLISH" ? "صعودي" : "هبوطي";
+      reasons.push(`✅ OB ${obType} صالح: ${obDetails.bottomPrice?.toFixed(2)} - ${obDetails.topPrice?.toFixed(2)}`);
+    }
+  }
+  
+  // ✅ التحقق الخاص بـ FVG_IN_OB - يجب أن يكون كلاهما موجوداً
+  if (pdArray === "FVG_IN_OB") {
+    if (!fvgDetails.exists || !obDetails.exists) {
+      reasons.push("⚠️ FVG_IN_OB يتطلب وجود كل من FVG و OB - أحدهما مفقود");
+      if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+    } else {
+      reasons.push("⭐ FVG داخل OB = إشارة قوية جداً");
+      if (r.score !== undefined) r.score = Math.min(r.score + 0.5, 10);
+      if (r.confidence !== undefined) r.confidence = Math.min(r.confidence + 5, 100);
+    }
+  }
+  
+  // ✅ التحقق من منطقة الدخول إذا كانت محددة (معلومات إضافية)
+  if (entryZone.isValid === true) {
+    const zoneType = entryZone.type === "FVG" ? "FVG" : 
+                     entryZone.type === "OB" ? "OB" : 
+                     entryZone.type === "FVG_IN_OB" ? "FVG داخل OB" : "غير محدد";
+    reasons.push(`✅ منطقة الدخول: ${zoneType} - ${entryZone.description || ''}`);
   }
   
   return { isValid: true, reasons };
@@ -569,6 +720,74 @@ function validateTradeData(t: any, currentPrice: number, isBuy: boolean): Valida
   return { isValid: true, reasons };
 }
 
+// 11. التحقق من أن سعر الدخول داخل منطقة FVG أو OB
+function validateEntryInZone(t: any, r: any, isBuy: boolean): ValidationResult {
+  const reasons: string[] = [];
+  const m5 = r.m5Analysis || {};
+  const entryZone = m5.entryZone || {};
+  const fvgDetails = m5.fvgDetails || {};
+  const obDetails = m5.obDetails || {};
+  const pdArray = m5.pdArray || "NONE";
+  
+  const entry = Number(t.entry) || 0;
+  if (entry <= 0) return { isValid: true, reasons }; // سيتم التحقق منه في validateTradeData
+  
+  // إذا لم تكن هناك منطقة محددة، تجاوز هذا التحقق
+  if (pdArray === "NONE" || pdArray === undefined) {
+    return { isValid: true, reasons };
+  }
+  
+  let hasValidatedEntry = false;
+  const tolerance = entry * 0.001; // هامش 0.1% للتسامح
+  
+  // التحقق من entryZone إذا كانت موجودة
+  if (entryZone.isValid === true && entryZone.topPrice && entryZone.bottomPrice) {
+    const top = Number(entryZone.topPrice);
+    const bottom = Number(entryZone.bottomPrice);
+    
+    if (entry < bottom - tolerance || entry > top + tolerance) {
+      reasons.push(`⚠️ سعر الدخول (${entry.toFixed(2)}) خارج منطقة الـ ${entryZone.type} (${bottom.toFixed(2)} - ${top.toFixed(2)})`);
+      if (r.score !== undefined) r.score = Math.max(r.score - 0.5, 0);
+    } else {
+      reasons.push(`✅ سعر الدخول داخل منطقة الـ ${entryZone.type}`);
+    }
+    hasValidatedEntry = true;
+  }
+  
+  // التحقق من FVG إذا لم يتم التحقق عبر entryZone و pdArray يتطلب FVG
+  if (!hasValidatedEntry && (pdArray === "FVG" || pdArray === "FVG_IN_OB") && fvgDetails.exists === true) {
+    const fvgTop = Number(fvgDetails.topPrice) || 0;
+    const fvgBottom = Number(fvgDetails.bottomPrice) || 0;
+    
+    if (fvgTop > 0 && fvgBottom > 0) {
+      if (entry < fvgBottom - tolerance || entry > fvgTop + tolerance) {
+        reasons.push(`⚠️ سعر الدخول (${entry.toFixed(2)}) خارج FVG (${fvgBottom.toFixed(2)} - ${fvgTop.toFixed(2)})`);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.3, 0);
+      } else {
+        reasons.push(`✅ سعر الدخول داخل FVG`);
+      }
+      hasValidatedEntry = true;
+    }
+  }
+  
+  // التحقق من OB إذا لم يتم التحقق عبر entryZone و pdArray يتطلب OB
+  if (!hasValidatedEntry && (pdArray === "OB" || pdArray === "FVG_IN_OB") && obDetails.exists === true) {
+    const obTop = Number(obDetails.topPrice) || 0;
+    const obBottom = Number(obDetails.bottomPrice) || 0;
+    
+    if (obTop > 0 && obBottom > 0) {
+      if (entry < obBottom - tolerance || entry > obTop + tolerance) {
+        reasons.push(`⚠️ سعر الدخول (${entry.toFixed(2)}) خارج OB (${obBottom.toFixed(2)} - ${obTop.toFixed(2)})`);
+        if (r.score !== undefined) r.score = Math.max(r.score - 0.3, 0);
+      } else {
+        reasons.push(`✅ سعر الدخول داخل OB`);
+      }
+    }
+  }
+  
+  return { isValid: true, reasons };
+}
+
 // ===================== Main Validator =====================
 function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   const allReasons: string[] = [];
@@ -608,6 +827,21 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     const displacement = r.m5Analysis?.displacement || "WEAK";
     if (displacement === "WEAK") {
       detailedReasons.push("❌ الإزاحة السعرية ضعيفة (WEAK)");
+    }
+    
+    // فحص FVG/OB (منطقة الدخول)
+    const pdArray = r.m5Analysis?.pdArray || "NONE";
+    if (pdArray === "NONE") {
+      detailedReasons.push("❌ لا يوجد FVG أو OB لتحديد منطقة الدخول");
+    } else {
+      // إضافة تفاصيل FVG/OB إذا كانت موجودة
+      const entryZone = r.m5Analysis?.entryZone;
+      if (entryZone?.type) {
+        const zoneDesc = entryZone.type === "FVG" ? "FVG" : 
+                        entryZone.type === "OB" ? "OB" : 
+                        entryZone.type === "FVG_IN_OB" ? "FVG داخل OB" : pdArray;
+        detailedReasons.push(`ℹ️ منطقة الدخول المحددة: ${zoneDesc}`);
+      }
     }
     
     // فحص Score و Confidence
@@ -668,11 +902,12 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     return createNoTradeResult([...r.reasons, ...dispCheck.reasons], r);
   }
   
-  // 9. التحقق من PD Array
+  // 9. التحقق من PD Array (FVG/OB)
   const pdCheck = validatePDArray(r);
   if (!pdCheck.isValid) {
     return createNoTradeResult([...r.reasons, ...pdCheck.reasons], r);
   }
+  allReasons.push(...pdCheck.reasons); // إضافة تفاصيل FVG/OB
   
   // 10. التحقق من التلاقيات
   const confCheck = validateConfluences(r);
@@ -685,6 +920,10 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   if (!tradeCheck.isValid) {
     return createNoTradeResult([...r.reasons, ...tradeCheck.reasons], r);
   }
+  
+  // 12. التحقق من أن سعر الدخول داخل منطقة FVG أو OB
+  const entryZoneCheck = validateEntryInZone(t, r, isBuy);
+  allReasons.push(...entryZoneCheck.reasons);
   
   // ✅ تقريب الأرقام النهائية
   t.entry = round2(toNumber(t.entry));
@@ -707,8 +946,10 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     r.reasons = [...r.reasons, "⚠️ الاعتماد على سحب M5 فقط (مخاطرة أعلى قليلاً)"];
   }
   
-  // إضافة التحذيرات
-  r.reasons = [...r.reasons, ...allReasons.filter(r => r.startsWith("⚠️"))];
+  // إضافة التحذيرات ومعلومات FVG/OB
+  const warnings = allReasons.filter(reason => reason.startsWith("⚠️"));
+  const fvgObInfo = allReasons.filter(reason => reason.startsWith("✅") || reason.startsWith("⭐"));
+  r.reasons = [...r.reasons, ...warnings, ...fvgObInfo];
   
   return r as ICTAnalysis;
 }
@@ -830,6 +1071,39 @@ export const analyzeMultiTimeframe = async (
       console.log(`   MSS بعد السحب: ${parsed.m5Analysis.mssOccurredAfterSweep ? '✅' : '❌'}`);
       console.log(`   الإزاحة: ${parsed.m5Analysis.displacement || 'غير محدد'}`);
       console.log(`   PD Array: ${parsed.m5Analysis.pdArray || 'غير محدد'}`);
+      
+      // تفاصيل FVG
+      if (parsed.m5Analysis.fvgDetails?.exists) {
+        const fvg = parsed.m5Analysis.fvgDetails;
+        console.log(`\n   📊 FVG Details:`);
+        console.log(`      النوع: ${fvg.type === 'BULLISH' ? 'صعودي ⬆️' : fvg.type === 'BEARISH' ? 'هبوطي ⬇️' : 'غير محدد'}`);
+        console.log(`      النطاق: ${fvg.bottomPrice?.toFixed(2)} - ${fvg.topPrice?.toFixed(2)}`);
+        console.log(`      المنتصف: ${fvg.midPrice?.toFixed(2)}`);
+        console.log(`      نسبة الملء: ${fvg.fillPercentage || 0}%`);
+        console.log(`      صالح للدخول: ${fvg.isValid ? '✅' : '❌'}`);
+      }
+      
+      // تفاصيل OB
+      if (parsed.m5Analysis.obDetails?.exists) {
+        const ob = parsed.m5Analysis.obDetails;
+        console.log(`\n   🧱 OB Details:`);
+        console.log(`      النوع: ${ob.type === 'BULLISH' ? 'صعودي ⬆️' : ob.type === 'BEARISH' ? 'هبوطي ⬇️' : 'غير محدد'}`);
+        console.log(`      النطاق: ${ob.bottomPrice?.toFixed(2)} - ${ob.topPrice?.toFixed(2)}`);
+        console.log(`      مستوى التخفيف: ${ob.mitigationLevel?.toFixed(2)}`);
+        console.log(`      Breaker: ${ob.isBreaker ? '✅' : '❌'}`);
+        console.log(`      تم اختباره: ${ob.hasBeenTested ? '✅' : '❌'}`);
+        console.log(`      صالح للدخول: ${ob.isValid ? '✅' : '❌'}`);
+      }
+      
+      // منطقة الدخول
+      if (parsed.m5Analysis.entryZone?.isValid) {
+        const zone = parsed.m5Analysis.entryZone;
+        console.log(`\n   🎯 Entry Zone:`);
+        console.log(`      النوع: ${zone.type}`);
+        console.log(`      النطاق: ${zone.bottomPrice?.toFixed(2)} - ${zone.topPrice?.toFixed(2)}`);
+        console.log(`      الدخول الأمثل: ${zone.optimalEntry?.toFixed(2)}`);
+        console.log(`      الوصف: ${zone.description || 'غير محدد'}`);
+      }
     }
     
     if (parsed.liquidityPurge) {
