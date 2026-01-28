@@ -1,4 +1,7 @@
 // types.ts - أنواع البيانات للسيرفر
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📌 Version: 2.2.0 - Enhanced types for ICT Analysis
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export interface Candle {
   time: string;
@@ -24,13 +27,25 @@ export interface SuggestedTrade {
   rrRatio?: string;
 }
 
+// ===================== Killzone / Session Management =====================
+// 📌 معلومات جلسة التداول (Killzone)
+export interface KillzoneInfo {
+  isActive: boolean;
+  session: 'ASIA' | 'LONDON' | 'NY_AM' | 'NY_PM' | 'OFF_HOURS';
+  quality: 'HIGH' | 'MEDIUM' | 'LOW';
+  minutesToEnd: number;
+  description: string;
+}
+
 export interface H1Analysis {
   bias: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  trendStrength?: 'STRONG' | 'MODERATE' | 'WEAK';
   allowBuy: boolean;
   allowSell: boolean;
   liquiditySweep: string;
   nearestBSL: string;
   nearestSSL: string;
+  structureDescription?: string;
 }
 
 // Fair Value Gap (FVG) - فجوة القيمة العادلة
@@ -57,6 +72,7 @@ export interface OBDetails {
   candlesAgo: number;    // عدد الشموع منذ تكوين الـ OB
   hasBeenTested: boolean; // هل تم اختباره
   isValid: boolean;      // هل الـ OB صالح للدخول
+  strength?: 'STRONG' | 'MEDIUM' | 'WEAK'; // قوة الـ OB (v2.2)
 }
 
 // Entry Zone - منطقة الدخول المحددة
@@ -70,10 +86,12 @@ export interface EntryZone {
 }
 
 export interface M5Analysis {
-  marketStructure: 'MSS' | 'CHoCH' | 'CONSOLIDATION';
+  marketStructure: 'MSS' | 'CHoCH' | 'BOS' | 'CONSOLIDATION';
+  mssOccurredAfterSweep?: boolean; // هل حدث MSS بعد سحب السيولة (v2.2)
   displacement: 'STRONG' | 'MODERATE' | 'WEAK';
   pdArray: 'FVG' | 'OB' | 'FVG_IN_OB' | 'NONE';
   readyForEntry: boolean;
+  obStrength?: 'STRONG' | 'MEDIUM' | 'WEAK'; // قوة OB الدخول (v2.2)
   // تفاصيل FVG و OB الجديدة
   fvgDetails?: FVGDetails;
   obDetails?: OBDetails;
@@ -98,12 +116,15 @@ export interface DrawOnLiquidity {
   nearestSSL: string;
 }
 
+// ===================== ICT Analysis Result =====================
+// 📌 نتيجة التحليل الكاملة
 export interface ICTAnalysis {
   decision: 'PLACE_PENDING' | 'NO_TRADE';
   score: number;
   confidence: number;
   sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
   bias: string;
+  htfAlignment?: boolean; // توافق الاتجاه مع H1 (v2.2)
   h1Analysis: H1Analysis;
   m5Analysis: M5Analysis;
   priceLocation: 'PREMIUM' | 'DISCOUNT' | 'MID';
@@ -113,6 +134,7 @@ export interface ICTAnalysis {
   reasons: string[];
   reasoning: string;
   suggestedTrade?: SuggestedTrade;
+  killzoneInfo?: KillzoneInfo; // معلومات جلسة التداول (v2.2)
 }
 
 export interface User {
