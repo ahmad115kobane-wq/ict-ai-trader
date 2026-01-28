@@ -2,9 +2,12 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // ✅ ICT AI Trader - Professional Analysis Service
 // ═══════════════════════════════════════════════════════════════════════════════
-// 📌 Version: 2.2.0 - Enhanced ICT Analysis System
+// 📌 Version: 2.3.0 - Enhanced ICT Analysis with Smart Entry Positioning
 // 
-// 🔧 التحسينات في هذه النسخة:
+// 🔧 التحسينات في هذه النسخة (v2.3.0):
+// - ✅ تصحيح تلقائي لموقع سعر الدخول (BUY_LIMIT أسفل السعر، SELL_LIMIT أعلى السعر)
+// - ✅ التحقق الصارم من موقع الدخول بناءً على مفاهيم ICT الحقيقية
+// - ✅ دمج منطقة الدخول (FVG/OB) مع تصحيح السعر التلقائي
 // - توافق الاتجاه مع H1 (HTF Alignment) إلزامي
 // - نظام Killzone/Session للتداول في أوقات نشطة
 // - تصنيف قوة Order Blocks (STRONG/MEDIUM/WEAK)
@@ -15,6 +18,7 @@
 // ✅ تحليل متكامل: H1 للسياق والاتجاه + M5 للدخول والتأكيد
 // ✅ سحب السيولة + MSS إلزامي قبل الدخول
 // ✅ الدخول من Order Block قوي أو FVG متميز
+// ✅ تصحيح ذكي لسعر الدخول ليكون في المنطقة الصحيحة
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { ICTAnalysis, ManagementAdvice, KillzoneInfo } from "../types";
@@ -22,7 +26,7 @@ import { ICTAnalysis, ManagementAdvice, KillzoneInfo } from "../types";
 // ===================== Environment Variables =====================
 declare const process: any;
 
-console.log("🚀 aiService v2.2.0 loaded - Enhanced ICT Analysis with Killzone & HTF Alignment");
+console.log("🚀 aiService v2.3.0 loaded - Enhanced ICT Analysis with Smart Entry Positioning");
 
 // ===================== API Config =====================
 // ⚠️ يقرأ من OLLAMA_API_KEY و OLLAMA_BASE_URL في Railway
@@ -507,12 +511,34 @@ export const systemInstruction = `
   }
 }
 
+═══════════════════════════════════════════════════════════════
+(7) قواعد حاسمة لموقع الدخول - ICT CORE CONCEPT
+═══════════════════════════════════════════════════════════════
+🔴 هذا الشرط إلزامي ولا يقبل استثناء:
+
+✅ BUY_LIMIT: يجب أن يكون سعر الدخول أقل من السعر الحالي
+   - لماذا؟ لأننا ننتظر السعر أن ينزل إلى منطقة Discount (FVG/OB) ثم نشتري
+   - Entry < Current Price (إلزامي)
+   - الدخول في Bullish FVG أو Bullish OB تحت السعر الحالي
+
+✅ SELL_LIMIT: يجب أن يكون سعر الدخول أكبر من السعر الحالي
+   - لماذا؟ لأننا ننتظر السعر أن يصعد إلى منطقة Premium (FVG/OB) ثم نبيع
+   - Entry > Current Price (إلزامي)
+   - الدخول في Bearish FVG أو Bearish OB فوق السعر الحالي
+
+⚠️ مثال عملي:
+   - السعر الحالي: 2660
+   - للشراء: ابحث عن FVG/OB بين 2640-2650 (أسفل السعر) → BUY_LIMIT = 2645
+   - للبيع: ابحث عن FVG/OB بين 2670-2680 (فوق السعر) → SELL_LIMIT = 2675
+
+❌ خطأ شائع: وضع BUY_LIMIT فوق السعر أو SELL_LIMIT تحت السعر = مرفوض فوراً
+
 📌 ملاحظات مهمة للتحليل:
 - htfAlignment = true يعني أن اتجاه الصفقة يتوافق مع H1
 - obStrength يحدد قوة الـ Order Block المختار
 - trendStrength يحدد قوة الاتجاه على H1
 
-🔴 تذكر: إذا لم تجد Sweep واضح أو لم يتوافق الاتجاه = NO_TRADE
+🔴 تذكر: إذا لم تجد Sweep واضح أو لم يتوافق الاتجاه أو موقع الدخول خاطئ = NO_TRADE
 `;
 
 // ===================== Result Builder =====================
@@ -1042,6 +1068,43 @@ function validateTradeData(t: any, currentPrice: number, isBuy: boolean): Valida
     return { isValid: false, reasons };
   }
   
+  // ✅ التحقق من موقع سعر الدخول بالنسبة للسعر الحالي (مفهوم ICT الأساسي)
+  // BUY_LIMIT يجب أن يكون أسفل السعر الحالي (ننتظر السعر ينزل للدخول)
+  // SELL_LIMIT يجب أن يكون أعلى السعر الحالي (ننتظر السعر يصعد للدخول)
+  const tradeType = String(t.type);
+  
+  if (tradeType === "BUY_LIMIT") {
+    if (entry >= currentPrice) {
+      reasons.push(`❌ BUY_LIMIT (${entry.toFixed(2)}) يجب أن يكون أسفل السعر الحالي (${currentPrice.toFixed(2)}) - مفهوم ICT: ندخل شراء من Discount`);
+      return { isValid: false, reasons };
+    }
+    reasons.push(`✅ BUY_LIMIT صحيح: Entry (${entry.toFixed(2)}) < Current Price (${currentPrice.toFixed(2)})`);
+  }
+  
+  if (tradeType === "SELL_LIMIT") {
+    if (entry <= currentPrice) {
+      reasons.push(`❌ SELL_LIMIT (${entry.toFixed(2)}) يجب أن يكون أعلى السعر الحالي (${currentPrice.toFixed(2)}) - مفهوم ICT: ندخل بيع من Premium`);
+      return { isValid: false, reasons };
+    }
+    reasons.push(`✅ SELL_LIMIT صحيح: Entry (${entry.toFixed(2)}) > Current Price (${currentPrice.toFixed(2)})`);
+  }
+  
+  // BUY_STOP يجب أن يكون أعلى السعر الحالي
+  if (tradeType === "BUY_STOP") {
+    if (entry <= currentPrice) {
+      reasons.push(`❌ BUY_STOP (${entry.toFixed(2)}) يجب أن يكون أعلى السعر الحالي (${currentPrice.toFixed(2)})`);
+      return { isValid: false, reasons };
+    }
+  }
+  
+  // SELL_STOP يجب أن يكون أسفل السعر الحالي
+  if (tradeType === "SELL_STOP") {
+    if (entry >= currentPrice) {
+      reasons.push(`❌ SELL_STOP (${entry.toFixed(2)}) يجب أن يكون أسفل السعر الحالي (${currentPrice.toFixed(2)})`);
+      return { isValid: false, reasons };
+    }
+  }
+  
   // التحقق من المسافة
   const dist = Math.abs(entry - currentPrice);
   const maxDist = currentPrice * VALIDATION_OPTIONS.maxDistancePercent;
@@ -1075,6 +1138,136 @@ function validateTradeData(t: any, currentPrice: number, isBuy: boolean): Valida
   }
   
   return { isValid: true, reasons };
+}
+
+// ===================== تصحيح سعر الدخول بناءً على مناطق FVG/OB =====================
+// 📌 هذه الدالة تصحح سعر الدخول ليكون في المنطقة الصحيحة حسب مفاهيم ICT
+// BUY_LIMIT: يجب أن يكون أسفل السعر الحالي (في FVG/OB تحت السعر)
+// SELL_LIMIT: يجب أن يكون أعلى السعر الحالي (في FVG/OB فوق السعر)
+function correctEntryPrice(t: any, r: any, currentPrice: number): { entry: number; corrected: boolean; reason: string } {
+  const m5 = r.m5Analysis || {};
+  const entryZone = m5.entryZone || {};
+  const fvgDetails = m5.fvgDetails || {};
+  const obDetails = m5.obDetails || {};
+  const pdArray = m5.pdArray || "NONE";
+  
+  const originalEntry = Number(t.entry) || 0;
+  const tradeType = String(t.type || "");
+  const isBuyLimit = tradeType === "BUY_LIMIT";
+  const isSellLimit = tradeType === "SELL_LIMIT";
+  
+  // لا نصحح إذا لم تكن هناك منطقة محددة
+  if (pdArray === "NONE" || (!entryZone.isValid && !fvgDetails.exists && !obDetails.exists)) {
+    return { entry: originalEntry, corrected: false, reason: "لا توجد منطقة FVG/OB محددة" };
+  }
+  
+  // حساب أفضل سعر دخول من المناطق المتاحة
+  let optimalEntry = originalEntry;
+  let zoneType = "";
+  let zoneTop = 0;
+  let zoneBottom = 0;
+  
+  // أولوية 1: منطقة الدخول المحددة (entryZone)
+  if (entryZone.isValid && entryZone.optimalEntry) {
+    optimalEntry = Number(entryZone.optimalEntry);
+    zoneType = entryZone.type || "EntryZone";
+    zoneTop = Number(entryZone.topPrice) || 0;
+    zoneBottom = Number(entryZone.bottomPrice) || 0;
+  }
+  // أولوية 2: FVG
+  else if (fvgDetails.exists && fvgDetails.midPrice) {
+    optimalEntry = Number(fvgDetails.midPrice);
+    zoneType = "FVG";
+    zoneTop = Number(fvgDetails.topPrice) || 0;
+    zoneBottom = Number(fvgDetails.bottomPrice) || 0;
+  }
+  // أولوية 3: OB (مستوى التخفيف 50%)
+  else if (obDetails.exists && obDetails.mitigationLevel) {
+    optimalEntry = Number(obDetails.mitigationLevel);
+    zoneType = "OB";
+    zoneTop = Number(obDetails.topPrice) || 0;
+    zoneBottom = Number(obDetails.bottomPrice) || 0;
+  }
+  
+  // ✅ التحقق والتصحيح حسب نوع الأمر
+  if (isBuyLimit) {
+    // BUY_LIMIT يجب أن يكون أسفل السعر الحالي
+    if (optimalEntry >= currentPrice) {
+      // الدخول المقترح فوق السعر - نحتاج منطقة أسفل السعر
+      // نتحقق من أن المنطقة بالكامل أسفل السعر الحالي
+      if (zoneBottom > 0 && zoneTop > 0 && zoneTop < currentPrice) {
+        // المنطقة بالكامل تحت السعر الحالي - نستخدم المنتصف
+        const midZone = (zoneTop + zoneBottom) / 2;
+        optimalEntry = round2(midZone);
+        return { 
+          entry: optimalEntry, 
+          corrected: true, 
+          reason: `✅ تم تصحيح الدخول: BUY_LIMIT يجب أن يكون أسفل السعر (${optimalEntry.toFixed(2)} في ${zoneType})`
+        };
+      }
+      // تحقق بديل: إذا كان جزء من المنطقة أسفل السعر
+      if (zoneBottom > 0 && zoneBottom < currentPrice && zoneTop >= currentPrice) {
+        // المنطقة تعبر السعر الحالي - نستخدم الجزء الأسفل فقط
+        // نحسب منتصف الجزء الذي تحت السعر الحالي
+        const safeMid = (zoneBottom + currentPrice) / 2;
+        optimalEntry = round2(safeMid);
+        return { 
+          entry: optimalEntry, 
+          corrected: true, 
+          reason: `✅ تم تصحيح الدخول: BUY_LIMIT في الجزء الأسفل من ${zoneType} (${optimalEntry.toFixed(2)})`
+        };
+      }
+      // لا توجد منطقة صالحة أسفل السعر
+      return { 
+        entry: originalEntry, 
+        corrected: false, 
+        reason: `❌ لا توجد منطقة ${zoneType} أسفل السعر الحالي للشراء`
+      };
+    }
+    // الدخول المقترح صحيح (أسفل السعر)
+    return { entry: round2(optimalEntry), corrected: optimalEntry !== originalEntry, reason: `✅ BUY_LIMIT في ${zoneType}` };
+  }
+  
+  if (isSellLimit) {
+    // SELL_LIMIT يجب أن يكون أعلى السعر الحالي
+    if (optimalEntry <= currentPrice) {
+      // الدخول المقترح تحت السعر - نحتاج منطقة فوق السعر
+      // نتحقق من أن المنطقة بالكامل فوق السعر الحالي
+      if (zoneBottom > 0 && zoneTop > 0 && zoneBottom > currentPrice) {
+        // المنطقة بالكامل فوق السعر الحالي - نستخدم المنتصف
+        const midZone = (zoneTop + zoneBottom) / 2;
+        optimalEntry = round2(midZone);
+        return { 
+          entry: optimalEntry, 
+          corrected: true, 
+          reason: `✅ تم تصحيح الدخول: SELL_LIMIT يجب أن يكون أعلى السعر (${optimalEntry.toFixed(2)} في ${zoneType})`
+        };
+      }
+      // تحقق بديل: إذا كان جزء من المنطقة فوق السعر
+      if (zoneTop > 0 && zoneTop > currentPrice && zoneBottom <= currentPrice) {
+        // المنطقة تعبر السعر الحالي - نستخدم الجزء الأعلى فقط
+        // نحسب منتصف الجزء الذي فوق السعر الحالي
+        const safeMid = (zoneTop + currentPrice) / 2;
+        optimalEntry = round2(safeMid);
+        return { 
+          entry: optimalEntry, 
+          corrected: true, 
+          reason: `✅ تم تصحيح الدخول: SELL_LIMIT في الجزء الأعلى من ${zoneType} (${optimalEntry.toFixed(2)})`
+        };
+      }
+      // لا توجد منطقة صالحة فوق السعر
+      return { 
+        entry: originalEntry, 
+        corrected: false, 
+        reason: `❌ لا توجد منطقة ${zoneType} أعلى السعر الحالي للبيع`
+      };
+    }
+    // الدخول المقترح صحيح (فوق السعر)
+    return { entry: round2(optimalEntry), corrected: optimalEntry !== originalEntry, reason: `✅ SELL_LIMIT في ${zoneType}` };
+  }
+  
+  // للأنواع الأخرى (BUY_STOP, SELL_STOP) نعيد السعر الأصلي
+  return { entry: originalEntry, corrected: false, reason: "نوع أمر غير LIMIT" };
 }
 
 // 11. التحقق من أن سعر الدخول داخل منطقة FVG أو OB
@@ -1291,11 +1484,23 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   }
   allReasons.push(...obStrengthCheck.reasons);
   
+  // 🔧 تصحيح سعر الدخول بناءً على مناطق FVG/OB (قبل التحقق من بيانات الصفقة)
+  const entryCorrection = correctEntryPrice(t, r, currentPrice);
+  if (entryCorrection.corrected) {
+    console.log(`🔧 تصحيح سعر الدخول: ${t.entry} → ${entryCorrection.entry}`);
+    t.entry = entryCorrection.entry;
+    allReasons.push(entryCorrection.reason);
+  } else if (entryCorrection.reason.startsWith("❌")) {
+    // إذا لم يمكن تصحيح الدخول وكان خطأ
+    return createNoTradeResult([...r.reasons, entryCorrection.reason], r);
+  }
+  
   // 14. التحقق من بيانات الصفقة
   const tradeCheck = validateTradeData(t, currentPrice, isBuy);
   if (!tradeCheck.isValid) {
     return createNoTradeResult([...r.reasons, ...tradeCheck.reasons], r);
   }
+  allReasons.push(...tradeCheck.reasons.filter(reason => reason.startsWith("✅")));
   
   // 15. التحقق من أن سعر الدخول داخل منطقة FVG أو OB
   const entryZoneCheck = validateEntryInZone(t, r, isBuy);

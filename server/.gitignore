@@ -46,3 +46,6 @@ analysis-images/
 # Temporary files
 *.tmp
 *.temp
+
+# Puppeteer cache
+.cache/
