@@ -74,8 +74,8 @@ router.post('/analyze-demo', async (req: any, res: Response) => {
     
     console.log(`🖼️ Demo charts rendered: H1=${h1Image.length} chars, M5=${m5Image.length} chars`);
 
-    // 3. إرسال للـ AI للتحليل
-    const analysis = await analyzeMultiTimeframe(h1Image, m5Image, currentPrice);
+    // 3. إرسال للـ AI للتحليل مع بيانات الشموع
+    const analysis = await analyzeMultiTimeframe(h1Image, m5Image, currentPrice, h1Candles, m5Candles);
     
     console.log(`🤖 Demo analysis result: ${analysis.decision}, Score: ${analysis.score}`);
 
@@ -145,13 +145,15 @@ router.post('/follow-up', authMiddleware, chatPermissionMiddleware, async (req: 
     // رسم الشارتات باستخدام التقاط الصور الفعلية
     const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice);
 
-    // المتابعة
+    // المتابعة مع بيانات الشموع
     const result = await followUpTrade(
       h1Image,
       m5Image,
       originalAnalysis,
       currentPrice,
-      new Date(tradeTimestamp)
+      new Date(tradeTimestamp),
+      h1Candles,
+      m5Candles
     );
 
     // جلب العملات المحدثة

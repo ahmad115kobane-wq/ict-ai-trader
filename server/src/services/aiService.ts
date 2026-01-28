@@ -1574,20 +1574,42 @@ async function callAIChat(payload: any): Promise<{ content: string }> {
 export const analyzeMultiTimeframe = async (
   h1Image: string,
   m5Image: string,
-  currentPrice: number
+  currentPrice: number,
+  h1Candles?: any[],
+  m5Candles?: any[]
 ): Promise<ICTAnalysis> => {
   // الحصول على معلومات Killzone
   const killzoneInfo = getCurrentKillzone();
   
   console.log("\n═══════════════════════════════════════════════════════════════");
-  console.log("🔍 بدء التحليل متعدد الأطر الزمنية (v2.2.0 Enhanced)");
+  console.log("🔍 بدء التحليل متعدد الأطر الزمنية (v2.3.0 Enhanced with Candle Data)");
   console.log(`💰 السعر الحالي: ${currentPrice}`);
   console.log(`⏰ الجلسة الحالية: ${killzoneInfo.session} (${killzoneInfo.quality})`);
   console.log(`📊 ${killzoneInfo.description}`);
+  if (h1Candles) console.log(`📊 بيانات الشموع H1: ${h1Candles.length} شمعة`);
+  if (m5Candles) console.log(`📊 بيانات الشموع M5: ${m5Candles.length} شمعة`);
   console.log("═══════════════════════════════════════════════════════════════\n");
   
   const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
   const cleanM5 = m5Image.replace(/^data:image\/\w+;base64,/, "");
+
+  // إضافة بيانات الشموع إلى التحليل إذا كانت متاحة
+  let candleDataText = '';
+  if (h1Candles && h1Candles.length > 0) {
+    const recentH1 = h1Candles.slice(-20); // آخر 20 شمعة للإطار الساعي
+    candleDataText += '\n\n📊 بيانات شموع H1 (آخر 20 شمعة):\n';
+    candleDataText += recentH1.map((c, i) => 
+      `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
+    ).join('\n');
+  }
+  
+  if (m5Candles && m5Candles.length > 0) {
+    const recentM5 = m5Candles.slice(-30); // آخر 30 شمعة لإطار 5 دقائق
+    candleDataText += '\n\n📊 بيانات شموع M5 (آخر 30 شمعة):\n';
+    candleDataText += recentM5.map((c, i) => 
+      `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
+    ).join('\n');
+  }
 
   const userPrompt = `${systemInstruction}
 
@@ -1601,13 +1623,15 @@ export const analyzeMultiTimeframe = async (
 
 الصورة 1: H1 (السياق الأساسي + تحديد الاتجاه)
 الصورة 2: M5 (الدخول + السيولة الداخلية + التأكيد)
+${candleDataText}
 
 🔍 تعليمات مهمة جداً:
 1. حدد أولاً اتجاه H1 (صاعد/هابط/محايد) - هذا يحدد اتجاه الصفقة
-2. ابحث عن سحب سيولة (Sweep) على H1 أو M5
+2. ابحث عن سحب سيولة (Sweep) على H1 أو M5 باستخدام البيانات المالية المرفقة
 3. تأكد من حدوث MSS/CHoCH بعد السحب (شرط الدخول)
-4. حدد منطقة الدخول (OB قوي أو FVG متميز)
+4. حدد منطقة الدخول (OB قوي أو FVG متميز) باستخدام بيانات الشموع
 5. الدخول يكون بعد التأكيد (بعد الكسر) وليس قبله
+6. استخدم بيانات الشموع المرفقة لتحليل دقيق لمستويات السيولة والأنماط
 
 ⚠️ معايير التحليل المتوازن:
 - Score >= 6.0 للقبول (لا نريد صارم جداً)
@@ -1834,7 +1858,9 @@ export const followUpTrade = async (
   m5Image: string,
   originalAnalysis: ICTAnalysis,
   currentPrice: number,
-  tradeTimestamp: Date
+  tradeTimestamp: Date,
+  h1Candles?: any[],
+  m5Candles?: any[]
 ): Promise<{ advice: string; shouldExit: boolean; reason: string }> => {
   try {
     const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
@@ -1859,13 +1885,31 @@ export const followUpTrade = async (
       tradeStatus = 'تم التفعيل ✅';
     }
 
+    // إضافة بيانات الشموع إلى التحليل إذا كانت متاحة
+    let candleDataText = '';
+    if (h1Candles && h1Candles.length > 0) {
+      const recentH1 = h1Candles.slice(-10); // آخر 10 شموع للمتابعة
+      candleDataText += '\n\n📊 بيانات شموع H1 الحديثة:\n';
+      candleDataText += recentH1.map((c, i) => 
+        `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
+      ).join('\n');
+    }
+    
+    if (m5Candles && m5Candles.length > 0) {
+      const recentM5 = m5Candles.slice(-15); // آخر 15 شمعة للمتابعة
+      candleDataText += '\n\n📊 بيانات شموع M5 الحديثة:\n';
+      candleDataText += recentM5.map((c, i) => 
+        `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
+      ).join('\n');
+    }
+
     const data = await callAIChat({
       messages: [{
         role: "user",
         content: [
           {
             type: "text",
-            text: `أنت مدير مخاطر ICT. راجع الصفقة:
+            text: `أنت مدير مخاطر ICT. راجع الصفقة باستخدام البيانات المالية والصور:
 
 ⏱️ الوقت المنقضي: ${timePassedStr}
 📊 حالة الصفقة: ${tradeStatus}
@@ -1873,6 +1917,9 @@ export const followUpTrade = async (
 📈 النوع: ${isBuy ? 'شراء' : 'بيع'}
 🎯 Entry: ${entry} | SL: ${sl}
 ✅ TP1: ${tp1} | TP2: ${tp2} | TP3: ${tp3}
+${candleDataText}
+
+استخدم بيانات الشموع لتحليل دقيق لحركة السعر واتخاذ القرار المناسب.
 
 رد JSON:
 {

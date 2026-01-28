@@ -636,8 +636,8 @@ app.get('/test-analysis', async (req, res) => {
 
     console.log(`🖼️ Test Charts rendered: H1=${h1Image.length} chars, M5=${m5Image.length} chars`);
 
-    // التحليل
-    const analysis = await analyzeMultiTimeframe(h1Image, m5Image, currentPrice);
+    // التحليل مع بيانات الشموع
+    const analysis = await analyzeMultiTimeframe(h1Image, m5Image, currentPrice, h1Candles, m5Candles);
 
     console.log(`🤖 Test Analysis result: ${analysis.decision}, Score: ${analysis.score}`);
 
@@ -1815,8 +1815,8 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
     // رسم الشارتات باستخدام التقاط الصور الفعلية
     const { h1Image, m5Image } = await renderDualCharts(h1Candles, m5Candles, currentPrice, 100, 140);
 
-    // التحليل
-    const analysis = await analyzeMultiTimeframe(h1Image, m5Image, currentPrice);
+    // التحليل مع بيانات الشموع
+    const analysis = await analyzeMultiTimeframe(h1Image, m5Image, currentPrice, h1Candles, m5Candles);
 
     console.log(`🤖 Auto Analysis: ${analysis.decision}, Score: ${analysis.score}, Confidence: ${analysis.confidence}%`);
 
