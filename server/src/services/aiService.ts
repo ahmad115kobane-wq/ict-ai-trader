@@ -1194,18 +1194,28 @@ function correctEntryPrice(t: any, r: any, currentPrice: number): { entry: numbe
     // BUY_LIMIT يجب أن يكون أسفل السعر الحالي
     if (optimalEntry >= currentPrice) {
       // الدخول المقترح فوق السعر - نحتاج منطقة أسفل السعر
-      // نبحث عن أقرب دعم في المنطقة
-      if (zoneBottom > 0 && zoneBottom < currentPrice) {
-        // نستخدم منتصف المنطقة إذا كانت أسفل السعر
+      // نتحقق من أن المنطقة بالكامل أسفل السعر الحالي
+      if (zoneBottom > 0 && zoneTop > 0 && zoneTop < currentPrice) {
+        // المنطقة بالكامل تحت السعر الحالي - نستخدم المنتصف
         const midZone = (zoneTop + zoneBottom) / 2;
-        if (midZone < currentPrice) {
-          optimalEntry = round2(midZone);
-          return { 
-            entry: optimalEntry, 
-            corrected: true, 
-            reason: `✅ تم تصحيح الدخول: BUY_LIMIT يجب أن يكون أسفل السعر (${optimalEntry.toFixed(2)} في ${zoneType})`
-          };
-        }
+        optimalEntry = round2(midZone);
+        return { 
+          entry: optimalEntry, 
+          corrected: true, 
+          reason: `✅ تم تصحيح الدخول: BUY_LIMIT يجب أن يكون أسفل السعر (${optimalEntry.toFixed(2)} في ${zoneType})`
+        };
+      }
+      // تحقق بديل: إذا كان جزء من المنطقة أسفل السعر
+      if (zoneBottom > 0 && zoneBottom < currentPrice && zoneTop >= currentPrice) {
+        // المنطقة تعبر السعر الحالي - نستخدم الجزء الأسفل فقط
+        // نحسب منتصف الجزء الذي تحت السعر الحالي
+        const safeMid = (zoneBottom + currentPrice) / 2;
+        optimalEntry = round2(safeMid);
+        return { 
+          entry: optimalEntry, 
+          corrected: true, 
+          reason: `✅ تم تصحيح الدخول: BUY_LIMIT في الجزء الأسفل من ${zoneType} (${optimalEntry.toFixed(2)})`
+        };
       }
       // لا توجد منطقة صالحة أسفل السعر
       return { 
@@ -1222,17 +1232,28 @@ function correctEntryPrice(t: any, r: any, currentPrice: number): { entry: numbe
     // SELL_LIMIT يجب أن يكون أعلى السعر الحالي
     if (optimalEntry <= currentPrice) {
       // الدخول المقترح تحت السعر - نحتاج منطقة فوق السعر
-      if (zoneTop > 0 && zoneTop > currentPrice) {
-        // نستخدم منتصف المنطقة إذا كانت فوق السعر
+      // نتحقق من أن المنطقة بالكامل فوق السعر الحالي
+      if (zoneBottom > 0 && zoneTop > 0 && zoneBottom > currentPrice) {
+        // المنطقة بالكامل فوق السعر الحالي - نستخدم المنتصف
         const midZone = (zoneTop + zoneBottom) / 2;
-        if (midZone > currentPrice) {
-          optimalEntry = round2(midZone);
-          return { 
-            entry: optimalEntry, 
-            corrected: true, 
-            reason: `✅ تم تصحيح الدخول: SELL_LIMIT يجب أن يكون أعلى السعر (${optimalEntry.toFixed(2)} في ${zoneType})`
-          };
-        }
+        optimalEntry = round2(midZone);
+        return { 
+          entry: optimalEntry, 
+          corrected: true, 
+          reason: `✅ تم تصحيح الدخول: SELL_LIMIT يجب أن يكون أعلى السعر (${optimalEntry.toFixed(2)} في ${zoneType})`
+        };
+      }
+      // تحقق بديل: إذا كان جزء من المنطقة فوق السعر
+      if (zoneTop > 0 && zoneTop > currentPrice && zoneBottom <= currentPrice) {
+        // المنطقة تعبر السعر الحالي - نستخدم الجزء الأعلى فقط
+        // نحسب منتصف الجزء الذي فوق السعر الحالي
+        const safeMid = (zoneTop + currentPrice) / 2;
+        optimalEntry = round2(safeMid);
+        return { 
+          entry: optimalEntry, 
+          corrected: true, 
+          reason: `✅ تم تصحيح الدخول: SELL_LIMIT في الجزء الأعلى من ${zoneType} (${optimalEntry.toFixed(2)})`
+        };
       }
       // لا توجد منطقة صالحة فوق السعر
       return { 
@@ -1479,7 +1500,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   if (!tradeCheck.isValid) {
     return createNoTradeResult([...r.reasons, ...tradeCheck.reasons], r);
   }
-  allReasons.push(...tradeCheck.reasons.filter(r => r.startsWith("✅")));
+  allReasons.push(...tradeCheck.reasons.filter(reason => reason.startsWith("✅")));
   
   // 15. التحقق من أن سعر الدخول داخل منطقة FVG أو OB
   const entryZoneCheck = validateEntryInZone(t, r, isBuy);
