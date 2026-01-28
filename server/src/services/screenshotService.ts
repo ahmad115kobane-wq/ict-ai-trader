@@ -717,8 +717,8 @@ export const captureRealChartScreenshots = async (
   h1Candles: Candle[],
   m5Candles: Candle[],
   currentPrice: number,
-  h1CandleCount: number = 130,
-  m5CandleCount: number = 220
+  h1CandleCount: number = 100,
+  m5CandleCount: number = 140
 ): Promise<{ h1Image: string; m5Image: string }> => {
   console.log(`🎯 Starting parallel browser-based chart screenshot capture...`);
   console.log(`📊 Target H1: ${h1CandleCount}, Target M5: ${m5CandleCount}`);
@@ -794,7 +794,7 @@ export const saveChartsToFiles = async (
     }
 
     // التقاط الصور
-    const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 130, 220);
+    const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 100, 140);
 
     // تحويل base64 إلى buffer
     const h1Buffer = Buffer.from(h1Image.replace('data:image/png;base64,', ''), 'base64');
@@ -834,7 +834,7 @@ export const createAnimatedChart = async (
     const { getCandles, getCurrentPrice } = await import('../services/oandaService');
 
     // جلب بيانات أكثر للحصول على إطارات متعددة
-    const candleCount = timeframe === 'H1' ? 220 : 350;  // أرقام أكبر قليلاً للرسوم المتحركة
+    const candleCount = timeframe === 'H1' ? 150 : 200;  // أرقام أكبر قليلاً للرسوم المتحركة
     const candles = await getCandles(symbol, timeframe === 'H1' ? '1h' : '5m', candleCount);
     const currentPrice = await getCurrentPrice(symbol);
 
@@ -843,7 +843,7 @@ export const createAnimatedChart = async (
     }
 
     const frameImages: string[] = [];
-    const displayCount = timeframe === 'H1' ? 130 : 220;  // استخدام الأرقام الجديدة
+    const displayCount = timeframe === 'H1' ? 100 : 140;  // استخدام الأرقام الجديدة
 
     // إنشاء إطارات متعددة بعرض بيانات متزايدة
     for (let i = 0; i < frames; i++) {
