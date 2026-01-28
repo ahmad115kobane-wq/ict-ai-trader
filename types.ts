@@ -39,6 +39,7 @@ export interface KillzoneInfo {
   session: 'ASIA' | 'LONDON' | 'NY_AM' | 'NY_PM' | 'OFF_HOURS';
   quality: 'HIGH' | 'MEDIUM' | 'LOW';
   minutesToEnd: number;
+  description?: string; // وصف الجلسة بالعربية (v2.2)
 }
 
 // Fair Value Gap (FVG) - فجوة القيمة العادلة

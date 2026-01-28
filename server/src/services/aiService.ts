@@ -1,15 +1,28 @@
 // services/aiService.ts
-// ✅ نسخة ICT مصححة بالكامل - خالية من الأخطاء المنطقية
-// ✅ تحليل متكامل: H1 للسياق + M5 للدخول
-// ✅ سحب السيولة إلزامي + معايير متوازنة
-// 🔄 Version: 2.1.0 - Enhanced sweep detection + relaxed criteria
+// ═══════════════════════════════════════════════════════════════════════════════
+// ✅ ICT AI Trader - Professional Analysis Service
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📌 Version: 2.2.0 - Enhanced ICT Analysis System
+// 
+// 🔧 التحسينات في هذه النسخة:
+// - توافق الاتجاه مع H1 (HTF Alignment) إلزامي
+// - نظام Killzone/Session للتداول في أوقات نشطة
+// - تصنيف قوة Order Blocks (STRONG/MEDIUM/WEAK)
+// - معايير متوازنة (ليست صارمة جداً ولا متساهلة)
+// - الدخول بعد التأكيد (MSS/CHoCH) وليس قبله
+// - تحليل مفصل بالعربية
+// 
+// ✅ تحليل متكامل: H1 للسياق والاتجاه + M5 للدخول والتأكيد
+// ✅ سحب السيولة + MSS إلزامي قبل الدخول
+// ✅ الدخول من Order Block قوي أو FVG متميز
+// ═══════════════════════════════════════════════════════════════════════════════
 
-import { ICTAnalysis, ManagementAdvice } from "../types";
+import { ICTAnalysis, ManagementAdvice, KillzoneInfo } from "../types";
 
 // ===================== Environment Variables =====================
 declare const process: any;
 
-console.log("🚀 aiService v2.1.0 loaded - Enhanced sweep detection");
+console.log("🚀 aiService v2.2.0 loaded - Enhanced ICT Analysis with Killzone & HTF Alignment");
 
 // ===================== API Config =====================
 // ⚠️ يقرأ من OLLAMA_API_KEY و OLLAMA_BASE_URL في Railway
@@ -52,24 +65,207 @@ const safeParseJson = (content: string): any => {
 };
 
 // ===================== Validation Options =====================
-const VALIDATION_OPTIONS = {
-  maxDistancePercent: 0.015,  // 1.5% حد أقصى للمسافة (كان 1.2%)
-  minRR: 1.5,                 // نسبة مخاطرة/عائد أدنى (كان 1.8)
-  minScore: 5.5,              // تقييم أدنى (كان 6.5)
-  minConfidence: 60,          // ثقة أدنى (كان 65)
-  minConfluences: 2,          // تلاقيات أدنى (كان 3)
-  maxM5CandlesAgo: 20         // أقصى عدد شموع لسحب M5 (كان 15)
+// 🔧 معايير محسّنة للحصول على إشارات أكثر موثوقية
+// 📌 هذه المعايير أكثر صرامة قليلاً من السابقة لتصفية الإشارات الضعيفة
+
+// Type for OB strength
+type OBStrength = 'STRONG' | 'MEDIUM' | 'WEAK';
+
+const VALIDATION_OPTIONS: {
+  maxDistancePercent: number;
+  minRR: number;
+  minScore: number;
+  minConfidence: number;
+  minConfluences: number;
+  maxM5CandlesAgo: number;
+  requireKillzone: boolean;
+  requireHTFAlignment: boolean;
+  obMinStrength: OBStrength;
+  killzonePenalty: number;
+  neutralH1Penalty: number;
+} = {
+  maxDistancePercent: 0.012,  // 1.2% حد أقصى للمسافة (لدخول أقرب للسعر الحالي)
+  minRR: 1.8,                 // نسبة مخاطرة/عائد أدنى (1:1.8 - جيدة للذهب)
+  minScore: 6.0,              // تقييم أدنى (6/10 - يتطلب معظم الشروط)
+  minConfidence: 65,          // ثقة أدنى (65% - موثوقية جيدة)
+  minConfluences: 2,          // تلاقيات أدنى (على الأقل عاملين متوافقين)
+  maxM5CandlesAgo: 15,        // أقصى عدد شموع لسحب M5 (15 شمعة = ساعة و15 دقيقة)
+  requireKillzone: true,      // تحذير إذا كان خارج Killzone (لا يرفض)
+  requireHTFAlignment: true,  // يجب توافق الاتجاه مع H1 (يرفض إذا معاكس)
+  obMinStrength: 'MEDIUM',    // الحد الأدنى لقوة Order Block
+  killzonePenalty: 0.5,       // خصم من Score عند خارج Killzone
+  neutralH1Penalty: 1.0       // خصم من Score عند H1 محايد
 };
 
-console.log("⚙️ Validation Options:", JSON.stringify(VALIDATION_OPTIONS, null, 2));
+console.log("⚙️ Validation Options (Enhanced v2.2):", JSON.stringify(VALIDATION_OPTIONS, null, 2));
+
+// ===================== Killzone / Session Management =====================
+// 📌 أوقات الجلسات الرئيسية (بتوقيت UTC)
+// يُعد الدخول خلال هذه الأوقات أكثر أماناً بسبب حجم التداول العالي
+// ⚠️ ملاحظة: الأوقات ثابتة ولا تراعي التوقيت الصيفي (DST)
+
+/**
+ * الحصول على معلومات الـ Killzone الحالية
+ * @returns معلومات الجلسة الحالية وجودتها
+ */
+function getCurrentKillzone(): KillzoneInfo {
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  const utcMinute = now.getUTCMinutes();
+  const totalMinutes = utcHour * 60 + utcMinute;
+  
+  // تعريف أوقات الجلسات (بالدقائق من بداية اليوم UTC)
+  const sessions = {
+    // جلسة آسيا: 00:00 - 03:00 UTC
+    ASIA: { start: 0, end: 180, quality: 'MEDIUM' as const },
+    // جلسة لندن: 07:00 - 10:00 UTC (أفضل وقت)
+    LONDON: { start: 420, end: 600, quality: 'HIGH' as const },
+    // جلسة نيويورك الصباحية: 12:00 - 15:00 UTC (ممتاز)
+    NY_AM: { start: 720, end: 900, quality: 'HIGH' as const },
+    // جلسة نيويورك المسائية: 15:00 - 18:00 UTC
+    NY_PM: { start: 900, end: 1080, quality: 'MEDIUM' as const }
+  };
+  
+  // تحديد الجلسة الحالية
+  for (const [sessionName, session] of Object.entries(sessions)) {
+    if (totalMinutes >= session.start && totalMinutes < session.end) {
+      const minutesToEnd = session.end - totalMinutes;
+      return {
+        isActive: true,
+        session: sessionName as KillzoneInfo['session'],
+        quality: session.quality,
+        minutesToEnd,
+        description: getSessionDescription(sessionName as KillzoneInfo['session'])
+      };
+    }
+  }
+  
+  // خارج أوقات التداول النشطة
+  return {
+    isActive: false,
+    session: 'OFF_HOURS',
+    quality: 'LOW',
+    minutesToEnd: 0,
+    description: '⚠️ خارج أوقات التداول النشطة - يُنصح بالانتظار'
+  };
+}
+
+/**
+ * الحصول على وصف الجلسة بالعربية
+ */
+function getSessionDescription(session: KillzoneInfo['session']): string {
+  const descriptions: Record<KillzoneInfo['session'], string> = {
+    ASIA: '🌏 جلسة آسيا - حجم تداول متوسط',
+    LONDON: '🇬🇧 جلسة لندن - أفضل وقت للتداول (حجم عالي)',
+    NY_AM: '🇺🇸 جلسة نيويورك الصباحية - ممتازة للتداول',
+    NY_PM: '🇺🇸 جلسة نيويورك المسائية - حجم تداول جيد',
+    OFF_HOURS: '⚠️ خارج أوقات التداول النشطة'
+  };
+  return descriptions[session];
+}
+
+// ===================== Order Block Rating System =====================
+// 📌 نظام تقييم كتل الأوامر (Order Blocks)
+
+interface OBRating {
+  strength: 'STRONG' | 'MEDIUM' | 'WEAK';
+  score: number; // 0-10
+  factors: string[];
+}
+
+/**
+ * تقييم قوة Order Block
+ * @param obDetails تفاصيل الـ OB من التحليل
+ * @param priceLocation موقع السعر الحالي
+ * @param hasLiquiditySweep هل حدث سحب سيولة
+ */
+function rateOrderBlock(obDetails: any, priceLocation: string, hasLiquiditySweep: boolean): OBRating {
+  const factors: string[] = [];
+  let score = 5; // نقطة بداية
+  
+  if (!obDetails || !obDetails.exists) {
+    return { strength: 'WEAK', score: 0, factors: ['❌ لا يوجد OB'] };
+  }
+  
+  // 1. هل تم اختباره سابقاً؟ (OB الجديد أفضل)
+  if (obDetails.hasBeenTested === false) {
+    score += 2;
+    factors.push('✅ OB جديد لم يُختبر');
+  } else {
+    score -= 1;
+    factors.push('⚠️ OB تم اختباره سابقاً');
+  }
+  
+  // 2. هل هو Breaker Block؟ (سلبي - يعني تم كسره)
+  if (obDetails.isBreaker === true) {
+    score -= 3;
+    factors.push('❌ تحول إلى Breaker Block');
+  }
+  
+  // 3. عمر الـ OB (كلما كان حديثاً كان أفضل)
+  const candlesAgo = obDetails.candlesAgo || 100;
+  if (candlesAgo <= 20) {
+    score += 2;
+    factors.push('✅ OB حديث (< 20 شمعة)');
+  } else if (candlesAgo <= 50) {
+    score += 1;
+    factors.push('✅ OB في نطاق جيد (< 50 شمعة)');
+  } else if (candlesAgo > 100) {
+    score -= 1;
+    factors.push('⚠️ OB قديم (> 100 شمعة)');
+  }
+  
+  // 4. توافق الموقع السعري مع نوع OB
+  if (obDetails.type === 'BULLISH' && priceLocation === 'DISCOUNT') {
+    score += 1;
+    factors.push('✅ OB صعودي في منطقة Discount');
+  } else if (obDetails.type === 'BEARISH' && priceLocation === 'PREMIUM') {
+    score += 1;
+    factors.push('✅ OB هبوطي في منطقة Premium');
+  }
+  
+  // 5. وجود سحب سيولة قبل الوصول للـ OB
+  if (hasLiquiditySweep) {
+    score += 1;
+    factors.push('✅ سحب سيولة قبل OB');
+  }
+  
+  // 6. هل الـ OB صالح حسب التحليل
+  if (obDetails.isValid === true) {
+    score += 1;
+    factors.push('✅ OB صالح للدخول');
+  }
+  
+  // تحديد القوة بناءً على المجموع
+  const strength = score >= 8 ? 'STRONG' : score >= 5 ? 'MEDIUM' : 'WEAK';
+  
+  return { strength, score: Math.max(0, Math.min(10, score)), factors };
+}
 
 // ===================== ICT System Instruction =====================
+// 📌 v2.2.0 - تحليل محسّن مع توافق الاتجاه والجلسات
 export const systemInstruction = `
-أنت "ICT Professional Analyzer" متخصص XAUUSD - تحليل صارم مثل متداول مؤسسي.
+أنت "ICT Professional Analyzer" متخصص XAUUSD - تحليل مؤسسي متوازن وموثوق.
 ⚠️ يجب أن تكون جميع النصوص بالعربية فقط.
 ⚠️ يجب أن ترد بصيغة JSON فقط بدون أي نص خارجي.
 
-🔴 المبدأ الأساسي: لا تعطي صفقة إلا بعد اكتمال Setup ICT مؤسسي كامل
+🎯 المبدأ الأساسي: تحليل موثوق متوافق مع الاتجاه + دخول من مناطق قوية بعد التأكيد
+
+═══════════════════════════════════════════════════════════════
+(0) الشرط الصفر - توافق الاتجاه مع H1 (أهم شرط)
+═══════════════════════════════════════════════════════════════
+🔴 يجب أن يتوافق اتجاه الصفقة مع اتجاه H1 الرئيسي
+
+✅ قواعد التوافق:
+- إذا كان H1 صاعد (Higher Highs + Higher Lows) → ابحث عن شراء فقط
+- إذا كان H1 هابط (Lower Highs + Lower Lows) → ابحث عن بيع فقط
+- إذا كان H1 متذبذب → انتظر تحديد اتجاه واضح أو تداول Counter-Trend بحذر
+
+🔍 كيفية تحديد اتجاه H1:
+1. انظر لآخر 20-50 شمعة على H1
+2. حدد القمم والقيعان الرئيسية
+3. إذا القمم والقيعان ترتفع = صعودي
+4. إذا القمم والقيعان تنخفض = هبوطي
 
 ═══════════════════════════════════════════════════════════════
 (1) الشرط الأول - سحب السيولة إلزامي (NO EXCEPTIONS)
@@ -116,48 +312,64 @@ export const systemInstruction = `
 - القرار النهائي: NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(2) الشرط الثاني - MSS إلزامي بعد السحب (CRITICAL)
+(2) الشرط الثاني - كسر الهيكل MSS/CHoCH إلزامي بعد السحب
 ═══════════════════════════════════════════════════════════════
-🔴 هذا أهم شرط - لا تدخل بدون MSS
+🔴 هذا شرط التأكيد - الدخول بعد الكسر فقط
 
-❌ ممنوع الدخول من ارتداد السيولة فقط
-✅ يجب كسر هيكل السوق (MSS) بعد السحب
+❌ ممنوع الدخول من ارتداد السيولة فقط (قبل التأكيد)
+✅ يجب كسر هيكل السوق (MSS/CHoCH) بعد السحب ثم الدخول
+
+📌 ما هو MSS (Market Structure Shift):
+- كسر واضح لآخر قمة/قاع مهم
+- يؤكد تغيير الاتجاه قصير المدى
+- يعطي تأكيد للدخول
 
 للشراء:
-- يجب كسر آخر Lower High
+- يجب كسر آخر Lower High على M5
 - إغلاق واضح فوقه
-- تأكيد تغيير الاتجاه
+- انتظار عودة السعر للـ FVG أو OB
 
 للبيع:
-- يجب كسر آخر Higher Low
+- يجب كسر آخر Higher Low على M5
 - إغلاق واضح تحته
-- تأكيد تغيير الاتجاه
+- انتظار عودة السعر للـ FVG أو OB
 
-⚠️ CHoCH مقبول أيضاً (تغيير طبيعة السوق)
-❌ BOS فقط = غير كافٍ
-❌ لم يحدث MSS بعد السحب = NO_TRADE
+⚠️ CHoCH (Change of Character) مقبول أيضاً
+❌ BOS (Break of Structure) العادي = غير كافٍ للدخول
+❌ لم يحدث MSS/CHoCH بعد السحب = NO_TRADE
 
 ═══════════════════════════════════════════════════════════════
-(3) الشرط الثالث - Displacement حقيقي فقط
+(3) الشرط الثالث - Displacement حقيقي (إزاحة سعرية قوية)
 ═══════════════════════════════════════════════════════════════
 ❌ ارفض أي حركة بطيئة أو متذبذبة
 
 المقبول فقط:
-✅ شمعة أو أكثر بجسم كبير
-✅ إغلاق قوي
+✅ شمعة أو أكثر بجسم كبير (أكبر من المتوسط)
+✅ إغلاق قوي في اتجاه الحركة
 ✅ خلق FVG واضح
 ✅ حركة سريعة في اتجاه واحد
 
-❌ WEAK Displacement = NO_TRADE
+❌ WEAK Displacement = NO_TRADE (يجب MODERATE أو STRONG)
 
 ═══════════════════════════════════════════════════════════════
-(4) الشرط الرابع - الدخول فقط من FVG أو OB (إلزامي)
+(4) الشرط الرابع - الدخول من Order Block قوي أو FVG متميز
 ═══════════════════════════════════════════════════════════════
-🔴 هذا شرط إلزامي - الدخول يجب أن يكون من FVG أو OB
+🔴 هذا شرط إلزامي - الدخول يجب أن يكون من منطقة قوية
 
 ❌ لا تدخل من مستوى أفقي فقط
 ❌ لا تدخل من رقم دائري فقط
-❌ ارتداد من سعر فقط = مرفوض
+❌ ارتداد من سعر عشوائي = مرفوض
+
+✅ Order Block القوي (المفضل للدخول):
+   - آخر شمعة معاكسة قبل الحركة القوية (Displacement)
+   - يجب ألا يكون قد تم اختباره سابقاً (Fresh OB)
+   - الدخول من 50% من OB (مستوى التخفيف)
+   - OB حديث (< 50 شمعة) أفضل من القديم
+
+📊 تصنيف قوة Order Block:
+   - STRONG: لم يُختبر + حديث + مع FVG = أفضل دخول
+   - MEDIUM: تم اختباره مرة أو حديث بدون FVG = مقبول
+   - WEAK: قديم أو تم اختباره عدة مرات = تجنب
 
 ✅ FVG (Fair Value Gap) - فجوة القيمة العادلة:
    - تتكون عندما يكون هناك فجوة بين ذيل الشمعة الأولى وذيل الشمعة الثالثة
@@ -191,12 +403,12 @@ export const systemInstruction = `
 ❌ لا شراء في Premium
 ❌ لا بيع في Discount
 
-✅ BUY → Discount فقط
-✅ SELL → Premium فقط
-❌ MID → NO_TRADE
+✅ BUY → Discount فقط (السعر تحت 50% من النطاق)
+✅ SELL → Premium فقط (السعر فوق 50% من النطاق)
+⚠️ MID → حذر - يمكن القبول مع تلاقيات قوية
 
 ═══════════════════════════════════════════════════════════════
-(6) صيغة JSON الإلزامية
+(6) صيغة JSON الإلزامية - v2.2
 ═══════════════════════════════════════════════════════════════
 {
   "decision": "PLACE_PENDING" | "NO_TRADE",
@@ -205,13 +417,16 @@ export const systemInstruction = `
   "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
   "bias": "وصف سياق H1 بالعربية",
   "priceLocation": "PREMIUM" | "DISCOUNT" | "MID",
+  "htfAlignment": true | false,
   "h1Analysis": {
     "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
+    "trendStrength": "STRONG" | "MODERATE" | "WEAK",
     "allowBuy": true | false,
     "allowSell": true | false,
     "liquiditySweep": "وصف السحب على H1 أو 'لم يحدث'",
     "nearestBSL": "وصف/سعر",
-    "nearestSSL": "وصف/سعر"
+    "nearestSSL": "وصف/سعر",
+    "structureDescription": "وصف هيكل H1 بالعربية"
   },
   "m5Analysis": {
     "marketStructure": "MSS" | "CHoCH" | "BOS" | "CONSOLIDATION",
@@ -219,6 +434,7 @@ export const systemInstruction = `
     "displacement": "STRONG" | "MODERATE" | "WEAK",
     "pdArray": "FVG" | "OB" | "FVG_IN_OB" | "NONE",
     "readyForEntry": true | false,
+    "obStrength": "STRONG" | "MEDIUM" | "WEAK",
     "fvgDetails": {
       "exists": true | false,
       "type": "BULLISH" | "BEARISH" | "NONE",
@@ -239,7 +455,8 @@ export const systemInstruction = `
       "isBreaker": true | false,
       "candlesAgo": number,
       "hasBeenTested": true | false,
-      "isValid": true | false
+      "isValid": true | false,
+      "strength": "STRONG" | "MEDIUM" | "WEAK"
     },
     "entryZone": {
       "type": "FVG" | "OB" | "FVG_IN_OB" | "NONE",
@@ -277,7 +494,7 @@ export const systemInstruction = `
   },
   "confluences": ["عامل 1", "عامل 2", "عامل 3"],
   "reasons": ["سبب 1", "سبب 2"],
-  "reasoning": "شرح مفصل",
+  "reasoning": "شرح مفصل بالعربية يوضح التحليل",
   "suggestedTrade": {
     "type": "BUY_LIMIT" | "SELL_LIMIT" | "BUY_STOP" | "SELL_STOP",
     "entry": number,
@@ -290,7 +507,12 @@ export const systemInstruction = `
   }
 }
 
-🔴 تذكر: إذا لم تجد Sweep واضح = NO_TRADE فوراً
+📌 ملاحظات مهمة للتحليل:
+- htfAlignment = true يعني أن اتجاه الصفقة يتوافق مع H1
+- obStrength يحدد قوة الـ Order Block المختار
+- trendStrength يحدد قوة الاتجاه على H1
+
+🔴 تذكر: إذا لم تجد Sweep واضح أو لم يتوافق الاتجاه = NO_TRADE
 `;
 
 // ===================== Result Builder =====================
@@ -662,7 +884,142 @@ function validateScoreAndConfidence(r: any): ValidationResult {
   return { isValid: true, reasons };
 }
 
-// 10. التحقق من بيانات الصفقة
+// 10. التحقق من Killzone (جلسة التداول)
+// 📌 يُطبق خصم على Score إذا كان خارج Killzone
+function validateKillzone(r: any): ValidationResult {
+  const reasons: string[] = [];
+  
+  // الحصول على معلومات الجلسة الحالية
+  const killzone = getCurrentKillzone();
+  
+  // إذا كان التحقق من Killzone مفعل في الإعدادات
+  if (VALIDATION_OPTIONS.requireKillzone) {
+    if (!killzone.isActive) {
+      reasons.push(`⚠️ خارج أوقات التداول النشطة - ${killzone.description}`);
+      // تطبيق خصم على Score
+      if (r.score !== undefined) {
+        r.score = Math.max(r.score - VALIDATION_OPTIONS.killzonePenalty, 0);
+        reasons.push(`📉 تم خصم ${VALIDATION_OPTIONS.killzonePenalty} من التقييم`);
+      }
+      return { isValid: true, reasons }; // تحذير فقط، لا نرفض
+    }
+    
+    if (killzone.quality === 'LOW') {
+      reasons.push(`⚠️ جودة الجلسة منخفضة - ${killzone.description}`);
+      // خصم أقل لجودة منخفضة
+      if (r.score !== undefined) {
+        r.score = Math.max(r.score - (VALIDATION_OPTIONS.killzonePenalty * 0.5), 0);
+      }
+    } else if (killzone.quality === 'HIGH') {
+      reasons.push(`✅ جلسة ممتازة للتداول - ${killzone.description}`);
+    } else {
+      reasons.push(`✅ جلسة جيدة للتداول - ${killzone.description}`);
+    }
+    
+    // تحذير إذا كان الوقت المتبقي قليل
+    if (killzone.minutesToEnd < 30) {
+      reasons.push(`⚠️ تبقى ${killzone.minutesToEnd} دقيقة على انتهاء الجلسة`);
+    }
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 11. التحقق من توافق الاتجاه مع H1 (HTF Alignment)
+// 📌 يرفض إذا كان الاتجاه معاكس، ويخصم من Score إذا محايد
+function validateHTFAlignment(r: any, isBuy: boolean): ValidationResult {
+  const reasons: string[] = [];
+  const h1 = r.h1Analysis || {};
+  
+  // إذا كان التحقق من HTF Alignment مفعل في الإعدادات
+  if (VALIDATION_OPTIONS.requireHTFAlignment) {
+    const h1Bias = h1.bias || "NEUTRAL";
+    const htfAlignment = r.htfAlignment;
+    
+    // التحقق من توافق الاتجاه
+    if (isBuy && h1Bias === "BEARISH") {
+      reasons.push("❌ محاولة شراء ضد اتجاه H1 الهابط - خطر عالي");
+      return { isValid: false, reasons };
+    }
+    
+    if (!isBuy && h1Bias === "BULLISH") {
+      reasons.push("❌ محاولة بيع ضد اتجاه H1 الصاعد - خطر عالي");
+      return { isValid: false, reasons };
+    }
+    
+    // تطبيق خصم إذا كان H1 محايد
+    if (h1Bias === "NEUTRAL") {
+      reasons.push("⚠️ H1 محايد - الصفقة مقبولة لكن بحذر");
+      // تطبيق خصم على Score
+      if (r.score !== undefined) {
+        r.score = Math.max(r.score - VALIDATION_OPTIONS.neutralH1Penalty, 0);
+        reasons.push(`📉 تم خصم ${VALIDATION_OPTIONS.neutralH1Penalty} من التقييم بسبب H1 محايد`);
+      }
+      if (r.confidence !== undefined) {
+        r.confidence = Math.max(r.confidence - 10, 0);
+      }
+    }
+    
+    // مكافأة إذا كان التوافق قوي
+    if (htfAlignment === true) {
+      reasons.push("✅ توافق قوي مع اتجاه H1");
+    }
+    
+    // التحقق من قوة الاتجاه
+    const trendStrength = h1.trendStrength || "WEAK";
+    if (trendStrength === "STRONG") {
+      reasons.push("✅ قوة اتجاه H1 ممتازة");
+    } else if (trendStrength === "WEAK") {
+      reasons.push("⚠️ قوة اتجاه H1 ضعيفة - انتبه للانعكاسات");
+    }
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 12. التحقق من قوة Order Block
+function validateOrderBlockStrength(r: any): ValidationResult {
+  const reasons: string[] = [];
+  const m5 = r.m5Analysis || {};
+  const obDetails = m5.obDetails || {};
+  const pdArray = m5.pdArray || "NONE";
+  
+  // إذا كان الدخول من OB، تحقق من قوته
+  if (pdArray === "OB" || pdArray === "FVG_IN_OB") {
+    if (!obDetails.exists) {
+      // سبق التحقق في validatePDArray
+      return { isValid: true, reasons };
+    }
+    
+    // حساب قوة OB
+    const hasLiquiditySweep = r.liquidityPurge?.h1Sweep?.occurred === true || 
+                              r.liquidityPurge?.m5InternalSweep?.occurred === true;
+    const priceLocation = r.priceLocation || "MID";
+    
+    const obRating = rateOrderBlock(obDetails, priceLocation, hasLiquiditySweep);
+    
+    // التحقق من الحد الأدنى للقوة
+    if (VALIDATION_OPTIONS.obMinStrength === 'STRONG' && obRating.strength !== 'STRONG') {
+      reasons.push(`❌ قوة OB غير كافية (${obRating.strength}) - المطلوب STRONG`);
+      return { isValid: false, reasons };
+    }
+    
+    if (VALIDATION_OPTIONS.obMinStrength === 'MEDIUM' && obRating.strength === 'WEAK') {
+      reasons.push(`❌ قوة OB ضعيفة (${obRating.strength}) - المطلوب MEDIUM على الأقل`);
+      return { isValid: false, reasons };
+    }
+    
+    // إضافة تفاصيل التقييم
+    reasons.push(`📊 قوة OB: ${obRating.strength} (${obRating.score}/10)`);
+    obRating.factors.forEach(factor => {
+      reasons.push(`   ${factor}`);
+    });
+  }
+  
+  return { isValid: true, reasons };
+}
+
+// 13. التحقق من بيانات الصفقة
 function validateTradeData(t: any, currentPrice: number, isBuy: boolean): ValidationResult {
   const reasons: string[] = [];
   
@@ -915,13 +1272,32 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     return createNoTradeResult([...r.reasons, ...confCheck.reasons], r);
   }
   
-  // 11. التحقق من بيانات الصفقة
+  // 11. التحقق من Killzone (جلسة التداول) - v2.2
+  const killzoneCheck = validateKillzone(r);
+  allReasons.push(...killzoneCheck.reasons);
+  // يطبق خصم على Score ولكن لا يرفض الصفقة
+  
+  // 12. التحقق من توافق الاتجاه مع H1 (HTF Alignment) - v2.2
+  const htfCheck = validateHTFAlignment(r, isBuy);
+  if (!htfCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...htfCheck.reasons], r);
+  }
+  allReasons.push(...htfCheck.reasons);
+  
+  // 13. التحقق من قوة Order Block - v2.2
+  const obStrengthCheck = validateOrderBlockStrength(r);
+  if (!obStrengthCheck.isValid) {
+    return createNoTradeResult([...r.reasons, ...obStrengthCheck.reasons], r);
+  }
+  allReasons.push(...obStrengthCheck.reasons);
+  
+  // 14. التحقق من بيانات الصفقة
   const tradeCheck = validateTradeData(t, currentPrice, isBuy);
   if (!tradeCheck.isValid) {
     return createNoTradeResult([...r.reasons, ...tradeCheck.reasons], r);
   }
   
-  // 12. التحقق من أن سعر الدخول داخل منطقة FVG أو OB
+  // 15. التحقق من أن سعر الدخول داخل منطقة FVG أو OB
   const entryZoneCheck = validateEntryInZone(t, r, isBuy);
   allReasons.push(...entryZoneCheck.reasons);
   
@@ -989,14 +1365,20 @@ async function callAIChat(payload: any): Promise<{ content: string }> {
 }
 
 // ===================== Multi-Timeframe Analysis =====================
+// 📌 v2.2.0 - تحليل محسّن مع Killzone و توافق الاتجاه
 export const analyzeMultiTimeframe = async (
   h1Image: string,
   m5Image: string,
   currentPrice: number
 ): Promise<ICTAnalysis> => {
+  // الحصول على معلومات Killzone
+  const killzoneInfo = getCurrentKillzone();
+  
   console.log("\n═══════════════════════════════════════════════════════════════");
-  console.log("🔍 بدء التحليل متعدد الأطر الزمنية");
+  console.log("🔍 بدء التحليل متعدد الأطر الزمنية (v2.2.0 Enhanced)");
   console.log(`💰 السعر الحالي: ${currentPrice}`);
+  console.log(`⏰ الجلسة الحالية: ${killzoneInfo.session} (${killzoneInfo.quality})`);
+  console.log(`📊 ${killzoneInfo.description}`);
   console.log("═══════════════════════════════════════════════════════════════\n");
   
   const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
@@ -1009,25 +1391,31 @@ export const analyzeMultiTimeframe = async (
 ═══════════════════════════════════════════════════════════════
 - الزوج: XAUUSD
 - السعر الحالي: ${currentPrice}
+- الجلسة الحالية: ${killzoneInfo.session} (${killzoneInfo.isActive ? 'نشطة' : 'غير نشطة'})
+- جودة الجلسة: ${killzoneInfo.quality}
 
-الصورة 1: H1 (السياق الأساسي)
-الصورة 2: M5 (الدخول + السيولة الداخلية)
+الصورة 1: H1 (السياق الأساسي + تحديد الاتجاه)
+الصورة 2: M5 (الدخول + السيولة الداخلية + التأكيد)
 
 🔍 تعليمات مهمة جداً:
-1. انظر بعناية شديدة للشموع الأخيرة (آخر 10-20 شمعة)
-2. ابحث عن أي قمة أو قاع تم كسره مع ذيل طويل
-3. حتى لو كان الكسر صغير (5-20 نقطة) فهو sweep
-4. تحقق من وجود ذيول طويلة (wicks) عند القمم والقيعان
-5. إذا رأيت ذيل طويل عند قمة/قاع = هذا sweep محتمل
+1. حدد أولاً اتجاه H1 (صاعد/هابط/محايد) - هذا يحدد اتجاه الصفقة
+2. ابحث عن سحب سيولة (Sweep) على H1 أو M5
+3. تأكد من حدوث MSS/CHoCH بعد السحب (شرط الدخول)
+4. حدد منطقة الدخول (OB قوي أو FVG متميز)
+5. الدخول يكون بعد التأكيد (بعد الكسر) وليس قبله
 
-⚠️ تذكر:
-1. سحب السيولة إلزامي (H1 أولاً، M5 بديل)
-2. MSS إلزامي بعد السحب (mssOccurredAfterSweep = true)
-3. الدخول من FVG أو OB فقط
-4. BUY في Discount فقط، SELL في Premium فقط
-5. 3 أهداف (TP1, TP2, TP3) بنسب RR متصاعدة
+⚠️ معايير التحليل المتوازن:
+- Score >= 6.0 للقبول (لا نريد صارم جداً)
+- Confidence >= 65% (موثوقية جيدة)
+- RR >= 1.8 للهدف الأول
+- يجب توافق اتجاه الصفقة مع H1
 
-⚠️ إذا لم تجد sweep واضح، اشرح لماذا في reasoning
+📊 تقييم Order Block:
+- STRONG: لم يُختبر + حديث (< 20 شمعة) + مع FVG = ممتاز
+- MEDIUM: تم اختباره مرة أو < 50 شمعة = مقبول
+- WEAK: قديم أو مختبر عدة مرات = تجنب
+
+⚠️ إذا لم تجد sweep واضح أو لم يتوافق الاتجاه، اشرح لماذا في reasoning
 
 الرد JSON فقط وبالعربية فقط.
 `;
@@ -1126,10 +1514,14 @@ export const analyzeMultiTimeframe = async (
     console.log("\n🔍 بدء التحقق من الصحة...");
     const validated = validateAndFix(parsed, currentPrice);
     
+    // إضافة معلومات Killzone للنتيجة
+    validated.killzoneInfo = killzoneInfo;
+    
     console.log("\n✅ نتيجة التحقق النهائية:");
     console.log(`   القرار النهائي: ${validated.decision}`);
     console.log(`   التقييم النهائي: ${validated.score}/10`);
     console.log(`   الثقة النهائية: ${validated.confidence}%`);
+    console.log(`   ⏰ الجلسة: ${killzoneInfo.session} (${killzoneInfo.quality})`);
     
     if (validated.reasons && validated.reasons.length > 0) {
       console.log("\n📝 الأسباب التفصيلية:");
