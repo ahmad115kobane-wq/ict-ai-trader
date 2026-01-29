@@ -333,6 +333,10 @@
                 📋 عرض جميع Push Tokens
             </button>
 
+            <button class="btn btn-danger" onclick="clearAllTokens()" id="clearAllBtn" style="margin-top: 20px; background: linear-gradient(135deg, #dc2626, #991b1b);">
+                🗑️ حذف جميع Push Tokens (خطير!)
+            </button>
+
             <div class="loading" id="loading">
                 <div class="spinner"></div>
                 <p>جاري حذف Push Token...</p>
@@ -450,6 +454,77 @@
                     `;
                 }
             } catch (error) {
+                result.className = 'result error';
+                result.innerHTML = `
+                    <h3>❌ خطأ في الاتصال</h3>
+                    <p style="color: #fca5a5; margin-top: 10px;">${error.message}</p>
+                `;
+            }
+        }
+
+        async function clearAllTokens() {
+            if (!confirm('⚠️ هل أنت متأكد من حذف جميع Push Tokens؟\n\nسيتم حذف جميع Tokens من قاعدة البيانات!\nالمستخدمون سيحتاجون لإعادة تسجيل الدخول.')) {
+                return;
+            }
+
+            if (!confirm('⚠️⚠️ تأكيد نهائي!\n\nهذا الإجراء لا يمكن التراجع عنه!')) {
+                return;
+            }
+
+            const btn = document.getElementById('clearAllBtn');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+
+            result.style.display = 'none';
+            result.className = 'result';
+
+            loading.classList.add('active');
+            loading.querySelector('p').textContent = 'جاري حذف جميع Push Tokens...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/auth/clear-all-push-tokens', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                loading.classList.remove('active');
+                loading.querySelector('p').textContent = 'جاري حذف Push Token...';
+                btn.disabled = false;
+
+                if (data.success) {
+                    result.className = 'result success';
+                    result.innerHTML = `
+                        <h3>✅ تم حذف جميع Push Tokens بنجاح!</h3>
+                        <p style="color: #6ee7b7; margin: 15px 0;">
+                            تم حذف ${data.clearedCount} push token من أصل ${data.totalUsers} مستخدم.
+                        </p>
+                        <div style="background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3); margin-top: 15px;">
+                            <p style="color: #93c5fd; font-size: 0.95em; line-height: 1.6;">
+                                <strong>الخطوات التالية:</strong><br>
+                                1. ابني APK جديد مع Firebase الجديد<br>
+                                2. وزع APK على المستخدمين<br>
+                                3. عند فتح التطبيق، سيتم تسجيل Push Token جديد تلقائياً
+                            </p>
+                        </div>
+                        <pre style="margin-top: 15px;">${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    result.className = 'result error';
+                    result.innerHTML = `
+                        <h3>❌ فشل الحذف</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                loading.classList.remove('active');
+                loading.querySelector('p').textContent = 'جاري حذف Push Token...';
+                btn.disabled = false;
+
                 result.className = 'result error';
                 result.innerHTML = `
                     <h3>❌ خطأ في الاتصال</h3>
