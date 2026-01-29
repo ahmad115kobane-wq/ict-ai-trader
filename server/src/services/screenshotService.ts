@@ -239,7 +239,7 @@ function calculateLiquidityLevels(candles: Candle[]): LiquidityAnalysis {
   return result;
 }
 
-// دالة إنشاء HTML للرسم البياني مع مستويات السيولة
+// دالة إنشاء HTML للرسم البياني - محسن للذكاء الاصطناعي
 function createChartHTML(
   candles: Candle[],
   currentPrice: number,
@@ -261,28 +261,28 @@ function createChartHTML(
   const allPrices = visibleData.flatMap(d => [d.high, d.low]);
   const minPrice = Math.min(...allPrices);
   const maxPrice = Math.max(...allPrices);
-  const padding = (maxPrice - minPrice) * 0.05;
+  const padding = (maxPrice - minPrice) * 0.08;
   const min = minPrice - padding;
   const max = maxPrice + padding;
   const range = (max - min) || 0.01;
 
-  // إعدادات الرسم - جودة عالية
-  const chartWidth = 1794; // زيادة 10% إضافية (1631 * 1.10)
-  const chartHeight = 700;
-  const paddingTop = 80;
-  const paddingBottom = 80;
-  const paddingLeft = 100;
-  const paddingRight = 180;
-  const rightMargin = 40; // مسافة إضافية بعد آخر شمعة
+  // إعدادات الرسم - تصميم نظيف للذكاء الاصطناعي
+  const chartWidth = 1800;
+  const chartHeight = 750;
+  const paddingTop = 60;
+  const paddingBottom = 60;
+  const paddingLeft = 60;
+  const paddingRight = 140;
 
   const getY = (price: number) => paddingTop + ((max - price) / range) * chartHeight;
 
-  // حساب المساحة المتاحة للشموع مع ترك مسافة على اليمين
-  const chartAreaWidth = chartWidth - paddingLeft - paddingRight - rightMargin;
+  // حساب المساحة المتاحة للشموع
+  const chartAreaWidth = chartWidth - paddingLeft - paddingRight;
   const candleSpacing = chartAreaWidth / visibleData.length;
-  const candleWidth = Math.max(candleSpacing * 0.7, 4);
+  const candleWidth = Math.max(candleSpacing * 0.75, 6);
+  const wickWidth = Math.max(2, candleWidth * 0.15);
 
-  // بناء SVG للشموع - واضحة ومحسنة
+  // بناء SVG للشموع - واضحة جداً
   let candlesSVG = '';
   let wicksCount = 0;
 
@@ -291,9 +291,9 @@ function createChartHTML(
     const centerX = x + candleSpacing / 2;
     const isBullish = candle.close >= candle.open;
 
-    // ألوان واضحة
-    const bullColor = '#02b145e7';  // أخضر واضح
-    const bearColor = '#cc3c3cff';  // أحمر واضح
+    // ألوان عالية التباين
+    const bullColor = '#00FF00';  // أخضر ساطع
+    const bearColor = '#FF0000';  // أحمر ساطع
     const color = isBullish ? bullColor : bearColor;
 
     const openY = getY(candle.open);
@@ -303,213 +303,149 @@ function createChartHTML(
 
     const bodyTop = Math.min(openY, closeY);
     const bodyBottom = Math.max(openY, closeY);
-    const bodyHeight = Math.max(bodyBottom - bodyTop, 2);
+    const bodyHeight = Math.max(bodyBottom - bodyTop, 3);
 
-    // الفتيل العلوي - واضح
-    if (candle.high > Math.max(candle.open, candle.close)) {
-      candlesSVG += `
-        <line x1="${centerX}" y1="${highY}" x2="${centerX}" y2="${bodyTop}" 
-              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
-      wicksCount++;
-    }
+    // الفتيل (Wick) - خط واضح
+    candlesSVG += `
+      <line x1="${centerX}" y1="${highY}" x2="${centerX}" y2="${lowY}" 
+            stroke="${color}" stroke-width="${wickWidth}" stroke-linecap="round"/>`;
+    wicksCount++;
 
-    // الفتيل السفلي - واضح
-    if (candle.low < Math.min(candle.open, candle.close)) {
-      candlesSVG += `
-        <line x1="${centerX}" y1="${bodyBottom}" x2="${centerX}" y2="${lowY}" 
-              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
-      wicksCount++;
-    }
-
-    // جسم الشمعة - واضح وبسيط
+    // جسم الشمعة
     if (isBullish) {
-      // شمعة صاعدة - مجوفة
+      // شمعة صاعدة - مجوفة بحدود سميكة
       candlesSVG += `
         <rect x="${centerX - candleWidth / 2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
-              fill="white" stroke="${color}" stroke-width="2" rx="1"/>`;
+              fill="#0a0a0a" stroke="${color}" stroke-width="2.5"/>`;
     } else {
       // شمعة هابطة - مملوءة
       candlesSVG += `
         <rect x="${centerX - candleWidth / 2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" 
-              fill="${color}" stroke="${color}" stroke-width="1" rx="1"/>`;
-    }
-
-    // معالجة الشموع الصغيرة
-    if (Math.abs(candle.close - candle.open) < (maxPrice - minPrice) * 0.001) {
-      candlesSVG += `
-        <line x1="${centerX - candleWidth / 2}" y1="${(bodyTop + bodyBottom) / 2}" 
-              x2="${centerX + candleWidth / 2}" y2="${(bodyTop + bodyBottom) / 2}" 
-              stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+              fill="${color}" stroke="${color}" stroke-width="1"/>`;
     }
   });
 
   console.log(`📊 ${timeframe} - Drew ${wicksCount} wicks for ${visibleData.length} candles`);
 
-  // خطوط الشبكة والأسعار - تفاصيل أكثر
+  // خطوط الشبكة - واضحة ومنتظمة
   let gridLines = '';
   let priceLabels = '';
-
-  // نهاية منطقة الشموع (مع المسافة)
-  const candlesEndX = paddingLeft + chartAreaWidth;
-
-  // زيادة عدد الخطوط من 12 إلى 20 لتفاصيل أفضل
-  const gridCount = 20;
+  const gridCount = 12;
 
   for (let i = 0; i <= gridCount; i++) {
     const price = max - (range / gridCount) * i;
     const y = getY(price);
 
-    // الخطوط تنتهي عند نهاية منطقة الشموع
-    gridLines += `<line x1="${paddingLeft}" y1="${y}" x2="${candlesEndX}" y2="${y}" 
-                        stroke="rgba(255,255,255,0.15)" stroke-width="1"/>`;
+    // خطوط أفقية منقطة
+    gridLines += `<line x1="${paddingLeft}" y1="${y}" x2="${chartWidth - paddingRight}" y2="${y}" 
+                        stroke="#333333" stroke-width="1" stroke-dasharray="5,5"/>`;
 
-    priceLabels += `<text x="${chartWidth - paddingRight + 15}" y="${y + 6}" 
-                          fill="rgba(255,255,255,0.8)" font-size="16" font-weight="bold" font-family="Arial">
+    // أسعار واضحة على اليمين
+    priceLabels += `<text x="${chartWidth - paddingRight + 10}" y="${y + 5}" 
+                          fill="#FFFFFF" font-size="14" font-weight="bold" font-family="monospace">
                           ${price.toFixed(2)}
                     </text>`;
   }
 
-  // خط السعر الحالي - واضح
+  // خطوط عمودية كل 10 شموع
+  for (let i = 0; i <= visibleData.length; i += 10) {
+    const x = paddingLeft + i * candleSpacing;
+    gridLines += `<line x1="${x}" y1="${paddingTop}" x2="${x}" y2="${paddingTop + chartHeight}" 
+                        stroke="#222222" stroke-width="1"/>`;
+  }
+
+  // خط السعر الحالي - بارز جداً
   const currentPriceY = getY(currentPrice);
   const currentPriceLine = `
-    <line x1="${paddingLeft}" y1="${currentPriceY}" x2="${candlesEndX}" y2="${currentPriceY}" 
-          stroke="#fbbf24" stroke-width="3" stroke-dasharray="8,6"/>
-    <rect x="${chartWidth - paddingRight + 10}" y="${currentPriceY - 18}" width="120" height="36" 
-          fill="#fbbf24" rx="6"/>
-    <text x="${chartWidth - paddingRight + 70}" y="${currentPriceY + 8}" 
-          fill="#000" font-size="16" font-weight="bold" text-anchor="middle" font-family="Arial">
+    <line x1="${paddingLeft}" y1="${currentPriceY}" x2="${chartWidth - paddingRight}" y2="${currentPriceY}" 
+          stroke="#FFD700" stroke-width="2" stroke-dasharray="10,5"/>
+    <rect x="${chartWidth - paddingRight + 5}" y="${currentPriceY - 12}" width="90" height="24" 
+          fill="#FFD700" rx="4"/>
+    <text x="${chartWidth - paddingRight + 50}" y="${currentPriceY + 5}" 
+          fill="#000000" font-size="13" font-weight="bold" text-anchor="middle" font-family="monospace">
           ${currentPrice.toFixed(2)}
     </text>
   `;
 
-  // ✅ إزالة رسم مستويات السيولة من الرسم البياني
-  // تم إزالة رسم BSL، SSL، Swing Highs/Lows، Equal Highs/Lows، والـ Sweeps
-  // لأن المحلل الذكي سيحلل البيانات المالية مباشرة بدون رسومات
-  let liquidityLines = '';
-
-  // العنوان والمعلومات
-  const title = `${timeframe} Chart - XAUUSD`;
-  const info = `${visibleData.length} Candles (Target: ${candleCount}) | High: ${maxPrice.toFixed(2)} | Low: ${minPrice.toFixed(2)} | Current: ${currentPrice.toFixed(2)}`;
+  // معلومات الرسم البياني
+  const highLowInfo = `High: ${maxPrice.toFixed(2)} | Low: ${minPrice.toFixed(2)} | Range: ${(maxPrice - minPrice).toFixed(2)}`;
 
   return `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${title}</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             width: 100vw;
             height: 100vh;
-            background: linear-gradient(135deg, #0d1117 0%, #0a0e14 50%, #06080c 100%);
-            font-family: 'Arial', sans-serif;
-            color: white;
+            background: #0a0a0a;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
         }
-        .chart-container {
-            background: rgba(255,255,255,0.03);
-            border-radius: 16px;
-            padding: 30px;
-            border: 2px solid rgba(255,255,255,0.1);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-            backdrop-filter: blur(10px);
+        .chart-box {
+            background: #0a0a0a;
+            padding: 20px;
         }
-        .chart-title {
-            font-size: 32px;
+        .title {
+            color: #FFFFFF;
+            font-size: 24px;
             font-weight: bold;
-            color: #00C896;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+        .info {
+            color: #888888;
+            font-size: 14px;
+            font-family: monospace;
             text-align: center;
             margin-bottom: 15px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
-        .chart-info {
-            font-size: 18px;
-            color: rgba(255,255,255,0.8);
-            text-align: center;
-            margin-bottom: 25px;
-            font-weight: 500;
-        }
-        svg {
-            display: block;
-            margin: 0 auto;
-            border-radius: 8px;
-        }
-        .timeframe-badge {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: ${timeframe === 'H1' ? '#3b82f6' : '#8b5cf6'};
+        .badge {
+            display: inline-block;
+            background: ${timeframe === 'H1' ? '#0066FF' : '#9933FF'};
             color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 4px 12px;
+            border-radius: 4px;
             font-weight: bold;
-            font-size: 14px;
+            margin-right: 10px;
         }
     </style>
 </head>
 <body>
-    <div class="timeframe-badge">${timeframe}</div>
-    <div class="chart-container">
-        <div class="chart-title">${title}</div>
-        <div class="chart-info">${info}</div>
-        <svg width="${chartWidth}" height="${chartHeight + paddingTop + paddingBottom}" 
-             viewBox="0 0 ${chartWidth} ${chartHeight + paddingTop + paddingBottom}">
+    <div class="chart-box">
+        <div class="title">
+            <span class="badge">${timeframe}</span>
+            XAUUSD - ${visibleData.length} Candles
+        </div>
+        <div class="info">${highLowInfo}</div>
+        <svg width="${chartWidth}" height="${chartHeight + paddingTop + paddingBottom}">
             
-            <!-- تعريف التدرج -->
-            <defs>
-                <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:0.8" />
-                    <stop offset="50%" style="stop-color:#16213e;stop-opacity:0.6" />
-                    <stop offset="100%" style="stop-color:#0f172a;stop-opacity:0.8" />
-                </linearGradient>
-            </defs>
+            <!-- خلفية سوداء -->
+            <rect x="0" y="0" width="${chartWidth}" height="${chartHeight + paddingTop + paddingBottom}" fill="#0a0a0a"/>
             
-            <!-- خلفية الرسم البياني -->
+            <!-- منطقة الرسم -->
             <rect x="${paddingLeft}" y="${paddingTop}" 
-                  width="${chartAreaWidth}" 
-                  height="${chartHeight}" 
-                  fill="url(#bgGradient)" rx="8"/>
+                  width="${chartAreaWidth}" height="${chartHeight}" 
+                  fill="#0d0d0d" stroke="#333333" stroke-width="1"/>
             
-            <!-- خطوط الشبكة -->
+            <!-- الشبكة -->
             ${gridLines}
             
             <!-- الشموع -->
             ${candlesSVG}
             
-            <!-- ✅ تم إزالة رسومات السيولة - التحليل يتم باستخدام البيانات المالية مباشرة -->
-            ${liquidityLines}
-            
-            <!-- خط السعر الحالي -->
+            <!-- السعر الحالي -->
             ${currentPriceLine}
             
-            <!-- تسميات الأسعار -->
+            <!-- الأسعار -->
             ${priceLabels}
             
-            <!-- إطار الرسم البياني -->
-            <rect x="${paddingLeft}" y="${paddingTop}" 
-                  width="${chartAreaWidth}" 
-                  height="${chartHeight}" 
-                  fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" rx="8"/>
         </svg>
     </div>
-    
-    <script>
-        // تأكد من تحميل الصفحة بالكامل
-        window.addEventListener('load', function() {
-            console.log('Chart loaded successfully');
-            document.body.style.opacity = '1';
-        });
-    </script>
 </body>
 </html>
   `;
