@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إعداد بوت تليجرام</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0d1117 0%, #0a0e14 50%, #06080c 100%);
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .section {
+            background: rgba(255,255,255,0.02);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.3s;
+            width: 100%;
+        }
+        .btn:hover {
+            background: #059669;
+        }
+        .btn:disabled {
+            background: #6b7280;
+            cursor: not-allowed;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.05);
+            color: white;
+            font-size: 16px;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: none;
+        }
+        .status.success {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid #10b981;
+            display: block;
+        }
+        .status.error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid #ef4444;
+            display: block;
+        }
+        .status.info {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid #3b82f6;
+            display: block;
+        }
+        .code {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .step {
+            background: rgba(16, 185, 129, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #10b981;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 إعداد بوت تليجرام</h1>
+            <p>قم بإعداد webhook للبوت للبدء في استقبال الرسائل</p>
+        </div>
+
+        <div class="section">
+            <h2>📋 الخطوات المطلوبة:</h2>
+            
+            <div class="step">
+                <h3>1️⃣ تأكد من رفع السيرفر على Railway</h3>
+                <p>يجب أن يكون السيرفر يعمل على Railway أولاً</p>
+            </div>
+
+            <div class="step">
+                <h3>2️⃣ أدخل رابط السيرفر</h3>
+                <input type="text" id="serverUrl" placeholder="https://your-app.railway.app" />
+                <p style="font-size: 14px; opacity: 0.7;">مثال: https://ict-ai-trader.railway.app</p>
+            </div>
+
+            <div class="step">
+                <h3>3️⃣ اضغط على زر الإعداد</h3>
+                <button class="btn" onclick="setupWebhook()">🚀 إعداد Webhook</button>
+            </div>
+        </div>
+
+        <div id="statusDiv" class="status"></div>
+
+        <div class="section">
+            <h2>ℹ️ معلومات Webhook الحالي</h2>
+            <button class="btn" onclick="getWebhookInfo()">🔍 عرض معلومات Webhook</button>
+            <div id="webhookInfo" style="margin-top: 15px;"></div>
+        </div>
+
+        <div class="section">
+            <h2>🧪 اختبار البوت</h2>
+            <p>بعد إعداد الـ webhook، افتح تليجرام وابحث عن البوت الخاص بك وأرسل:</p>
+            <div class="code">/start</div>
+            <p>يجب أن يرد البوت بقائمة الباقات المتاحة</p>
+        </div>
+
+        <div class="section">
+            <h2>📝 ملاحظات مهمة:</h2>
+            <ul>
+                <li>تأكد من أن TELEGRAM_BOT_TOKEN موجود في ملف .env على Railway</li>
+                <li>الرابط يجب أن يكون HTTPS (Railway يوفر ذلك تلقائياً)</li>
+                <li>إذا لم يرد البوت، تحقق من logs على Railway</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function setupWebhook() {
+            const serverUrl = document.getElementById('serverUrl').value.trim();
+            const statusDiv = document.getElementById('statusDiv');
+            
+            if (!serverUrl) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ يرجى إدخال رابط السيرفر';
+                return;
+            }
+
+            // إزالة / من نهاية الرابط إن وجد
+            const cleanUrl = serverUrl.replace(/\/$/, '');
+            const webhookUrl = `${cleanUrl}/api/telegram/webhook`;
+
+            statusDiv.className = 'status info';
+            statusDiv.textContent = '⏳ جاري إعداد الـ webhook...';
+
+            try {
+                const response = await fetch(`${cleanUrl}/api/telegram/setup-webhook`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ webhookUrl })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = `
+                        ✅ تم إعداد الـ webhook بنجاح!<br>
+                        <strong>Webhook URL:</strong> ${webhookUrl}<br>
+                        <br>
+                        الآن يمكنك فتح تليجرام وإرسال /start للبوت
+                    `;
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = `❌ فشل الإعداد: ${data.error || 'خطأ غير معروف'}`;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = `❌ خطأ في الاتصال: ${error.message}`;
+            }
+        }
+
+        async function getWebhookInfo() {
+            const serverUrl = document.getElementById('serverUrl').value.trim();
+            const webhookInfoDiv = document.getElementById('webhookInfo');
+            
+            if (!serverUrl) {
+                alert('يرجى إدخال رابط السيرفر أولاً');
+                return;
+            }
+
+            const cleanUrl = serverUrl.replace(/\/$/, '');
+
+            try {
+                const response = await fetch(`${cleanUrl}/api/telegram/webhook-info`);
+                const data = await response.json();
+
+                if (data.success) {
+                    webhookInfoDiv.innerHTML = `
+                        <div class="code">
+                            <strong>URL:</strong> ${data.info.url || 'غير مُعد'}<br>
+                            <strong>Pending Updates:</strong> ${data.info.pending_update_count || 0}<br>
+                            <strong>Last Error:</strong> ${data.info.last_error_message || 'لا يوجد'}<br>
+                            <strong>Max Connections:</strong> ${data.info.max_connections || 40}
+                        </div>
+                    `;
+                } else {
+                    webhookInfoDiv.innerHTML = `<div class="status error">❌ فشل جلب المعلومات</div>`;
+                }
+            } catch (error) {
+                webhookInfoDiv.innerHTML = `<div class="status error">❌ خطأ: ${error.message}</div>`;
+            }
+        }
+
+        // تحميل الرابط من localStorage إن وجد
+        window.onload = function() {
+            const savedUrl = localStorage.getItem('serverUrl');
+            if (savedUrl) {
+                document.getElementById('serverUrl').value = savedUrl;
+            }
+        };
+
+        // حفظ الرابط في localStorage
+        document.getElementById('serverUrl').addEventListener('change', function() {
+            localStorage.setItem('serverUrl', this.value);
+        });
+    </script>
+</body>
+</html>
