@@ -117,10 +117,22 @@ TP3: ${trade.tp3}
           onCopy={() => copyToClipboard(trade.sl.toString())}
         />
         <LevelRow
-          label="TP"
+          label="TP1"
           value={trade.tp1.toString()}
           color={colors.success}
           onCopy={() => copyToClipboard(trade.tp1.toString())}
+        />
+        <LevelRow
+          label="TP2"
+          value={trade.tp2.toString()}
+          color={colors.success}
+          onCopy={() => copyToClipboard(trade.tp2.toString())}
+        />
+        <LevelRow
+          label="TP3"
+          value={trade.tp3.toString()}
+          color={colors.success}
+          onCopy={() => copyToClipboard(trade.tp3.toString())}
         />
         <View style={styles.rrRow}>
           <Text style={styles.rrValue}>{calculateRR()}</Text>

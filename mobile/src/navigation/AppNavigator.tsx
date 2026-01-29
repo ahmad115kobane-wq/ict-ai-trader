@@ -17,6 +17,7 @@ import RegisterScreen from '../screens/RegisterScreen';
 import HomeScreen from '../screens/HomeScreen';
 import TradesScreen from '../screens/TradesScreen';
 import SubscriptionScreen from '../screens/SubscriptionScreen';
+import FullChartScreen from '../screens/FullChartScreen';
 
 // أنواع المسارات
 export type AuthStackParamList = {
@@ -33,6 +34,7 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
+  FullChart: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -179,7 +181,17 @@ const AppNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
-          <Stack.Screen name="Main" component={MainTabNavigator} />
+          <>
+            <Stack.Screen name="Main" component={MainTabNavigator} />
+            <Stack.Screen 
+              name="FullChart" 
+              component={FullChartScreen}
+              options={{
+                animation: 'slide_from_bottom',
+                presentation: 'fullScreenModal',
+              }}
+            />
+          </>
         ) : (
           <Stack.Screen name="Auth" component={AuthNavigator} />
         )}

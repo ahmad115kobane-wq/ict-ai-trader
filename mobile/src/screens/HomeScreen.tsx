@@ -17,6 +17,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 import { useAuth } from '../context/AuthContext';
 import { analysisService, subscriptionService } from '../services/apiService';
@@ -28,6 +31,7 @@ import Header from '../components/Header';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const HomeScreen = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, refreshUser, logout } = useAuth();
   const chartWebViewRef = useRef<WebView>(null);
   const [currentPrice, setCurrentPrice] = useState<number>(0);
@@ -650,17 +654,14 @@ const HomeScreen = () => {
               </View>
             </View>
             <View style={styles.chartToolbarRight}>
-              <TouchableOpacity style={styles.chartToolButton} onPress={handleFitChart}>
-                <Ionicons name="scan-outline" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
               <TouchableOpacity style={styles.chartToolButton} onPress={handleGoToRealTime}>
                 <Ionicons name="locate-outline" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.chartToolButton}>
+              <TouchableOpacity 
+                style={styles.chartToolButton}
+                onPress={() => navigation.navigate('FullChart')}
+              >
                 <Ionicons name="expand-outline" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.chartToolButton}>
-                <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -692,7 +693,7 @@ const HomeScreen = () => {
             </View>
             <View style={styles.chartFooterRight}>
               <Ionicons name="analytics-outline" size={14} color={colors.primary} />
-              <Text style={styles.chartFooterText}>TradingView Data</Text>
+                <Text style={styles.chartFooterText}>ICT Trading Data</Text>
             </View>
           </View>
         </View>

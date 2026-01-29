@@ -17,7 +17,8 @@
       "bundleIdentifier": "com.ictaitrader.app",
       "infoPlist": {
         "UIBackgroundModes": [
-          "remote-notification"
+          "remote-notification",
+          "fetch"
         ]
       }
     },
@@ -31,9 +32,10 @@
         "INTERNET",
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "POST_NOTIFICATIONS"
       ],
-      "useNextNotificationsApi": true
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -48,12 +50,20 @@
           "androidCollapsedTitle": "ICT AI Trader"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "1881cacc-0c4d-4a83-a05e-19f20a07f2c0"
       }
+    },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#10b981",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "ICT AI Trader"
     }
   }
 }

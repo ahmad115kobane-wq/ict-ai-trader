@@ -166,7 +166,7 @@ const TradesScreen = () => {
               <Text style={[styles.levelLabel, { color: colors.error }]}>SL</Text>
             </View>
 
-            {/* TP */}
+            {/* TP1 */}
             <View style={styles.levelRow}>
               <TouchableOpacity
                 style={styles.copyButton}
@@ -175,7 +175,31 @@ const TradesScreen = () => {
                 <Ionicons name="copy-outline" size={18} color={colors.textMuted} />
               </TouchableOpacity>
               <Text style={[styles.levelValue, { color: colors.success }]}>{trade.tp1}</Text>
-              <Text style={[styles.levelLabel, { color: colors.success }]}>TP</Text>
+              <Text style={[styles.levelLabel, { color: colors.success }]}>TP1</Text>
+            </View>
+
+            {/* TP2 */}
+            <View style={styles.levelRow}>
+              <TouchableOpacity
+                style={styles.copyButton}
+                onPress={() => copyToClipboard(trade.tp2.toString())}
+              >
+                <Ionicons name="copy-outline" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+              <Text style={[styles.levelValue, { color: colors.success }]}>{trade.tp2}</Text>
+              <Text style={[styles.levelLabel, { color: colors.success }]}>TP2</Text>
+            </View>
+
+            {/* TP3 */}
+            <View style={styles.levelRow}>
+              <TouchableOpacity
+                style={styles.copyButton}
+                onPress={() => copyToClipboard(trade.tp3.toString())}
+              >
+                <Ionicons name="copy-outline" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+              <Text style={[styles.levelValue, { color: colors.success }]}>{trade.tp3}</Text>
+              <Text style={[styles.levelLabel, { color: colors.success }]}>TP3</Text>
             </View>
 
             {/* RR Ratio */}

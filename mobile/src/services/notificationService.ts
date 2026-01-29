@@ -1,5 +1,5 @@
 // src/services/notificationService.ts
-// خدمة الإشعارات للتطبيق
+// خدمة الإشعارات للتطبيق - محسّنة
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -7,12 +7,13 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { authService } from './apiService';
 
-// إعدادات الإشعارات
+// إعدادات الإشعارات - عرض دائماً مع صوت
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    priority: Notifications.AndroidNotificationPriority.MAX,
   }),
 });
 
@@ -22,14 +23,16 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
 
   // التحقق من أن الجهاز حقيقي (ليس محاكي)
   if (!Device.isDevice) {
-    console.log('Push notifications require a physical device');
+    console.log('⚠️ Push notifications require a physical device');
     return null;
   }
 
-  // إنشاء قناة للإشعارات على Android
+  // إنشاء قنوات للإشعارات على Android
   if (Platform.OS === 'android') {
+    // قناة رئيسية لتنبيهات التداول
     await Notifications.setNotificationChannelAsync('trade-alerts-v2', {
       name: 'تنبيهات التداول',
+      description: 'إشعارات فرص التداول الجديدة',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#10b981',
@@ -39,32 +42,66 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       bypassDnd: true,
     });
+
+    // قناة للتحديثات العامة
+    await Notifications.setNotificationChannelAsync('general', {
+      name: 'تحديثات عامة',
+      description: 'إشعارات النظام والتحديثات',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 100, 100, 100],
+      lightColor: '#3b82f6',
+      sound: 'default',
+    });
+
+    console.log('✅ Android notification channels created');
   }
 
   // التحقق من صلاحيات الإشعارات
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
+  console.log('📋 Current notification permission status:', existingStatus);
+
   if (existingStatus !== 'granted') {
+    console.log('🔔 Requesting notification permissions...');
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
+    console.log('📋 New notification permission status:', status);
   }
 
   if (finalStatus !== 'granted') {
-    console.log('Push notification permissions not granted');
+    console.log('❌ Push notification permissions not granted');
     return null;
   }
 
   // الحصول على توكن Expo Push
   try {
+    // جلب projectId من إعدادات التطبيق
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    
+    if (!projectId) {
+      console.error('❌ No projectId found in app.json extra.eas.projectId');
+      return null;
+    }
+
+    console.log('🔑 Using projectId:', projectId);
+
     const pushTokenData = await Notifications.getExpoPushTokenAsync({
       projectId: projectId,
     });
+    
     token = pushTokenData.data;
-    console.log('Push token:', token);
+    console.log('✅ Push token obtained:', token);
+    
+    // التحقق من صحة التوكن
+    if (!token || !token.startsWith('ExponentPushToken[')) {
+      console.error('❌ Invalid push token format:', token);
+      return null;
+    }
+    
   } catch (error) {
-    console.error('Error getting push token:', error);
+    console.error('❌ Error getting push token:', error);
+    return null;
   }
 
   return token;
