@@ -1650,6 +1650,8 @@ ${candleDataText}
 `;
 
   try {
+    // ✅ إرسال الصورتين معاً مع بيانات الشموع الرقمية في طلب واحد
+    // الصورة 1 (H1) + الصورة 2 (M5) + البيانات النصية (السعر + الشموع)
     const data = await callAIChat({
       messages: [{
         role: "user",
@@ -1903,6 +1905,7 @@ export const followUpTrade = async (
       ).join('\n');
     }
 
+    // ✅ إرسال الصورتين معاً مع بيانات الشموع في طلب واحد للمتابعة
     const data = await callAIChat({
       messages: [{
         role: "user",

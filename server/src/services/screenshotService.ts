@@ -52,7 +52,7 @@ const BROWSER_CONFIG = {
 const SCREENSHOT_CONFIG = {
   width: 2093,  // زيادة 10% إضافية (1903 * 1.10)
   height: 900,
-  deviceScaleFactor: 1,  // جودة عادية (1x resolution) - أداء أفضل
+  deviceScaleFactor: 2,  // جودة عالية (2x resolution) - دقة أفضل للتحليل
   type: 'png' as const,
   quality: 100,  // أقصى جودة للصورة
   fullPage: false
@@ -549,7 +549,7 @@ async function captureChartFromBrowser(
   throw new Error(`Failed to capture ${timeframe} screenshot`);
 }
 
-// دالة التقاط الصورتين من المتصفح - محسنة للموارد المحدودة (تسلسلي)
+// دالة التقاط الصورتين من المتصفح - محسنة للجودة العالية (متوازي مع fallback)
 export const captureRealChartScreenshots = async (
   h1Candles: Candle[],
   m5Candles: Candle[],
@@ -557,32 +557,49 @@ export const captureRealChartScreenshots = async (
   h1CandleCount: number = 100,
   m5CandleCount: number = 140
 ): Promise<{ h1Image: string; m5Image: string }> => {
-  console.log(`🎯 Starting sequential browser-based chart screenshot capture...`);
+  console.log(`🎯 Starting browser-based chart screenshot capture...`);
   console.log(`📊 Target H1: ${h1CandleCount}, Target M5: ${m5CandleCount}`);
 
-  let h1Image: string = '';
-  let m5Image: string = '';
-
   try {
-    // التقاط الصورتين بشكل تسلسلي لتوفير الذاكرة
-    console.log(`📊 Capturing H1 chart first...`);
-    h1Image = await captureChartFromBrowser(h1Candles, currentPrice, 'H1', h1CandleCount);
+    // محاولة التقاط الصورتين بشكل متوازي أولاً لأداء أفضل
+    console.log(`📊 Attempting parallel capture of H1 and M5 charts...`);
+    const [h1Image, m5Image] = await Promise.all([
+      captureChartFromBrowser(h1Candles, currentPrice, 'H1', h1CandleCount),
+      captureChartFromBrowser(m5Candles, currentPrice, 'M5', m5CandleCount)
+    ]);
+
     console.log(`✅ H1 captured: ${h1Image.length} chars`);
-
-    // انتظار قليل للسماح بتحرير الذاكرة
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    console.log(`📊 Capturing M5 chart...`);
-    m5Image = await captureChartFromBrowser(m5Candles, currentPrice, 'M5', m5CandleCount);
     console.log(`✅ M5 captured: ${m5Image.length} chars`);
-
-    console.log(`🎉 Both browser screenshots captured successfully!`);
+    console.log(`🎉 Both browser screenshots captured successfully in parallel!`);
 
     return { h1Image, m5Image };
 
-  } catch (error) {
-    console.error(`❌ Browser screenshot capture failed:`, error);
-    throw new Error(`Screenshot capture failed: ${(error as Error).message}`);
+  } catch (parallelError) {
+    // في حالة فشل التقاط متوازي (ربما بسبب محدودية الذاكرة)، نحاول تسلسلي
+    console.warn(`⚠️ Parallel capture failed, falling back to sequential capture...`);
+    console.warn(`   Error: ${(parallelError as Error).message}`);
+
+    try {
+      // التقاط الصورة الأولى
+      console.log(`📊 Capturing H1 chart (sequential fallback)...`);
+      const h1Image = await captureChartFromBrowser(h1Candles, currentPrice, 'H1', h1CandleCount);
+      console.log(`✅ H1 captured: ${h1Image.length} chars`);
+
+      // انتظار قليل للسماح بتحرير الذاكرة
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // التقاط الصورة الثانية
+      console.log(`📊 Capturing M5 chart (sequential fallback)...`);
+      const m5Image = await captureChartFromBrowser(m5Candles, currentPrice, 'M5', m5CandleCount);
+      console.log(`✅ M5 captured: ${m5Image.length} chars`);
+
+      console.log(`🎉 Both screenshots captured successfully (sequential fallback)!`);
+      return { h1Image, m5Image };
+
+    } catch (sequentialError) {
+      console.error(`❌ Browser screenshot capture failed:`, sequentialError);
+      throw new Error(`Screenshot capture failed: ${(sequentialError as Error).message}`);
+    }
   }
 };
 
