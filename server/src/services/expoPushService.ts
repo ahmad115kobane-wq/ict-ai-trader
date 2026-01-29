@@ -1,35 +1,19 @@
 // services/expoPushService.ts
 // خدمة Expo Push Notifications المتقدمة مع دعم الإشعارات المستمرة
-// يدعم FCM V1 API مع Service Account
+// يعمل بدون Firebase Server Key - يستخدم Expo's Push Service مباشرة
 
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 
-// إعداد Expo SDK مع دعم FCM V1 API
-let expo: Expo;
+// إنشاء instance من Expo SDK
+// ملاحظة: Expo SDK يعمل بدون Firebase credentials في Production
+// يستخدم Expo's Push Notification Service المجاني
+const expo = new Expo({
+  // لا نحتاج accessToken أو useFcmV1
+  // Expo سيستخدم خدمته المجانية تلقائياً
+});
 
-try {
-  // محاولة استخدام Service Account من Environment Variable
-  const serviceAccountJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-  
-  if (serviceAccountJson) {
-    console.log('🔑 Using FCM V1 API with Service Account');
-    const serviceAccount = JSON.parse(serviceAccountJson);
-    
-    expo = new Expo({
-      accessToken: undefined, // سيستخدم Service Account تلقائياً
-      useFcmV1: true, // تفعيل FCM V1 API
-    });
-    
-    console.log('✅ Expo SDK initialized with FCM V1 API');
-  } else {
-    console.log('⚠️ No Service Account found, using Legacy API');
-    expo = new Expo();
-  }
-} catch (error) {
-  console.error('❌ Error initializing Expo SDK:', error);
-  console.log('⚠️ Falling back to Legacy API');
-  expo = new Expo();
-}
+console.log('✅ Expo SDK initialized (using Expo Push Service)');
+console.log('📱 No Firebase Server Key required');
 
 // إرسال إشعارات Push للمستخدمين مع دعم الإشعارات المستمرة
 export const sendPushNotifications = async (
