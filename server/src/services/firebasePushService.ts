@@ -37,77 +37,43 @@ const initializeFirebase = () => {
   }
 };
 
-// تحويل Expo Push Token إلى FCM Token
-const expoPushTokenToFcmToken = (expoPushToken: string): string | null => {
-  // Expo Push Token format: ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]
-  // نحتاج استخراج الجزء الداخلي فقط
-  const match = expoPushToken.match(/ExponentPushToken\[(.*?)\]/);
-  if (match && match[1]) {
-    return match[1];
-  }
-  return null;
-};
+// ملاحظة: Expo Push Tokens لا يمكن استخدامها مباشرة مع Firebase Admin SDK
+// Expo Push Tokens تعمل فقط مع Expo Push Service
+// لذلك سنستخدم Expo SDK مع FCM credentials بدلاً من Firebase Admin SDK
 
-// إرسال إشعار واحد باستخدام Firebase Admin SDK
+// إرسال إشعار واحد باستخدام Expo SDK (يدعم FCM V1 تلقائياً)
 export const sendFirebasePushNotification = async (
   expoPushToken: string,
   title: string,
   body: string,
   data?: Record<string, any>
 ): Promise<{ success: boolean; error?: string }> => {
-  if (!initializeFirebase()) {
-    return { success: false, error: 'Firebase not initialized' };
-  }
-
+  // استخدام Expo SDK بدلاً من Firebase Admin SDK
+  // Expo SDK يتعامل مع FCM credentials تلقائياً من google-services.json
+  const { sendPushNotifications } = await import('./expoPushService');
+  
   try {
-    // تحويل Expo Token إلى FCM Token
-    const fcmToken = expoPushTokenToFcmToken(expoPushToken);
-    
-    if (!fcmToken) {
-      console.error('❌ Invalid Expo Push Token format:', expoPushToken);
-      return { success: false, error: 'Invalid token format' };
-    }
-
-    // إنشاء رسالة FCM
-    const message: admin.messaging.Message = {
-      token: fcmToken,
-      notification: {
-        title,
-        body,
-      },
-      data: data ? Object.fromEntries(
-        Object.entries(data).map(([key, value]) => [key, String(value)])
-      ) : undefined,
-      android: {
+    const result = await sendPushNotifications(
+      [expoPushToken],
+      title,
+      body,
+      data,
+      {
         priority: 'high',
-        notification: {
-          channelId: 'trade-alerts-v2',
-          priority: 'max',
-          defaultSound: true,
-          defaultVibrateTimings: true,
-          visibility: 'public',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            alert: {
-              title,
-              body,
-            },
-            sound: 'default',
-            badge: 1,
-          },
-        },
-      },
-    };
-
-    // إرسال الإشعار
-    const response = await admin.messaging().send(message);
-    console.log('✅ Firebase push notification sent:', response);
-    return { success: true };
+        sound: 'default',
+        badge: 1,
+      }
+    );
+    
+    if (result.success) {
+      console.log('✅ Push notification sent via Expo SDK');
+      return { success: true };
+    } else {
+      console.error('❌ Push notification failed via Expo SDK');
+      return { success: false, error: 'Failed to send via Expo SDK' };
+    }
   } catch (error: any) {
-    console.error('❌ Error sending Firebase push notification:', error);
+    console.error('❌ Error sending push notification:', error);
     return { success: false, error: error.message };
   }
 };
@@ -119,34 +85,45 @@ export const sendFirebasePushNotifications = async (
   body: string,
   data?: Record<string, any>
 ): Promise<{ success: boolean; successCount: number; failureCount: number }> => {
-  if (!initializeFirebase()) {
-    return { success: false, successCount: 0, failureCount: expoPushTokens.length };
+  // استخدام Expo SDK مباشرة
+  const { sendPushNotifications } = await import('./expoPushService');
+  
+  console.log(`📱 Sending ${expoPushTokens.length} push notifications via Expo SDK...`);
+
+  try {
+    const result = await sendPushNotifications(
+      expoPushTokens,
+      title,
+      body,
+      data,
+      {
+        priority: 'high',
+        sound: 'default',
+        badge: 1,
+      }
+    );
+    
+    const successCount = result.success ? expoPushTokens.length : 0;
+    const failureCount = result.success ? 0 : expoPushTokens.length;
+    
+    console.log(`📊 Push results: ${successCount} success, ${failureCount} failed`);
+    
+    return {
+      success: result.success,
+      successCount,
+      failureCount,
+    };
+  } catch (error) {
+    console.error('❌ Error sending push notifications:', error);
+    return {
+      success: false,
+      successCount: 0,
+      failureCount: expoPushTokens.length,
+    };
   }
-
-  let successCount = 0;
-  let failureCount = 0;
-
-  console.log(`📱 Sending ${expoPushTokens.length} Firebase push notifications...`);
-
-  for (const token of expoPushTokens) {
-    const result = await sendFirebasePushNotification(token, title, body, data);
-    if (result.success) {
-      successCount++;
-    } else {
-      failureCount++;
-    }
-  }
-
-  console.log(`📊 Firebase push results: ${successCount} success, ${failureCount} failed`);
-
-  return {
-    success: successCount > 0,
-    successCount,
-    failureCount,
-  };
 };
 
-// إرسال إشعار صفقة باستخدام Firebase
+// إرسال إشعار صفقة باستخدام Expo SDK
 export const sendFirebaseTradeNotification = async (
   expoPushTokens: string[],
   trade: {
@@ -161,29 +138,22 @@ export const sendFirebaseTradeNotification = async (
   score: number,
   currentPrice: number
 ): Promise<boolean> => {
-  const isBuy = trade.type.includes('BUY');
-  const emoji = isBuy ? '🟢' : '🔴';
-  const direction = isBuy ? 'شراء' : 'بيع';
-
-  const title = `${emoji} فرصة ${direction} على الذهب!`;
-  const body = `💰 الدخول: ${trade.entry.toFixed(2)} | 🛑 SL: ${trade.sl.toFixed(2)} | ✅ TP1: ${trade.tp1.toFixed(2)} | TP2: ${trade.tp2.toFixed(2)} | TP3: ${trade.tp3.toFixed(2)} | ⭐ التقييم: ${score}/10`;
-
-  const data = {
-    type: 'trade_opportunity',
-    tradeType: trade.type,
-    entry: trade.entry.toString(),
-    sl: trade.sl.toString(),
-    tp1: trade.tp1.toString(),
-    tp2: trade.tp2.toString(),
-    tp3: trade.tp3.toString(),
-    rrRatio: trade.rrRatio || '',
-    score: score.toString(),
-    currentPrice: currentPrice.toString(),
-    timestamp: Date.now().toString(),
-  };
-
-  const result = await sendFirebasePushNotifications(expoPushTokens, title, body, data);
-  return result.success;
+  // استخدام Expo SDK مباشرة
+  const { sendTradeNotification } = await import('./expoPushService');
+  
+  try {
+    const success = await sendTradeNotification(
+      expoPushTokens,
+      trade,
+      score,
+      currentPrice
+    );
+    
+    return success;
+  } catch (error) {
+    console.error('❌ Error sending trade notification:', error);
+    return false;
+  }
 };
 
 // التحقق من صحة Expo Push Token
