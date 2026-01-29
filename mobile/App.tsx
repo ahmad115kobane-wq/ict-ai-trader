@@ -25,11 +25,36 @@ const NotificationHandler = () => {
   const responseListener = useRef<Notifications.Subscription>();
   const appState = useRef(AppState.currentState);
   const [lastNotification, setLastNotification] = useState<Notifications.Notification | null>(null);
+  const hasSetupNotifications = useRef(false); // منع التكرار
 
   // تسجيل Push Token
   const setupPushNotifications = async () => {
+    // منع التكرار
+    if (hasSetupNotifications.current) {
+      console.log('🔔 Notifications already setup, skipping...');
+      return;
+    }
+    hasSetupNotifications.current = true;
+
     try {
       console.log('🔔 Setting up push notifications...');
+      
+      // طلب أذونات الإشعارات بشكل صريح على Android 13+
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        console.log('📱 Android 13+ detected - requesting explicit notification permission');
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('⚠️ Notification permission not granted');
+          Alert.alert(
+            'تنبيه الإشعارات',
+            'يجب السماح بالإشعارات لتلقي تنبيهات التداول الفورية',
+            [{ text: 'حسناً' }]
+          );
+          return;
+        }
+        console.log('✅ Notification permission granted');
+      }
+      
       const token = await registerForPushNotificationsAsync();
       
       if (token) {
@@ -42,17 +67,16 @@ const NotificationHandler = () => {
         }
       } else {
         console.log('⚠️ No push token obtained - notifications may not work');
-        // عرض تنبيه للمستخدم
-        if (Platform.OS !== 'web') {
-          Alert.alert(
-            'تنبيه الإشعارات',
-            'لم يتم الحصول على صلاحيات الإشعارات. يرجى تفعيلها من إعدادات الجهاز لتلقي إشعارات الصفقات.',
-            [{ text: 'حسناً', style: 'default' }]
-          );
-        }
+        // إظهار تنبيه للمستخدم
+        Alert.alert(
+          'تنبيه',
+          'لم يتم الحصول على توكن الإشعارات. قد لا تعمل الإشعارات بشكل صحيح.',
+          [{ text: 'حسناً' }]
+        );
       }
     } catch (error) {
       console.error('❌ Error setting up push notifications:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
     }
   };
 

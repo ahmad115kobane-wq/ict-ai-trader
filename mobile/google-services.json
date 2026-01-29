@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "54550042245",
-    "project_id": "aaaaaa-34f8a",
-    "storage_bucket": "aaaaaa-34f8a.firebasestorage.app"
+    "project_number": "306089278559",
+    "project_id": "icti-34ac0",
+    "storage_bucket": "icti-34ac0.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:54550042245:android:f870b3854206605e64fbec",
+        "mobilesdk_app_id": "1:306089278559:android:722917f5b0977e8dea2fea",
         "android_client_info": {
           "package_name": "com.ictaitrader.app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyA8VK02ApjXb0mqetdH_pz4CghlhlxA8JI"
+          "current_key": "AIzaSyAgjOmn2XiGRkd38vQpzWe5rxNh_TfqZkE"
         }
       ],
       "services": {

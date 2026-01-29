@@ -74,16 +74,11 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
     return null;
   }
 
-  // الحصول على توكن Expo Push
+  // الحصول على توكن Expo Push - محسّن للإنتاج
   try {
-    // جلب projectId من إعدادات التطبيق
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    // استخدام projectId الثابت مباشرة (يعمل في Expo Go والإنتاج)
+    const projectId = '1881cacc-0c4d-4a83-a05e-19f20a07f2c0';
     
-    if (!projectId) {
-      console.error('❌ No projectId found in app.json extra.eas.projectId');
-      return null;
-    }
-
     console.log('🔑 Using projectId:', projectId);
 
     const pushTokenData = await Notifications.getExpoPushTokenAsync({
@@ -101,6 +96,7 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
     
   } catch (error) {
     console.error('❌ Error getting push token:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     return null;
   }
 

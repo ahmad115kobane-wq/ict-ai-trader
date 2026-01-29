@@ -519,6 +519,38 @@ router.get('/list-push-tokens', async (req: Request, res: Response) => {
   }
 });
 
+// مسح جميع Push Tokens (لحل مشكلة Firebase Project القديم)
+router.post('/clear-all-push-tokens', async (req: Request, res: Response) => {
+  try {
+    const { getAllUsers, removeUserPushToken } = require('../db/index');
+    const users = await getAllUsers();
+    
+    let clearedCount = 0;
+    const usersWithTokens = users.filter((u: any) => u.push_token);
+    
+    for (const user of usersWithTokens) {
+      const success = await removeUserPushToken(user.id);
+      if (success) {
+        clearedCount++;
+        console.log(`🗑️ Cleared push token for user: ${user.email}`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `تم مسح ${clearedCount} push token بنجاح`,
+      clearedCount,
+      totalUsers: usersWithTokens.length
+    });
+  } catch (error) {
+    console.error('Clear all push tokens error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'خطأ في مسح Push Tokens' 
+    });
+  }
+});
+
 // إنهاء جميع الجلسات الأخرى
 router.post('/terminate-other-sessions', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
