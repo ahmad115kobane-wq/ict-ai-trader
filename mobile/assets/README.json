@@ -1,0 +1,13 @@
+{
+  "assets": {
+    "icon.png": "يجب إضافة صورة بحجم 1024x1024 بكسل",
+    "splash.png": "يجب إضافة صورة Splash بحجم 1284x2778 بكسل",
+    "adaptive-icon.png": "يجب إضافة صورة بحجم 1024x1024 بكسل",
+    "notification-icon.png": "يجب إضافة صورة بحجم 96x96 بكسل",
+    "favicon.png": "يجب إضافة صورة بحجم 48x48 بكسل"
+  },
+  "instructions": {
+    "ar": "قم بإنشاء هذه الصور واستبدل هذا الملف بها",
+    "en": "Create these images and replace this file with them"
+  }
+}

@@ -1596,16 +1596,16 @@ export const analyzeMultiTimeframe = async (
   // إضافة بيانات الشموع إلى التحليل إذا كانت متاحة
   let candleDataText = '';
   if (h1Candles && h1Candles.length > 0) {
-    const recentH1 = h1Candles.slice(-20); // آخر 20 شمعة للإطار الساعي
-    candleDataText += '\n\n📊 بيانات شموع H1 (آخر 20 شمعة):\n';
+    const recentH1 = h1Candles.slice(-30); // آخر 30 شمعة للإطار الساعي
+    candleDataText += '\n\n📊 بيانات شموع H1 (آخر 30 شمعة):\n';
     candleDataText += recentH1.map((c, i) => 
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
   }
   
   if (m5Candles && m5Candles.length > 0) {
-    const recentM5 = m5Candles.slice(-30); // آخر 30 شمعة لإطار 5 دقائق
-    candleDataText += '\n\n📊 بيانات شموع M5 (آخر 30 شمعة):\n';
+    const recentM5 = m5Candles.slice(-70); // آخر 70 شمعة لإطار 5 دقائق
+    candleDataText += '\n\n📊 بيانات شموع M5 (آخر 70 شمعة):\n';
     candleDataText += recentM5.map((c, i) => 
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
