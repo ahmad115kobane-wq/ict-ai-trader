@@ -532,10 +532,7 @@ async function captureChartFromBrowser(
       console.log(`📸 Starting ${timeframe} chart capture... (attempt ${retryCount + 1})`);
 
       // إنشاء متصفح جديد لكل عملية تصوير
-      browser = await puppeteer.launch({
-        ...BROWSER_CONFIG,
-        headless: 'new' // استخدام الوضع الجديد
-      });
+      browser = await puppeteer.launch(BROWSER_CONFIG);
       page = await browser.newPage();
 
       // تعيين حجم الصفحة
