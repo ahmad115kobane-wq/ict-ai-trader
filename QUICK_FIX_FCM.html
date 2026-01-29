@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔥 حل سريع - تفعيل FCM Legacy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            direction: rtl;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .status {
+            background: #f0f9ff;
+            border-right: 5px solid #3b82f6;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+        }
+        .status.error {
+            background: #fef2f2;
+            border-right-color: #ef4444;
+        }
+        .status.success {
+            background: #f0fdf4;
+            border-right-color: #10b981;
+        }
+        .step {
+            background: #f9fafb;
+            padding: 25px;
+            margin: 20px 0;
+            border-radius: 15px;
+            border: 2px solid #e5e7eb;
+        }
+        .step h2 {
+            color: #667eea;
+            font-size: 1.8em;
+            margin-bottom: 15px;
+        }
+        .step p {
+            font-size: 1.2em;
+            line-height: 1.8;
+            color: #374151;
+            margin: 10px 0;
+        }
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-size: 1.3em;
+            font-weight: bold;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        .button.secondary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .code {
+            background: #1f2937;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+        .token {
+            background: #fef3c7;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 1.1em;
+            word-break: break-all;
+            border: 2px solid #f59e0b;
+        }
+        .center {
+            text-align: center;
+        }
+        .emoji {
+            font-size: 3em;
+            margin: 20px 0;
+        }
+        ul {
+            margin: 15px 0;
+            padding-right: 30px;
+        }
+        li {
+            font-size: 1.2em;
+            line-height: 2;
+            color: #374151;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="center">
+            <div class="emoji">🔥</div>
+            <h1>حل سريع - تفعيل FCM Legacy</h1>
+        </div>
+
+        <div class="status success">
+            <h3>✅ الوضع الحالي:</h3>
+            <ul>
+                <li>APK الجديد مثبت</li>
+                <li>Push Token مسجل بنجاح</li>
+                <li>Firebase Project الجديد جاهز</li>
+            </ul>
+        </div>
+
+        <div class="status error">
+            <h3>❌ المشكلة:</h3>
+            <p><strong>Firebase Cloud Messaging API (Legacy) غير مفعّل</strong></p>
+            <div class="code">
+Unable to retrieve the FCM server key for the recipient's app
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>1️⃣ افتح Firebase Console</h2>
+            <p>اضغط على الزر أدناه للذهاب مباشرة إلى إعدادات Cloud Messaging:</p>
+            <div class="center">
+                <a href="https://console.firebase.google.com/project/icti-34ac0/settings/cloudmessaging" 
+                   target="_blank" 
+                   class="button">
+                    🚀 فتح Firebase Console
+                </a>
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>2️⃣ فعّل Legacy API</h2>
+            <p>في صفحة Cloud Messaging، ستجد قسمين:</p>
+            <ul>
+                <li><strong>Firebase Cloud Messaging API (V1)</strong> - مفعّل ✅</li>
+                <li><strong>Cloud Messaging API (Legacy)</strong> - غير مفعّل ❌</li>
+            </ul>
+            <p><strong>اضغط على زر "Enable" في القسم الثاني (Legacy)</strong></p>
+        </div>
+
+        <div class="step">
+            <h2>3️⃣ اختبر الإشعارات</h2>
+            <p>بعد التفعيل، اختبر الإشعارات باستخدام Expo Push Tool:</p>
+            <div class="center">
+                <a href="https://expo.dev/notifications" 
+                   target="_blank" 
+                   class="button secondary">
+                    🧪 اختبار الإشعارات
+                </a>
+            </div>
+            <p style="margin-top: 20px;"><strong>استخدم هذا Token:</strong></p>
+            <div class="token">
+                ExponentPushToken[TX5fpqIRn6hgRU30hV6eBD]
+            </div>
+        </div>
+
+        <div class="status success">
+            <h3>✅ النتيجة المتوقعة:</h3>
+            <ul>
+                <li>الإشعارات تصل بنجاح</li>
+                <li>صوت + اهتزاز</li>
+                <li>تظهر حتى عند إغلاق التطبيق</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h2>⚠️ ملاحظة مهمة</h2>
+            <p><strong>لا تحتاج:</strong></p>
+            <ul>
+                <li>❌ تغيير أي كود</li>
+                <li>❌ إعادة بناء APK</li>
+                <li>❌ إعادة تسجيل الدخول</li>
+            </ul>
+            <p><strong>فقط تفعيل Legacy API وانتهى!</strong> 🎉</p>
+        </div>
+
+        <div class="center" style="margin-top: 40px;">
+            <p style="color: #6b7280; font-size: 1.1em;">
+                📊 Project ID: <strong>icti-34ac0</strong><br>
+                📱 Package: <strong>com.ictaitrader.app</strong><br>
+                🔑 Project Number: <strong>306089278559</strong>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -84,15 +84,16 @@ node test-push-notification.js ExponentPushToken[xxx] trade
 
 ## 🚀 الخطوات التالية (مهم جداً!)
 
-### 1️⃣ تفعيل Firebase Cloud Messaging
+### 1️⃣ تفعيل Firebase Cloud Messaging (Legacy API)
 **هذه الخطوة ضرورية!**
 
-1. افتح: https://console.firebase.google.com/
-2. اختر مشروع: `aaaaaa-34f8a`
-3. اذهب إلى: **Project Settings** > **Cloud Messaging**
-4. تأكد من تفعيل: **Cloud Messaging API (Legacy)**
+1. افتح: https://console.firebase.google.com/project/icti-34ac0/settings/cloudmessaging
+2. في قسم **Cloud Messaging API (Legacy)** - اضغط **Enable**
+3. انتهى! ✅
 
 ⚠️ **بدون هذه الخطوة، الإشعارات لن تعمل في الإنتاج!**
+
+📄 **دليل مفصل**: راجع ملف `تفعيل_FCM_Legacy.md` أو افتح `QUICK_FIX_FCM.html`
 
 ---
 

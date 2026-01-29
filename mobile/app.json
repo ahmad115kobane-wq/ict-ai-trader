@@ -37,9 +37,8 @@
         "SCHEDULE_EXACT_ALARM",
         "USE_EXACT_ALARM"
       ],
-      "versionCode": 3,
-      "googleServicesFile": "./google-services.json",
-      "useNextNotificationsApi": true
+      "versionCode": 4,
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
