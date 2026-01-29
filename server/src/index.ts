@@ -345,20 +345,22 @@ app.get('/send-test-trade', async (req, res) => {
     let pushSent = 0;
     try {
       const { getUsersWithPushTokens } = await import('./db/index');
-      const { sendTradeNotification } = await import('./services/expoPushService');
+      const { sendFirebaseTradeNotification } = await import('./services/firebasePushService');
 
       const usersWithTokens = await getUsersWithPushTokens();
       const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
 
       if (pushTokens.length > 0) {
-        await sendTradeNotification(
+        const success = await sendFirebaseTradeNotification(
           pushTokens,
           { ...mockAnalysis.suggestedTrade, rrRatio: String(mockAnalysis.suggestedTrade.rrRatio) },
           mockAnalysis.score,
           currentPrice
         );
-        pushSent = pushTokens.length;
-        console.log(`📱 Push notifications sent to ${pushTokens.length} devices`);
+        if (success) {
+          pushSent = pushTokens.length;
+          console.log(`📱 Firebase push notifications sent to ${pushTokens.length} devices`);
+        }
       } else {
         console.log('📱 No push tokens registered');
       }

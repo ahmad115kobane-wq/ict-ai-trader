@@ -2,6 +2,7 @@
 // خدمة الإشعارات للمستخدمين
 
 import { sendTradeSignal } from './telegramService';
+import { sendFirebaseTradeNotification } from './firebasePushService';
 
 // إعدادات Telegram Bot (اختيارية)
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
@@ -55,8 +56,11 @@ export const notifyTradeOpportunity = async (analysis: any, currentPrice: number
     
     console.log(`📱 Sending trade signal to ${users.length} users with auto analysis enabled`);
     
+    // جمع Push Tokens للإشعارات
+    const pushTokens: string[] = [];
+    
     for (const user of users) {
-      // البحث عن telegram chat_id للمستخدم
+      // إرسال إلى Telegram
       if (user.email && user.email.startsWith('telegram_')) {
         const telegramId = user.email.replace('telegram_', '').replace('@ict-trader.local', '');
         
@@ -74,9 +78,31 @@ export const notifyTradeOpportunity = async (analysis: any, currentPrice: number
         
         console.log(`✅ Trade signal sent to Telegram user: ${telegramId}`);
       }
+      
+      // جمع Push Tokens
+      if (user.push_token) {
+        pushTokens.push(user.push_token);
+      }
+    }
+    
+    // إرسال Push Notifications باستخدام Firebase Admin SDK
+    if (pushTokens.length > 0) {
+      console.log(`📱 Sending Firebase push notifications to ${pushTokens.length} devices`);
+      const success = await sendFirebaseTradeNotification(
+        pushTokens,
+        trade,
+        analysis.score || 0,
+        currentPrice
+      );
+      
+      if (success) {
+        console.log(`✅ Firebase push notifications sent successfully`);
+      } else {
+        console.log(`⚠️ Some Firebase push notifications failed`);
+      }
     }
   } catch (error) {
-    console.error('❌ Error sending trade signals to Telegram:', error);
+    console.error('❌ Error sending trade signals:', error);
   }
 
   console.log('📱 Trade opportunity notification sent');
