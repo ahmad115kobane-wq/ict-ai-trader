@@ -16,7 +16,7 @@ import { ICTAnalysis, ManagementAdvice, KillzoneInfo } from "../types";
 
 declare const process: any;
 
-console.log("🚀 aiService v3.2.0 loaded - AI Balanced Mode");
+console.log("🚀 aiService v3.3.0 loaded - AI Balanced with Smart Strictness");
 
 // ===================== API Config =====================
 const API_KEY = process?.env?.OLLAMA_API_KEY || process?.env?.AI_API_KEY || "YOUR_API_KEY";

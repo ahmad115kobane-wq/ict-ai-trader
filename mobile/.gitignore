@@ -30,6 +30,10 @@ yarn-error.*
 .env*.local
 .env
 
+# Firebase Service Account (sensitive!)
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+
 # typescript
 *.tsbuildinfo
 
