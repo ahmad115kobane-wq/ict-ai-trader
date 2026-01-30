@@ -405,7 +405,7 @@ app.get('/send-test-trade', async (req, res) => {
   }
 });
 
-// Send manual trade - نفس send-test-trade لكن مع إدخال يدوي
+// Send manual trade - بدون مصادقة
 app.post('/send-manual-trade', async (req, res) => {
   try {
     console.log('📝 Sending manual trade...');
@@ -419,20 +419,10 @@ app.post('/send-manual-trade', async (req, res) => {
       tp3,
       score,
       confidence,
-      reasoning,
-      adminKey
+      reasoning
     } = req.body;
 
-    // التحقق من المفتاح الإداري
-    const ADMIN_KEY = process.env.ADMIN_KEY || 'admin123';
-    if (adminKey !== ADMIN_KEY) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid admin key'
-      });
-    }
-
-    // التحقق من البيانات
+    // التحقق من البيانات فقط
     if (!type || !entry || !sl || !tp1 || !tp2 || !tp3) {
       return res.status(400).json({
         success: false,

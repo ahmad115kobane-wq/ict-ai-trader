@@ -239,28 +239,17 @@
                 📤 إرسال الصفقة
             </button>
         </form>
-        
-        <button type="button" id="resetBtn" style="width: 100%; padding: 12px; background: #dc3545; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px;">
-            🔄 إعادة تعيين كلمة المرور
-        </button>
 
         <div class="message" id="message"></div>
     </div>
 
     <script>
         const API_URL = window.location.origin;
-        let token = localStorage.getItem('token');
-        
-        console.log('🔑 Current token:', token);
 
         // تحميل السعر الحالي
         async function loadCurrentPrice() {
             try {
-                const response = await fetch(`${API_URL}/api/analysis/current-price`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+                const response = await fetch(`${API_URL}/api/analysis/current-price`);
                 const data = await response.json();
                 if (data.success) {
                     document.getElementById('currentPrice').textContent = 
@@ -282,22 +271,21 @@
             submitBtn.textContent = '⏳ جاري الإرسال...';
             message.style.display = 'none';
 
-            const tradeData = {
-                type: document.getElementById('type').value,
-                entry: parseFloat(document.getElementById('entry').value),
-                sl: parseFloat(document.getElementById('sl').value),
-                tp1: parseFloat(document.getElementById('tp1').value),
-                tp2: parseFloat(document.getElementById('tp2').value),
-                tp3: parseFloat(document.getElementById('tp3').value),
-                score: parseInt(document.getElementById('score').value),
-                confidence: parseInt(document.getElementById('confidence').value),
-                reasoning: document.getElementById('reasoning').value || 'صفقة يدوية',
-                adminKey: token || 'admin123'  // استخدام token أو admin123 كافتراضي
-            };
-            
-            console.log('🔑 Token being sent:', token);
-            console.log('📤 Trade data:', tradeData);
+            try {
+                const tradeData = {
+                    type: document.getElementById('type').value,
+                    entry: parseFloat(document.getElementById('entry').value),
+                    sl: parseFloat(document.getElementById('sl').value),
+                    tp1: parseFloat(document.getElementById('tp1').value),
+                    tp2: parseFloat(document.getElementById('tp2').value),
+                    tp3: parseFloat(document.getElementById('tp3').value),
+                    score: parseInt(document.getElementById('score').value),
+                    confidence: parseInt(document.getElementById('confidence').value),
+                    reasoning: document.getElementById('reasoning').value || 'صفقة يدوية'
+                };
                 
+                console.log('📤 Sending trade data:', tradeData);
+                    
                 const response = await fetch(`${API_URL}/send-manual-trade`, {
                     method: 'POST',
                     headers: {
@@ -334,32 +322,11 @@
             }
         });
 
-        // التحقق من تسجيل الدخول
-        if (!token) {
-            const password = prompt('أدخل كلمة المرور:');
-            if (password === 'admin123') {
-                // حفظ كلمة المرور نفسها كـ token
-                token = password;
-                localStorage.setItem('token', token);
-            } else {
-                alert('كلمة مرور خاطئة');
-                window.location.href = '/';
-            }
-        }
-
         // تحميل السعر عند فتح الصفحة
         loadCurrentPrice();
 
         // تحديث السعر كل 30 ثانية
         setInterval(loadCurrentPrice, 30000);
-        
-        // زر إعادة التعيين
-        document.getElementById('resetBtn').addEventListener('click', function() {
-            if (confirm('هل تريد إعادة تعيين كلمة المرور؟')) {
-                localStorage.clear();
-                location.reload();
-            }
-        });
     </script>
 </body>
 </html>
