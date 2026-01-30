@@ -192,136 +192,6 @@ async function fetchFromTradingEconomics(): Promise<EconomicEvent[]> {
   }
 }
 
-// ===================== Investing.com Alternative =====================
-// استخدام بيانات وهمية واقعية كمثال
-function getMockEconomicEvents(): EconomicEvent[] {
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  return [
-    // أحداث صدرت بالأمس (لها نتائج فعلية)
-    {
-      id: 'nfp_yesterday_' + yesterday.toISOString(),
-      date: yesterday.toISOString().split('T')[0],
-      time: '15:30',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'الوظائف غير الزراعية',
-      impact: 'high',
-      forecast: '180K',
-      previous: '175K',
-      actual: '185K' // النتيجة الفعلية
-    },
-    {
-      id: 'cpi_yesterday_' + yesterday.toISOString(),
-      date: yesterday.toISOString().split('T')[0],
-      time: '15:30',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'مؤشر أسعار المستهلك',
-      impact: 'high',
-      forecast: '3.2%',
-      previous: '3.1%',
-      actual: '3.3%' // النتيجة الفعلية
-    },
-    {
-      id: 'gdp_yesterday_' + yesterday.toISOString(),
-      date: yesterday.toISOString().split('T')[0],
-      time: '15:30',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'الناتج المحلي الإجمالي',
-      impact: 'high',
-      forecast: '2.5%',
-      previous: '2.4%',
-      actual: '2.6%' // النتيجة الفعلية
-    },
-    // أحداث اليوم (بعضها صدر والبعض لم يصدر)
-    {
-      id: 'retail_today_' + today.toISOString(),
-      date: today.toISOString().split('T')[0],
-      time: '10:30',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'مبيعات التجزئة',
-      impact: 'medium',
-      forecast: '0.3%',
-      previous: '0.2%',
-      actual: '0.4%' // صدر
-    },
-    {
-      id: 'unemployment_today_' + today.toISOString(),
-      date: today.toISOString().split('T')[0],
-      time: '15:30',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'معدل البطالة',
-      impact: 'high',
-      forecast: '3.7%',
-      previous: '3.8%'
-      // لم يصدر بعد - لا توجد actual
-    },
-    {
-      id: 'pmi_today_' + today.toISOString(),
-      date: today.toISOString().split('T')[0],
-      time: '16:45',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'مؤشر مديري المشتريات الصناعي',
-      impact: 'medium',
-      forecast: '52.5',
-      previous: '52.3'
-      // لم يصدر بعد
-    },
-    // أحداث غداً (لم تصدر)
-    {
-      id: 'fomc_' + tomorrow.toISOString(),
-      date: tomorrow.toISOString().split('T')[0],
-      time: '21:00',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'قرار سعر الفائدة الفيدرالي',
-      impact: 'high',
-      forecast: '5.50%',
-      previous: '5.50%'
-    },
-    {
-      id: 'ecb_' + tomorrow.toISOString(),
-      date: tomorrow.toISOString().split('T')[0],
-      time: '14:45',
-      country: 'EU',
-      countryName: 'منطقة اليورو',
-      currency: 'EUR',
-      event: 'قرار سعر الفائدة الأوروبي',
-      impact: 'high',
-      forecast: '4.00%',
-      previous: '4.00%'
-    },
-    {
-      id: 'jobless_' + tomorrow.toISOString(),
-      date: tomorrow.toISOString().split('T')[0],
-      time: '15:30',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'طلبات إعانة البطالة الأولية',
-      impact: 'medium',
-      forecast: '220K',
-      previous: '215K'
-    }
-  ];
-}
-
 // ===================== Main Functions =====================
 
 /**
@@ -353,10 +223,26 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
       events = await fetchFromTradingEconomics();
     }
 
-    // إذا فشلت جميع المصادر، استخدم البيانات الوهمية
+    // إذا فشلت جميع المصادر، إرجاع قائمة فارغة
     if (events.length === 0) {
-      console.log('⚠️ All sources failed, using mock data with actual results');
-      events = getMockEconomicEvents();
+      console.error('❌ All data sources failed - no economic events available');
+      
+      // إرجاع الـ cache القديم إذا كان موجوداً
+      if (cachedEvents.length > 0) {
+        console.log('⚠️ Using old cached data');
+        return {
+          success: true,
+          events: cachedEvents,
+          lastUpdate: new Date(lastFetchTime).toISOString()
+        };
+      }
+      
+      // لا توجد بيانات على الإطلاق
+      return {
+        success: false,
+        events: [],
+        lastUpdate: new Date().toISOString()
+      };
     }
 
     // ترتيب حسب التاريخ والوقت
@@ -383,6 +269,7 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
     
     // إرجاع الـ cache القديم إذا كان موجوداً
     if (cachedEvents.length > 0) {
+      console.log('⚠️ Error occurred, using cached data');
       return {
         success: true,
         events: cachedEvents,
@@ -390,10 +277,10 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
       };
     }
 
-    // إرجاع بيانات وهمية كحل أخير
+    // لا توجد بيانات
     return {
       success: false,
-      events: getMockEconomicEvents(),
+      events: [],
       lastUpdate: new Date().toISOString()
     };
   }
