@@ -396,6 +396,185 @@ app.get('/send-test-trade', async (req, res) => {
   }
 });
 
+// Send manual trade - نفس send-test-trade لكن مع إدخال يدوي
+app.post('/send-manual-trade', async (req, res) => {
+  try {
+    console.log('📝 Sending manual trade...');
+
+    const {
+      type,
+      entry,
+      sl,
+      tp1,
+      tp2,
+      tp3,
+      score,
+      confidence,
+      reasoning,
+      adminKey
+    } = req.body;
+
+    // التحقق من المفتاح الإداري
+    const ADMIN_KEY = process.env.ADMIN_KEY || 'admin123';
+    if (adminKey !== ADMIN_KEY) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid admin key'
+      });
+    }
+
+    // التحقق من البيانات
+    if (!type || !entry || !sl || !tp1 || !tp2 || !tp3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields'
+      });
+    }
+
+    // الحصول على السعر الحالي
+    const symbol = 'XAUUSD';
+    let currentPrice = 2687.25;
+
+    try {
+      currentPrice = await getCurrentPrice(symbol);
+      console.log(`💰 Current price fetched: ${currentPrice}`);
+    } catch (priceError) {
+      console.log('⚠️ Could not fetch current price, using default');
+    }
+
+    // حساب RR
+    const risk = Math.abs(entry - sl);
+    const rr1 = Math.abs(tp1 - entry) / risk;
+    const rr2 = Math.abs(tp2 - entry) / risk;
+    const rr3 = Math.abs(tp3 - entry) / risk;
+    const rrRatio = `TP1: 1:${rr1.toFixed(1)} | TP2: 1:${rr2.toFixed(1)} | TP3: 1:${rr3.toFixed(1)}`;
+
+    // إنشاء الصفقة
+    const manualAnalysis = {
+      decision: 'PLACE_PENDING',
+      score: score || 8,
+      confidence: confidence || 80,
+      reasoning: reasoning || 'صفقة يدوية من الإدارة',
+      bias: type.includes('BUY') ? 'Bullish setup' : 'Bearish setup',
+      suggestedTrade: {
+        type,
+        entry: parseFloat(entry),
+        sl: parseFloat(sl),
+        tp1: parseFloat(tp1),
+        tp2: parseFloat(tp2),
+        tp3: parseFloat(tp3),
+        rrRatio,
+        expiryMinutes: 60
+      },
+      reasons: []
+    };
+
+    // تحديث lastAnalysisResult و lastAnalysisTime
+    lastAnalysisResult = {
+      decision: manualAnalysis.decision,
+      score: manualAnalysis.score,
+      confidence: manualAnalysis.confidence,
+      price: currentPrice,
+      suggestedTrade: manualAnalysis.suggestedTrade,
+      reasoning: manualAnalysis.reasoning
+    };
+    lastAnalysisTime = new Date();
+
+    // تحديث المتغيرات المصدرة
+    module.exports.lastAnalysisResult = lastAnalysisResult;
+    module.exports.lastAnalysisTime = lastAnalysisTime;
+
+    console.log('✅ Manual trade created and stored in lastAnalysisResult');
+    console.log(`📊 Type: ${manualAnalysis.suggestedTrade.type}`);
+    console.log(`💰 Entry: ${manualAnalysis.suggestedTrade.entry}`);
+    console.log(`🛑 SL: ${manualAnalysis.suggestedTrade.sl}`);
+    console.log(`✅ TP1: ${manualAnalysis.suggestedTrade.tp1}`);
+    console.log(`✅ TP2: ${manualAnalysis.suggestedTrade.tp2}`);
+    console.log(`✅ TP3: ${manualAnalysis.suggestedTrade.tp3}`);
+    console.log(`⏰ Mobile app will receive this in next poll (within 10 seconds)`);
+
+    // حفظ في قاعدة البيانات لجميع المستخدمين المشتركين
+    let savedCount = 0;
+    try {
+      const { getUsersWithAutoAnalysisEnabled } = await import('./db/index');
+      const usersWithAutoAnalysis = await getUsersWithAutoAnalysisEnabled();
+
+      for (const user of usersWithAutoAnalysis) {
+        const manualAnalysisId = uuidv4();
+        saveEnhancedAnalysis(
+          manualAnalysisId,
+          user.id,
+          symbol,
+          currentPrice,
+          manualAnalysis,
+          'auto'
+        );
+        savedCount++;
+      }
+      console.log(`💾 Manual trade saved for ${savedCount} users`);
+    } catch (saveError) {
+      console.error('❌ Failed to save manual trade:', saveError);
+    }
+
+    // إرسال إشعار Telegram
+    try {
+      const { notifyTradeOpportunity } = await import('./services/notificationService');
+      await notifyTradeOpportunity(manualAnalysis, currentPrice);
+      console.log('📱 Telegram notification sent');
+    } catch (notificationError) {
+      console.log('⚠️ Telegram notification skipped (not configured)');
+    }
+
+    // إرسال Push Notifications
+    let pushSent = 0;
+    try {
+      const { getUsersWithPushTokens } = await import('./db/index');
+      const { sendFirebaseTradeNotification } = await import('./services/firebasePushService');
+
+      const usersWithTokens = await getUsersWithPushTokens();
+      const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
+
+      if (pushTokens.length > 0) {
+        const success = await sendFirebaseTradeNotification(
+          pushTokens,
+          { ...manualAnalysis.suggestedTrade, rrRatio: String(manualAnalysis.suggestedTrade.rrRatio) },
+          manualAnalysis.score,
+          currentPrice
+        );
+        if (success) {
+          pushSent = pushTokens.length;
+          console.log(`📱 Firebase push notifications sent to ${pushTokens.length} devices`);
+        }
+      } else {
+        console.log('📱 No push tokens registered');
+      }
+    } catch (pushError) {
+      console.error('❌ Push notification failed:', pushError);
+    }
+
+    res.json({
+      success: true,
+      message: `Manual trade sent! Push sent to ${pushSent} devices.`,
+      trade: {
+        analysis: manualAnalysis,
+        currentPrice,
+        timestamp: lastAnalysisTime.toISOString(),
+        userCount: savedCount,
+        pushSent,
+        note: 'This trade is now stored in lastAnalysisResult and will be picked up by mobile app'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Send manual trade failed:', error);
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+      message: 'Failed to send manual trade'
+    });
+  }
+});
+
 // Debug endpoint - لفحص المستخدمين في قاعدة البيانات
 app.get('/debug-users', async (req, res) => {
   try {
