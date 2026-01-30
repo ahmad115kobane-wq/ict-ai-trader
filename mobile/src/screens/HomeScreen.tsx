@@ -740,6 +740,25 @@ const HomeScreen = () => {
           </View>
         </View>
 
+        {/* Economic Calendar Button */}
+        <TouchableOpacity
+          style={styles.economicCalendarButton}
+          onPress={() => navigation.navigate('EconomicCalendar')}
+        >
+          <View style={styles.economicCalendarContent}>
+            <View style={styles.economicCalendarIcon}>
+              <Ionicons name="calendar" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.economicCalendarText}>
+              <Text style={styles.economicCalendarTitle}>التقويم الاقتصادي</Text>
+              <Text style={styles.economicCalendarSubtitle}>
+                الأحداث الاقتصادية المؤثرة على الأسواق
+              </Text>
+            </View>
+            <Ionicons name="chevron-back" size={20} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
@@ -1025,6 +1044,42 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     fontWeight: '600',
     textAlign: 'right',
+  },
+  economicCalendarButton: {
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.sm,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    overflow: 'hidden',
+  },
+  economicCalendarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  economicCalendarIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  economicCalendarText: {
+    flex: 1,
+  },
+  economicCalendarTitle: {
+    color: colors.text,
+    fontSize: fontSizes.md,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  economicCalendarSubtitle: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.sm,
   },
   bottomSpacer: {
     height: 100, // مسافة إضافية لشريط التنقل العائم
