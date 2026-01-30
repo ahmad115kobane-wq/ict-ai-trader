@@ -46,30 +46,101 @@ const countryNames: { [key: string]: string } = {
 
 // ترجمة الأحداث الشائعة
 const eventTranslations: { [key: string]: string } = {
+  // أحداث التوظيف
   'Non-Farm Payrolls': 'الوظائف غير الزراعية',
   'Unemployment Rate': 'معدل البطالة',
+  'ADP Employment': 'تقرير التوظيف ADP',
+  'Initial Jobless Claims': 'طلبات إعانة البطالة الأولية',
+  'Continuing Jobless Claims': 'طلبات إعانة البطالة المستمرة',
+  'Employment Change': 'التغير في التوظيف',
+  'Unemployment Claims': 'طلبات البطالة',
+  
+  // التضخم والأسعار
   'CPI': 'مؤشر أسعار المستهلك',
   'Core CPI': 'مؤشر أسعار المستهلك الأساسي',
+  'PPI': 'مؤشر أسعار المنتجين',
+  'Core PPI': 'مؤشر أسعار المنتجين الأساسي',
+  'Inflation Rate': 'معدل التضخم',
+  'Consumer Price Index': 'مؤشر أسعار المستهلك',
+  'Producer Price Index': 'مؤشر أسعار المنتجين',
+  
+  // الناتج المحلي
   'GDP': 'الناتج المحلي الإجمالي',
+  'GDP Growth Rate': 'معدل نمو الناتج المحلي',
+  'Preliminary GDP': 'الناتج المحلي الأولي',
+  'Final GDP': 'الناتج المحلي النهائي',
+  'GDP Annualized': 'الناتج المحلي السنوي',
+  
+  // أسعار الفائدة والبنوك المركزية
   'Interest Rate Decision': 'قرار سعر الفائدة',
   'FOMC': 'اجتماع الفيدرالي الأمريكي',
+  'FOMC Meeting': 'اجتماع الفيدرالي الأمريكي',
+  'Fed Interest Rate Decision': 'قرار الفائدة الفيدرالي',
   'ECB': 'البنك المركزي الأوروبي',
+  'ECB Interest Rate Decision': 'قرار الفائدة الأوروبي',
+  'BOE Interest Rate Decision': 'قرار الفائدة البريطاني',
+  'BOJ Interest Rate Decision': 'قرار الفائدة الياباني',
+  'Fed Chair Speech': 'خطاب رئيس الفيدرالي',
+  'ECB President Speech': 'خطاب رئيس البنك المركزي الأوروبي',
+  'FOMC Minutes': 'محضر اجتماع الفيدرالي',
+  'Monetary Policy Statement': 'بيان السياسة النقدية',
+  
+  // المبيعات والإنفاق
   'Retail Sales': 'مبيعات التجزئة',
+  'Core Retail Sales': 'مبيعات التجزئة الأساسية',
+  'Consumer Spending': 'الإنفاق الاستهلاكي',
+  'Personal Spending': 'الإنفاق الشخصي',
+  'Durable Goods Orders': 'طلبات السلع المعمرة',
+  'Factory Orders': 'طلبات المصانع',
+  
+  // مؤشرات PMI
   'Manufacturing PMI': 'مؤشر مديري المشتريات الصناعي',
   'Services PMI': 'مؤشر مديري المشتريات الخدمي',
-  'Trade Balance': 'الميزان التجاري',
-  'Consumer Confidence': 'ثقة المستهلك',
-  'Industrial Production': 'الإنتاج الصناعي',
-  'Building Permits': 'تصاريح البناء',
-  'Housing Starts': 'بدء البناء السكني',
-  'PPI': 'مؤشر أسعار المنتجين',
-  'Initial Jobless Claims': 'طلبات إعانة البطالة الأولية',
-  'Durable Goods Orders': 'طلبات السلع المعمرة',
+  'Composite PMI': 'مؤشر مديري المشتريات المركب',
   'ISM Manufacturing': 'مؤشر ISM الصناعي',
   'ISM Services': 'مؤشر ISM الخدمي',
-  'ADP Employment': 'تقرير التوظيف ADP',
-  'Fed Chair Speech': 'خطاب رئيس الفيدرالي',
-  'ECB President Speech': 'خطاب رئيس البنك المركزي الأوروبي'
+  'ISM Non-Manufacturing': 'مؤشر ISM غير الصناعي',
+  
+  // التجارة والميزان
+  'Trade Balance': 'الميزان التجاري',
+  'Current Account': 'الحساب الجاري',
+  'Exports': 'الصادرات',
+  'Imports': 'الواردات',
+  
+  // الثقة والمعنويات
+  'Consumer Confidence': 'ثقة المستهلك',
+  'Business Confidence': 'ثقة الأعمال',
+  'Consumer Sentiment': 'معنويات المستهلك',
+  'ZEW Economic Sentiment': 'مؤشر ZEW للمعنويات الاقتصادية',
+  
+  // الإنتاج والصناعة
+  'Industrial Production': 'الإنتاج الصناعي',
+  'Manufacturing Production': 'الإنتاج الصناعي',
+  'Capacity Utilization': 'معدل استغلال الطاقة',
+  
+  // البناء والإسكان
+  'Building Permits': 'تصاريح البناء',
+  'Housing Starts': 'بدء البناء السكني',
+  'New Home Sales': 'مبيعات المنازل الجديدة',
+  'Existing Home Sales': 'مبيعات المنازل القائمة',
+  'Pending Home Sales': 'مبيعات المنازل المعلقة',
+  'Construction Spending': 'الإنفاق على البناء',
+  
+  // أخرى
+  'Crude Oil Inventories': 'مخزونات النفط الخام',
+  'Natural Gas Storage': 'مخزونات الغاز الطبيعي',
+  'Baker Hughes Oil Rig Count': 'عدد منصات النفط',
+  'Beige Book': 'الكتاب البيج',
+  'Nonfarm Productivity': 'إنتاجية القطاع غير الزراعي',
+  'Unit Labor Costs': 'تكاليف العمالة',
+  'Wholesale Inventories': 'مخزونات الجملة',
+  'Business Inventories': 'مخزونات الأعمال',
+  'Chicago PMI': 'مؤشر شيكاغو PMI',
+  'Dallas Fed Manufacturing Index': 'مؤشر دالاس الصناعي',
+  'Philadelphia Fed Manufacturing Index': 'مؤشر فيلادلفيا الصناعي',
+  'NY Empire State Manufacturing Index': 'مؤشر نيويورك الصناعي',
+  'Richmond Fed Manufacturing Index': 'مؤشر ريتشموند الصناعي',
+  'Kansas City Fed Manufacturing Index': 'مؤشر كانساس الصناعي',
 };
 
 // ===================== Forex Factory API =====================
@@ -320,16 +391,120 @@ export async function getUpcomingEvents(hoursAhead = 24): Promise<EconomicEvent[
 // ===================== Helper Functions =====================
 
 function translateEvent(eventName: string): string {
-  // البحث عن ترجمة مباشرة
+  if (!eventName) return 'حدث اقتصادي';
+  
+  // البحث عن ترجمة مباشرة (مطابقة كاملة)
   if (eventTranslations[eventName]) {
     return eventTranslations[eventName];
   }
 
-  // البحث عن ترجمة جزئية
+  // البحث عن ترجمة جزئية (يحتوي على)
   for (const [key, value] of Object.entries(eventTranslations)) {
-    if (eventName.includes(key)) {
+    if (eventName.toLowerCase().includes(key.toLowerCase())) {
       return value;
     }
+  }
+
+  // محاولة ترجمة الكلمات الشائعة
+  let translated = eventName;
+  
+  // استبدال الكلمات الشائعة
+  const commonWords: { [key: string]: string } = {
+    'Preliminary': 'أولي',
+    'Final': 'نهائي',
+    'Revised': 'منقح',
+    'Flash': 'سريع',
+    'Forecast': 'توقعات',
+    'Actual': 'فعلي',
+    'Previous': 'سابق',
+    'Change': 'تغير',
+    'Rate': 'معدل',
+    'Index': 'مؤشر',
+    'Report': 'تقرير',
+    'Data': 'بيانات',
+    'Release': 'إصدار',
+    'Statement': 'بيان',
+    'Minutes': 'محضر',
+    'Speech': 'خطاب',
+    'Conference': 'مؤتمر',
+    'Meeting': 'اجتماع',
+    'Decision': 'قرار',
+    'Announcement': 'إعلان',
+    'Sales': 'مبيعات',
+    'Orders': 'طلبات',
+    'Production': 'إنتاج',
+    'Spending': 'إنفاق',
+    'Income': 'دخل',
+    'Price': 'سعر',
+    'Prices': 'أسعار',
+    'Growth': 'نمو',
+    'Inflation': 'تضخم',
+    'Employment': 'توظيف',
+    'Unemployment': 'بطالة',
+    'Jobs': 'وظائف',
+    'Payrolls': 'رواتب',
+    'Claims': 'طلبات',
+    'Balance': 'ميزان',
+    'Trade': 'تجارة',
+    'Exports': 'صادرات',
+    'Imports': 'واردات',
+    'Confidence': 'ثقة',
+    'Sentiment': 'معنويات',
+    'Manufacturing': 'صناعي',
+    'Services': 'خدمي',
+    'Composite': 'مركب',
+    'Consumer': 'مستهلك',
+    'Producer': 'منتج',
+    'Business': 'أعمال',
+    'Industrial': 'صناعي',
+    'Retail': 'تجزئة',
+    'Wholesale': 'جملة',
+    'Housing': 'إسكان',
+    'Building': 'بناء',
+    'Construction': 'إنشاءات',
+    'Permits': 'تصاريح',
+    'Starts': 'بدء',
+    'Inventories': 'مخزونات',
+    'Capacity': 'طاقة',
+    'Utilization': 'استغلال',
+    'Durable': 'معمرة',
+    'Goods': 'سلع',
+    'Core': 'أساسي',
+    'Crude': 'خام',
+    'Oil': 'نفط',
+    'Natural Gas': 'غاز طبيعي',
+    'Fed': 'الفيدرالي',
+    'Federal': 'فيدرالي',
+    'Central Bank': 'البنك المركزي',
+    'Interest': 'فائدة',
+    'Monetary': 'نقدي',
+    'Policy': 'سياسة',
+    'GDP': 'الناتج المحلي',
+    'CPI': 'مؤشر أسعار المستهلك',
+    'PPI': 'مؤشر أسعار المنتجين',
+    'PMI': 'مؤشر مديري المشتريات',
+    'ISM': 'ISM',
+    'ADP': 'ADP',
+    'NFP': 'الوظائف غير الزراعية',
+    'FOMC': 'الفيدرالي',
+    'ECB': 'المركزي الأوروبي',
+    'BOE': 'بنك إنجلترا',
+    'BOJ': 'بنك اليابان',
+    'ZEW': 'ZEW',
+  };
+
+  // محاولة استبدال الكلمات
+  for (const [eng, ar] of Object.entries(commonWords)) {
+    const regex = new RegExp(`\\b${eng}\\b`, 'gi');
+    if (translated.match(regex)) {
+      // إذا وجدنا ترجمة، نستبدل
+      translated = translated.replace(regex, ar);
+    }
+  }
+
+  // إذا تم الترجمة جزئياً، نعيدها
+  if (translated !== eventName) {
+    return translated;
   }
 
   // إرجاع الاسم الأصلي إذا لم توجد ترجمة
