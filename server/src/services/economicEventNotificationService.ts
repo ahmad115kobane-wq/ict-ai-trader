@@ -47,7 +47,7 @@ export function stopEconomicEventMonitoring() {
  */
 async function checkUpcomingEvents() {
   try {
-    const calendar = await getEconomicCalendar();
+    const calendar = await getEconomicCalendar(true); // فرض التحديث للحصول على أحدث البيانات
     const now = new Date();
 
     for (const event of calendar.events) {
@@ -65,11 +65,18 @@ async function checkUpcomingEvents() {
         console.log(`📅 Sent 5-minute warning for: ${event.event}`);
       }
 
-      // إشعار عند صدور الخبر (في نفس الدقيقة)
-      if (minutesUntil === 0 && !notifiedEvents.has(event.id)) {
-        await sendEventNotification(event, 'now');
-        notifiedEvents.add(event.id);
-        console.log(`📅 Sent release notification for: ${event.event}`);
+      // إشعار عند صدور الخبر (في نفس الدقيقة أو بعدها مباشرة)
+      // نتحقق إذا كان الوقت قد حان ولم نرسل إشعار من قبل
+      if (minutesUntil <= 0 && minutesUntil >= -5 && !notifiedEvents.has(event.id)) {
+        // إعادة جلب البيانات للتأكد من وجود النتيجة الفعلية
+        const updatedCalendar = await getEconomicCalendar(true);
+        const updatedEvent = updatedCalendar.events.find(e => e.id === event.id);
+        
+        if (updatedEvent) {
+          await sendEventNotification(updatedEvent, 'now');
+          notifiedEvents.add(event.id);
+          console.log(`📅 Sent release notification for: ${updatedEvent.event}${updatedEvent.actual ? ' (Actual: ' + updatedEvent.actual + ')' : ''}`);
+        }
       }
 
       // تنظيف الأحداث القديمة (أكثر من ساعة)
@@ -101,17 +108,27 @@ async function sendEventNotification(
     if (event.forecast) {
       message += `\n📊 التوقع: ${event.forecast}`;
     }
-  } else {
-    title = `📢 صدر الآن: ${event.event}`;
-    message = `${impactEmoji} ${event.countryName} (${event.currency})\n🕐 ${event.time}`;
-    if (event.actual) {
-      message += `\n✅ الفعلي: ${event.actual}`;
-    }
-    if (event.forecast) {
-      message += `\n📊 التوقع: ${event.forecast}`;
-    }
     if (event.previous) {
       message += `\n📈 السابق: ${event.previous}`;
+    }
+  } else {
+    // إشعار عند الصدور - مع التركيز على النتيجة
+    if (event.actual) {
+      title = `📢 صدر الآن: ${event.event}`;
+      message = `${impactEmoji} ${event.countryName} (${event.currency})\n\n✅ النتيجة الفعلية: ${event.actual}`;
+      if (event.forecast) {
+        message += `\n📊 التوقع كان: ${event.forecast}`;
+      }
+      if (event.previous) {
+        message += `\n📈 القراءة السابقة: ${event.previous}`;
+      }
+    } else {
+      // إذا لم تتوفر النتيجة بعد
+      title = `📢 حان وقت: ${event.event}`;
+      message = `${impactEmoji} ${event.countryName} (${event.currency})\n🕐 ${event.time}\n\n⏳ في انتظار النتيجة...`;
+      if (event.forecast) {
+        message += `\n📊 التوقع: ${event.forecast}`;
+      }
     }
   }
 
