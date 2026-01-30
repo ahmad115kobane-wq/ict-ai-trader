@@ -29,6 +29,7 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Trades: undefined;
+  EconomicCalendar: undefined;
   Subscription: undefined;
 };
 
@@ -36,7 +37,6 @@ export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
   FullChart: undefined;
-  EconomicCalendar: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -139,6 +139,8 @@ const MainTabNavigator = () => (
           iconName = focused ? 'home' : 'home-outline';
         } else if (route.name === 'Trades') {
           iconName = focused ? 'analytics' : 'analytics-outline';
+        } else if (route.name === 'EconomicCalendar') {
+          iconName = focused ? 'calendar' : 'calendar-outline';
         } else if (route.name === 'Subscription') {
           iconName = focused ? 'diamond' : 'diamond-outline';
         } else {
@@ -162,6 +164,11 @@ const MainTabNavigator = () => (
       name="Trades"
       component={TradesScreen}
       options={{ tabBarLabel: 'السجلات' }}
+    />
+    <Tab.Screen
+      name="EconomicCalendar"
+      component={EconomicCalendarScreen}
+      options={{ tabBarLabel: 'الأحداث' }}
     />
     <Tab.Screen
       name="Subscription"
@@ -191,13 +198,6 @@ const AppNavigator = () => {
               options={{
                 animation: 'slide_from_bottom',
                 presentation: 'fullScreenModal',
-              }}
-            />
-            <Stack.Screen 
-              name="EconomicCalendar" 
-              component={EconomicCalendarScreen}
-              options={{
-                animation: 'slide_from_right',
               }}
             />
           </>
