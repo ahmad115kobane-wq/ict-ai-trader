@@ -165,27 +165,76 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
         // تصفية الأحداث ذات التأثير المنخفض
         if (item.impact === 'Low' || item.impact === 'low') continue;
 
-        // تحويل التاريخ والوقت
-        let eventDate = item.date || new Date().toISOString().split('T')[0];
-        let eventTime = item.time || '00:00';
+        // تحويل التاريخ والوقت من ISO
+        let eventDate: string;
+        let eventTime: string;
+        
+        if (item.date && item.date.includes('T')) {
+          // التاريخ بصيغة ISO
+          const dateObj = new Date(item.date);
+          eventDate = dateObj.toISOString().split('T')[0];
+          eventTime = dateObj.toLocaleTimeString('en-US', { 
+            hour12: false, 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+        } else {
+          // التاريخ بصيغة عادية
+          eventDate = item.date || new Date().toISOString().split('T')[0];
+          eventTime = item.time || '00:00';
+          
+          // تنظيف الوقت (إزالة am/pm وتحويل إلى 24 ساعة)
+          if (eventTime.includes('am') || eventTime.includes('pm')) {
+            const isPM = eventTime.includes('pm');
+            eventTime = eventTime.replace(/am|pm/gi, '').trim();
+            const [hours, minutes] = eventTime.split(':').map(Number);
+            let hour24 = hours;
+            if (isPM && hours !== 12) hour24 = hours + 12;
+            if (!isPM && hours === 12) hour24 = 0;
+            eventTime = `${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`;
+          }
+        }
 
-        // تنظيف الوقت (إزالة am/pm وتحويل إلى 24 ساعة)
-        if (eventTime.includes('am') || eventTime.includes('pm')) {
-          const isPM = eventTime.includes('pm');
-          eventTime = eventTime.replace(/am|pm/gi, '').trim();
-          const [hours, minutes] = eventTime.split(':').map(Number);
-          let hour24 = hours;
-          if (isPM && hours !== 12) hour24 = hours + 12;
-          if (!isPM && hours === 12) hour24 = 0;
-          eventTime = `${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`;
+        // تحديد الدولة واسمها
+        let country = item.country || 'US';
+        let countryName = countryNames[country] || country;
+        
+        // إذا كانت الدولة رمز عملة، نحاول تحويلها
+        if (country === 'USD') {
+          country = 'US';
+          countryName = 'الولايات المتحدة';
+        } else if (country === 'EUR') {
+          country = 'EU';
+          countryName = 'منطقة اليورو';
+        } else if (country === 'GBP') {
+          country = 'GB';
+          countryName = 'بريطانيا';
+        } else if (country === 'JPY') {
+          country = 'JP';
+          countryName = 'اليابان';
+        } else if (country === 'CAD') {
+          country = 'CA';
+          countryName = 'كندا';
+        } else if (country === 'AUD') {
+          country = 'AU';
+          countryName = 'أستراليا';
+        } else if (country === 'NZD') {
+          country = 'NZ';
+          countryName = 'نيوزيلندا';
+        } else if (country === 'CHF') {
+          country = 'CH';
+          countryName = 'سويسرا';
+        } else if (country === 'CNY') {
+          country = 'CN';
+          countryName = 'الصين';
         }
 
         const event: EconomicEvent = {
           id: `${eventDate}_${eventTime}_${item.title || item.event}`,
           date: eventDate,
           time: eventTime,
-          country: item.country || 'US',
-          countryName: countryNames[item.country] || item.country || 'غير محدد',
+          country: country,
+          countryName: countryName,
           currency: item.currency || 'USD',
           event: translateEvent(item.title || item.event || 'حدث اقتصادي'),
           impact: mapImpact(item.impact),
