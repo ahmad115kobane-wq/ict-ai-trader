@@ -22,6 +22,7 @@ import authRoutes from './routes/auth';
 import analysisRoutes from './routes/analysis';
 import subscriptionRoutes from './routes/subscription';
 import telegramRoutes from './routes/telegram';
+import manualTradeRoutes from './routes/manualTrade';
 import { initializeDefaultPackages, checkAndExpireSubscriptions } from './services/subscriptionService';
 import { getCandles, getCurrentPrice } from './services/oandaService';
 import { renderDualCharts } from './services/chartService';
@@ -45,6 +46,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/telegram', telegramRoutes);
+app.use('/api', manualTradeRoutes); // Manual trade entry
 
 // Telegram setup page
 app.get('/setup-telegram', (req, res) => {
@@ -1952,8 +1954,10 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
   }
 };
 
+// ===================== AUTO ANALYSIS - DISABLED =====================
+// تم تعطيل التحليل التلقائي - استخدم /api/manual-trade لإدخال الصفقات يدوياً
 // بدء جدولة التحليل التلقائي الذكي
-scheduleNextAnalysis();
+// scheduleNextAnalysis(); // ❌ معطل
 
 // ===================== Start Server =====================
 const startServer = async () => {
