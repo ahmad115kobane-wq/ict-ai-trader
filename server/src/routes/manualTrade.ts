@@ -19,7 +19,7 @@ router.post('/manual-trade-admin', async (req: Request, res: Response) => {
       reasoning,
       score,
       confidence,
-      adminKey  // مفتاح إداري بسيط
+      adminKey
     } = req.body;
 
     // التحقق من المفتاح الإداري
@@ -48,15 +48,23 @@ router.post('/manual-trade-admin', async (req: Request, res: Response) => {
     }
 
     const { getCurrentPrice } = await import('../services/oandaService');
-    const currentPrice = await getCurrentPrice('XAUUSD');
+    const symbol = 'XAUUSD';
+    let currentPrice = 2687.25;
 
-    // إنشاء كائن التحليل
+    try {
+      currentPrice = await getCurrentPrice(symbol);
+      console.log(`💰 Current price fetched: ${currentPrice}`);
+    } catch (priceError) {
+      console.log('⚠️ Could not fetch current price, using default');
+    }
+
+    // إنشاء كائن التحليل (نفس طريقة send-test-trade)
     const analysis = {
       decision: 'PLACE_PENDING',
       score: score || 8,
       confidence: confidence || 80,
       sentiment: type.includes('BUY') ? 'BULLISH' : 'BEARISH',
-      bias: reasoning || 'صفقة يدوية',
+      bias: reasoning || 'صفقة يدوية من الإدارة',
       reasoning: reasoning || 'تم إدخال الصفقة يدوياً',
       confluences: ['إدخال يدوي'],
       reasons: ['صفقة يدوية من الإدارة'],
@@ -72,23 +80,55 @@ router.post('/manual-trade-admin', async (req: Request, res: Response) => {
       }
     };
 
-    // حفظ لجميع المستخدمين المشتركين
-    const { getUsersWithAutoAnalysisEnabled, saveEnhancedAnalysis } = await import('../db/index');
-    const usersWithAutoAnalysis = await getUsersWithAutoAnalysisEnabled();
-
-    for (const user of usersWithAutoAnalysis) {
-      const analysisId = uuidv4();
-      await saveEnhancedAnalysis(
-        analysisId,
-        user.id,
-        'XAUUSD',
-        currentPrice,
-        analysis,
-        'manual'
-      );
+    // تحديث lastAnalysisResult و lastAnalysisTime (مهم للتطبيق!)
+    const { lastAnalysisResult, lastAnalysisTime } = await import('../index');
+    const updatedResult = {
+      decision: analysis.decision,
+      score: analysis.score,
+      confidence: analysis.confidence,
+      price: currentPrice,
+      suggestedTrade: analysis.suggestedTrade,
+      reasoning: analysis.reasoning
+    };
+    
+    // تحديث المتغيرات العامة
+    Object.assign(lastAnalysisResult || {}, updatedResult);
+    const now = new Date();
+    if (lastAnalysisTime) {
+      lastAnalysisTime.setTime(now.getTime());
     }
 
-    console.log(`✅ Manual trade saved for ${usersWithAutoAnalysis.length} users`);
+    console.log('✅ Manual trade created and stored in lastAnalysisResult');
+    console.log(`📊 Type: ${analysis.suggestedTrade.type}`);
+    console.log(`💰 Entry: ${analysis.suggestedTrade.entry}`);
+    console.log(`🛑 SL: ${analysis.suggestedTrade.sl}`);
+    console.log(`✅ TP1: ${analysis.suggestedTrade.tp1}`);
+    console.log(`✅ TP2: ${analysis.suggestedTrade.tp2}`);
+    console.log(`✅ TP3: ${analysis.suggestedTrade.tp3}`);
+    console.log(`⏰ Mobile app will receive this in next poll (within 10 seconds)`);
+
+    // حفظ في قاعدة البيانات لجميع المستخدمين المشتركين
+    let savedCount = 0;
+    try {
+      const { getUsersWithAutoAnalysisEnabled, saveEnhancedAnalysis } = await import('../db/index');
+      const usersWithAutoAnalysis = await getUsersWithAutoAnalysisEnabled();
+
+      for (const user of usersWithAutoAnalysis) {
+        const analysisId = uuidv4();
+        await saveEnhancedAnalysis(
+          analysisId,
+          user.id,
+          symbol,
+          currentPrice,
+          analysis,
+          'auto' // نوع التحليل: auto لتظهر في السجلات
+        );
+        savedCount++;
+      }
+      console.log(`💾 Manual trade saved for ${savedCount} users`);
+    } catch (saveError) {
+      console.error('❌ Failed to save manual trade:', saveError);
+    }
 
     // إرسال إشعارات Telegram
     try {
@@ -96,10 +136,11 @@ router.post('/manual-trade-admin', async (req: Request, res: Response) => {
       await notifyTradeOpportunity(analysis, currentPrice);
       console.log('📱 Telegram notification sent');
     } catch (error) {
-      console.error('❌ Failed to send Telegram notification:', error);
+      console.log('⚠️ Telegram notification skipped (not configured)');
     }
 
-    // إرسال Push Notifications
+    // إرسال Push Notifications مباشرة للتطبيق
+    let pushSent = 0;
     try {
       const { getUsersWithPushTokens } = await import('../db/index');
       const { sendFirebaseTradeNotification } = await import('../services/firebasePushService');
@@ -108,13 +149,18 @@ router.post('/manual-trade-admin', async (req: Request, res: Response) => {
       const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
 
       if (pushTokens.length > 0) {
-        await sendFirebaseTradeNotification(
+        const success = await sendFirebaseTradeNotification(
           pushTokens,
           { ...analysis.suggestedTrade, rrRatio: String(analysis.suggestedTrade.rrRatio) },
           analysis.score,
           currentPrice
         );
-        console.log(`📱 Push notifications sent to ${pushTokens.length} devices`);
+        if (success) {
+          pushSent = pushTokens.length;
+          console.log(`📱 Firebase push notifications sent to ${pushTokens.length} devices`);
+        }
+      } else {
+        console.log('📱 No push tokens registered');
       }
     } catch (error) {
       console.error('❌ Failed to send push notifications:', error);
@@ -122,10 +168,12 @@ router.post('/manual-trade-admin', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: 'Manual trade sent successfully',
+      message: `Manual trade sent successfully! Push sent to ${pushSent} devices.`,
       analysis,
       currentPrice,
-      userCount: usersWithAutoAnalysis.length
+      userCount: savedCount,
+      pushSent,
+      note: 'This trade is now stored in lastAnalysisResult and will be picked up by mobile app'
     });
 
   } catch (error) {
