@@ -73,37 +73,50 @@ const eventTranslations: { [key: string]: string } = {
 };
 
 // ===================== Forex Factory API =====================
-// استخدام Forex Factory Calendar API (غير رسمي)
+// استخدام Forex Factory Calendar API
 async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
   try {
-    // ملاحظة: Forex Factory لا يوفر API رسمي
-    // يمكن استخدام خدمات طرف ثالث مثل:
-    // - https://nfs.faireconomy.media/ff_calendar_thisweek.json
-    // - أو web scraping
-    
+    // استخدام API من nfs.faireconomy.media (يوفر بيانات Forex Factory)
     const response = await axios.get('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {
       timeout: 10000,
       headers: {
-        'User-Agent': 'Mozilla/5.0'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
     });
 
     const events: EconomicEvent[] = [];
     const data = response.data;
 
+    console.log(`📅 Fetched ${Array.isArray(data) ? data.length : 0} events from Forex Factory`);
+
     if (Array.isArray(data)) {
       for (const item of data) {
-        // تصفية الأحداث ذات التأثير العالي والمتوسط فقط
-        if (item.impact === 'Low') continue;
+        // تصفية الأحداث ذات التأثير المنخفض
+        if (item.impact === 'Low' || item.impact === 'low') continue;
+
+        // تحويل التاريخ والوقت
+        let eventDate = item.date || new Date().toISOString().split('T')[0];
+        let eventTime = item.time || '00:00';
+
+        // تنظيف الوقت (إزالة am/pm وتحويل إلى 24 ساعة)
+        if (eventTime.includes('am') || eventTime.includes('pm')) {
+          const isPM = eventTime.includes('pm');
+          eventTime = eventTime.replace(/am|pm/gi, '').trim();
+          const [hours, minutes] = eventTime.split(':').map(Number);
+          let hour24 = hours;
+          if (isPM && hours !== 12) hour24 = hours + 12;
+          if (!isPM && hours === 12) hour24 = 0;
+          eventTime = `${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`;
+        }
 
         const event: EconomicEvent = {
-          id: `${item.date}_${item.time}_${item.title}`,
-          date: item.date,
-          time: item.time || '00:00',
+          id: `${eventDate}_${eventTime}_${item.title || item.event}`,
+          date: eventDate,
+          time: eventTime,
           country: item.country || 'US',
-          countryName: countryNames[item.country] || item.country,
+          countryName: countryNames[item.country] || item.country || 'غير محدد',
           currency: item.currency || 'USD',
-          event: translateEvent(item.title),
+          event: translateEvent(item.title || item.event || 'حدث اقتصادي'),
           impact: mapImpact(item.impact),
           forecast: item.forecast || undefined,
           previous: item.previous || undefined,
@@ -114,9 +127,67 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
       }
     }
 
+    console.log(`✅ Processed ${events.length} events (filtered low impact)`);
     return events;
   } catch (error) {
     console.error('❌ Failed to fetch from Forex Factory:', error);
+    return [];
+  }
+}
+
+// ===================== Alternative: Trading Economics API =====================
+// يمكن استخدام Trading Economics كبديل (يتطلب API key)
+async function fetchFromTradingEconomics(): Promise<EconomicEvent[]> {
+  try {
+    const API_KEY = process.env.TRADING_ECONOMICS_API_KEY;
+    if (!API_KEY) {
+      console.log('⚠️ Trading Economics API key not configured');
+      return [];
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const endDate = nextWeek.toISOString().split('T')[0];
+
+    const response = await axios.get(
+      `https://api.tradingeconomics.com/calendar/country/all/${today}/${endDate}`,
+      {
+        params: { c: API_KEY },
+        timeout: 10000
+      }
+    );
+
+    const events: EconomicEvent[] = [];
+    
+    if (Array.isArray(response.data)) {
+      for (const item of response.data) {
+        // تصفية حسب الأهمية
+        if (item.Importance !== 'High' && item.Importance !== 'Medium') continue;
+
+        const eventDate = new Date(item.Date);
+        const event: EconomicEvent = {
+          id: `te_${item.CalendarId}`,
+          date: eventDate.toISOString().split('T')[0],
+          time: eventDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+          country: item.Country || 'US',
+          countryName: countryNames[item.Country] || item.Country,
+          currency: item.Currency || 'USD',
+          event: translateEvent(item.Event),
+          impact: item.Importance === 'High' ? 'high' : 'medium',
+          forecast: item.Forecast?.toString() || undefined,
+          previous: item.Previous?.toString() || undefined,
+          actual: item.Actual?.toString() || undefined
+        };
+
+        events.push(event);
+      }
+    }
+
+    console.log(`✅ Fetched ${events.length} events from Trading Economics`);
+    return events;
+  } catch (error) {
+    console.error('❌ Failed to fetch from Trading Economics:', error);
     return [];
   }
 }
@@ -125,13 +196,16 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
 // استخدام بيانات وهمية واقعية كمثال
 function getMockEconomicEvents(): EconomicEvent[] {
   const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
   return [
+    // أحداث صدرت بالأمس (لها نتائج فعلية)
     {
-      id: 'nfp_' + today.toISOString(),
-      date: today.toISOString().split('T')[0],
+      id: 'nfp_yesterday_' + yesterday.toISOString(),
+      date: yesterday.toISOString().split('T')[0],
       time: '15:30',
       country: 'US',
       countryName: 'الولايات المتحدة',
@@ -139,11 +213,12 @@ function getMockEconomicEvents(): EconomicEvent[] {
       event: 'الوظائف غير الزراعية',
       impact: 'high',
       forecast: '180K',
-      previous: '175K'
+      previous: '175K',
+      actual: '185K' // النتيجة الفعلية
     },
     {
-      id: 'cpi_' + today.toISOString(),
-      date: today.toISOString().split('T')[0],
+      id: 'cpi_yesterday_' + yesterday.toISOString(),
+      date: yesterday.toISOString().split('T')[0],
       time: '15:30',
       country: 'US',
       countryName: 'الولايات المتحدة',
@@ -151,8 +226,63 @@ function getMockEconomicEvents(): EconomicEvent[] {
       event: 'مؤشر أسعار المستهلك',
       impact: 'high',
       forecast: '3.2%',
-      previous: '3.1%'
+      previous: '3.1%',
+      actual: '3.3%' // النتيجة الفعلية
     },
+    {
+      id: 'gdp_yesterday_' + yesterday.toISOString(),
+      date: yesterday.toISOString().split('T')[0],
+      time: '15:30',
+      country: 'US',
+      countryName: 'الولايات المتحدة',
+      currency: 'USD',
+      event: 'الناتج المحلي الإجمالي',
+      impact: 'high',
+      forecast: '2.5%',
+      previous: '2.4%',
+      actual: '2.6%' // النتيجة الفعلية
+    },
+    // أحداث اليوم (بعضها صدر والبعض لم يصدر)
+    {
+      id: 'retail_today_' + today.toISOString(),
+      date: today.toISOString().split('T')[0],
+      time: '10:30',
+      country: 'US',
+      countryName: 'الولايات المتحدة',
+      currency: 'USD',
+      event: 'مبيعات التجزئة',
+      impact: 'medium',
+      forecast: '0.3%',
+      previous: '0.2%',
+      actual: '0.4%' // صدر
+    },
+    {
+      id: 'unemployment_today_' + today.toISOString(),
+      date: today.toISOString().split('T')[0],
+      time: '15:30',
+      country: 'US',
+      countryName: 'الولايات المتحدة',
+      currency: 'USD',
+      event: 'معدل البطالة',
+      impact: 'high',
+      forecast: '3.7%',
+      previous: '3.8%'
+      // لم يصدر بعد - لا توجد actual
+    },
+    {
+      id: 'pmi_today_' + today.toISOString(),
+      date: today.toISOString().split('T')[0],
+      time: '16:45',
+      country: 'US',
+      countryName: 'الولايات المتحدة',
+      currency: 'USD',
+      event: 'مؤشر مديري المشتريات الصناعي',
+      impact: 'medium',
+      forecast: '52.5',
+      previous: '52.3'
+      // لم يصدر بعد
+    },
+    // أحداث غداً (لم تصدر)
     {
       id: 'fomc_' + tomorrow.toISOString(),
       date: tomorrow.toISOString().split('T')[0],
@@ -178,28 +308,16 @@ function getMockEconomicEvents(): EconomicEvent[] {
       previous: '4.00%'
     },
     {
-      id: 'gdp_' + today.toISOString(),
-      date: today.toISOString().split('T')[0],
+      id: 'jobless_' + tomorrow.toISOString(),
+      date: tomorrow.toISOString().split('T')[0],
       time: '15:30',
       country: 'US',
       countryName: 'الولايات المتحدة',
       currency: 'USD',
-      event: 'الناتج المحلي الإجمالي',
-      impact: 'high',
-      forecast: '2.5%',
-      previous: '2.4%'
-    },
-    {
-      id: 'retail_' + today.toISOString(),
-      date: today.toISOString().split('T')[0],
-      time: '15:30',
-      country: 'US',
-      countryName: 'الولايات المتحدة',
-      currency: 'USD',
-      event: 'مبيعات التجزئة',
+      event: 'طلبات إعانة البطالة الأولية',
       impact: 'medium',
-      forecast: '0.3%',
-      previous: '0.2%'
+      forecast: '220K',
+      previous: '215K'
     }
   ];
 }
@@ -226,12 +344,18 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
 
     console.log('📅 Fetching fresh economic calendar...');
 
-    // محاولة جلب البيانات من Forex Factory
+    // محاولة جلب البيانات من Forex Factory أولاً
     let events = await fetchFromForexFactory();
 
-    // إذا فشل، استخدام البيانات الوهمية
+    // إذا فشل Forex Factory، جرب Trading Economics
     if (events.length === 0) {
-      console.log('⚠️ Using mock economic data');
+      console.log('⚠️ Forex Factory failed, trying Trading Economics...');
+      events = await fetchFromTradingEconomics();
+    }
+
+    // إذا فشلت جميع المصادر، استخدم البيانات الوهمية
+    if (events.length === 0) {
+      console.log('⚠️ All sources failed, using mock data with actual results');
       events = getMockEconomicEvents();
     }
 
