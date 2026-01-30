@@ -239,6 +239,10 @@
                 📤 إرسال الصفقة
             </button>
         </form>
+        
+        <button type="button" id="resetBtn" style="width: 100%; padding: 12px; background: #dc3545; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px;">
+            🔄 إعادة تعيين كلمة المرور
+        </button>
 
         <div class="message" id="message"></div>
     </div>
@@ -348,6 +352,14 @@
 
         // تحديث السعر كل 30 ثانية
         setInterval(loadCurrentPrice, 30000);
+        
+        // زر إعادة التعيين
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            if (confirm('هل تريد إعادة تعيين كلمة المرور؟')) {
+                localStorage.clear();
+                location.reload();
+            }
+        });
     </script>
 </body>
 </html>
