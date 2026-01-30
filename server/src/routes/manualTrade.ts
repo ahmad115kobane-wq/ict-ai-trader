@@ -81,21 +81,25 @@ router.post('/manual-trade-admin', async (req: Request, res: Response) => {
     };
 
     // تحديث lastAnalysisResult و lastAnalysisTime (مهم للتطبيق!)
-    const { lastAnalysisResult, lastAnalysisTime } = await import('../index');
-    const updatedResult = {
-      decision: analysis.decision,
-      score: analysis.score,
-      confidence: analysis.confidence,
-      price: currentPrice,
-      suggestedTrade: analysis.suggestedTrade,
-      reasoning: analysis.reasoning
-    };
-    
-    // تحديث المتغيرات العامة
-    Object.assign(lastAnalysisResult || {}, updatedResult);
-    const now = new Date();
-    if (lastAnalysisTime) {
-      lastAnalysisTime.setTime(now.getTime());
+    // نستخدم طريقة مباشرة بدلاً من import
+    try {
+      const indexModule = require('../index');
+      if (indexModule.lastAnalysisResult) {
+        Object.assign(indexModule.lastAnalysisResult, {
+          decision: analysis.decision,
+          score: analysis.score,
+          confidence: analysis.confidence,
+          price: currentPrice,
+          suggestedTrade: analysis.suggestedTrade,
+          reasoning: analysis.reasoning
+        });
+      }
+      if (indexModule.lastAnalysisTime) {
+        indexModule.lastAnalysisTime.setTime(new Date().getTime());
+      }
+      console.log('✅ Manual trade stored in lastAnalysisResult');
+    } catch (updateError) {
+      console.log('⚠️ Could not update lastAnalysisResult:', updateError);
     }
 
     console.log('✅ Manual trade created and stored in lastAnalysisResult');
