@@ -14,8 +14,8 @@ dotenv.config();
 
 // تحديد المسار الأساسي للملفات الثابتة
 // في وضع التطوير: server/src -> server
-// في وضع الإنتاج: server/dist/src -> server
-const SERVER_ROOT = path.join(__dirname, process.env.NODE_ENV === 'production' ? '../..' : '..');
+// في وضع الإنتاج: server/dist/src -> server/dist
+const SERVER_ROOT = path.join(__dirname, '..');
 
 import { initDatabase } from './db/index';
 import authRoutes from './routes/auth';
