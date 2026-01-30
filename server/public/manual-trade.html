@@ -290,6 +290,8 @@
             };
 
             try {
+                console.log('📤 Sending trade data:', tradeData);
+                
                 const response = await fetch(`${API_URL}/send-manual-trade`, {
                     method: 'POST',
                     headers: {
@@ -298,11 +300,13 @@
                     body: JSON.stringify(tradeData)
                 });
 
+                console.log('📥 Response status:', response.status);
                 const data = await response.json();
+                console.log('📥 Response data:', data);
 
                 if (data.success) {
                     message.className = 'message success';
-                    message.textContent = '✅ تم إرسال الصفقة بنجاح لجميع المستخدمين!';
+                    message.textContent = `✅ تم إرسال الصفقة بنجاح! Push: ${data.trade?.pushSent || 0} | Users: ${data.trade?.userCount || 0}`;
                     message.style.display = 'block';
                     
                     // إعادة تعيين النموذج
@@ -314,6 +318,7 @@
                     throw new Error(data.error || 'فشل إرسال الصفقة');
                 }
             } catch (error) {
+                console.error('❌ Error:', error);
                 message.className = 'message error';
                 message.textContent = `❌ خطأ: ${error.message}`;
                 message.style.display = 'block';
