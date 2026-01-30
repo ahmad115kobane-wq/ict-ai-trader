@@ -1750,6 +1750,24 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Current price endpoint
+app.get('/api/analysis/current-price', async (req, res) => {
+  try {
+    const currentPrice = await getCurrentPrice('XAUUSD');
+    res.json({
+      success: true,
+      price: currentPrice,
+      symbol: 'XAUUSD',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch current price'
+    });
+  }
+});
+
 // API info
 app.get('/api', (req, res) => {
   res.json({

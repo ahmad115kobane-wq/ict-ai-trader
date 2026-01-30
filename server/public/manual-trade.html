@@ -332,8 +332,8 @@
         if (!token) {
             const password = prompt('أدخل كلمة المرور:');
             if (password === 'admin123') {
-                // في الإنتاج، يجب استخدام نظام مصادقة حقيقي
-                token = 'manual-entry-token';
+                // حفظ كلمة المرور نفسها كـ token
+                token = password;
                 localStorage.setItem('token', token);
             } else {
                 alert('كلمة مرور خاطئة');
