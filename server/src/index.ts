@@ -67,6 +67,11 @@ app.get('/manual-trade', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'manual-trade.html'));
 });
 
+// Economic calendar page
+app.get('/economic-calendar', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'public', 'economic-calendar.html'));
+});
+
 // Test screenshot route
 app.get('/test-screenshot', async (req, res) => {
   try {
@@ -1764,6 +1769,103 @@ app.get('/api/analysis/current-price', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch current price'
+    });
+  }
+});
+
+// ===================== Economic Calendar Endpoints =====================
+// جلب التقويم الاقتصادي الكامل
+app.get('/api/economic-calendar', async (req, res) => {
+  try {
+    const { getEconomicCalendar } = await import('./services/economicCalendarService');
+    const forceRefresh = req.query.refresh === 'true';
+    const calendar = await getEconomicCalendar(forceRefresh);
+    res.json(calendar);
+  } catch (error) {
+    console.error('❌ Failed to get economic calendar:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch economic calendar'
+    });
+  }
+});
+
+// جلب الأحداث ذات التأثير العالي فقط
+app.get('/api/economic-calendar/high-impact', async (req, res) => {
+  try {
+    const { getHighImpactEvents } = await import('./services/economicCalendarService');
+    const events = await getHighImpactEvents();
+    res.json({
+      success: true,
+      events,
+      count: events.length
+    });
+  } catch (error) {
+    console.error('❌ Failed to get high impact events:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch high impact events'
+    });
+  }
+});
+
+// جلب أحداث اليوم
+app.get('/api/economic-calendar/today', async (req, res) => {
+  try {
+    const { getTodayEvents } = await import('./services/economicCalendarService');
+    const events = await getTodayEvents();
+    res.json({
+      success: true,
+      events,
+      count: events.length,
+      date: new Date().toISOString().split('T')[0]
+    });
+  } catch (error) {
+    console.error('❌ Failed to get today events:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch today events'
+    });
+  }
+});
+
+// جلب الأحداث القادمة
+app.get('/api/economic-calendar/upcoming', async (req, res) => {
+  try {
+    const { getUpcomingEvents } = await import('./services/economicCalendarService');
+    const hours = parseInt(req.query.hours as string) || 24;
+    const events = await getUpcomingEvents(hours);
+    res.json({
+      success: true,
+      events,
+      count: events.length,
+      hoursAhead: hours
+    });
+  } catch (error) {
+    console.error('❌ Failed to get upcoming events:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch upcoming events'
+    });
+  }
+});
+
+// التحقق من وجود أحداث عالية التأثير قريبة
+app.get('/api/economic-calendar/check-upcoming', async (req, res) => {
+  try {
+    const { hasHighImpactEventSoon } = await import('./services/economicCalendarService');
+    const minutes = parseInt(req.query.minutes as string) || 30;
+    const hasEvent = await hasHighImpactEventSoon(minutes);
+    res.json({
+      success: true,
+      hasHighImpactEventSoon: hasEvent,
+      minutesAhead: minutes
+    });
+  } catch (error) {
+    console.error('❌ Failed to check upcoming events:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check upcoming events'
     });
   }
 });

@@ -24,6 +24,7 @@
     "@types/puppeteer": "^5.4.7",
     "@types/sql.js": "^1.4.9",
     "@types/uuid": "^9.0.7",
+    "axios": "^1.13.4",
     "bcryptjs": "^2.4.3",
     "canvas": "^3.2.1",
     "cors": "^2.8.5",
