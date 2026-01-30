@@ -95,7 +95,7 @@ app.get('/test-parallel', async (req, res) => {
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
       getCandles(symbol, '1h', 100),  // 100 شمعة للساعة
-      getCandles(symbol, '5m', 140),  // 140 شمعة لـ5 دقائق
+      getCandles(symbol, '5m', 220),  // 220 شمعة لـ5 دقائق
       getCurrentPrice(symbol)
     ]);
 
@@ -105,7 +105,7 @@ app.get('/test-parallel', async (req, res) => {
 
     // التقاط الصور المتوازي
     const startTime = Date.now();
-    const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 100, 140);
+    const { h1Image, m5Image } = await captureRealChartScreenshots(h1Candles, m5Candles, currentPrice, 100, 220);
     const endTime = Date.now();
 
     const html = `
@@ -163,7 +163,7 @@ app.get('/save-charts', async (req, res) => {
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
       getCandles(symbol, '1h', 100),  // 100 شمعة للساعة
-      getCandles(symbol, '5m', 140),  // 140 شمعة لـ 5 دقائق
+      getCandles(symbol, '5m', 220),  // 220 شمعة لـ 5 دقائق
       getCurrentPrice(symbol)
     ]);
 
@@ -623,7 +623,7 @@ app.get('/test-analysis', async (req, res) => {
     // جلب البيانات
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
       getCandles(symbol, '1h', 100),  // 100 شمعة للساعة
-      getCandles(symbol, '5m', 140),  // 140 شمعة لـ5 دقائق
+      getCandles(symbol, '5m', 220),  // 220 شمعة لـ5 دقائق
       getCurrentPrice(symbol)
     ]);
 
@@ -674,7 +674,7 @@ app.get('/chart', async (req, res) => {
     // جلب البيانات بالعدد المطلوب
     const [h1Candles, m5Candles, currentPrice] = await Promise.all([
       getCandles(symbol, '1h', 100),  // 100 شمعة للساعة
-      getCandles(symbol, '5m', 140),  // 140 شمعة لـ 5 دقائق
+      getCandles(symbol, '5m', 220),  // 220 شمعة لـ 5 دقائق
       getCurrentPrice(symbol)
     ]);
 
@@ -1788,7 +1788,7 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
     try {
       [h1Candles, m5Candles, currentPrice] = await Promise.all([
         getCandles(symbol, '1h', 100),  // 100 شمعة للساعة
-        getCandles(symbol, '5m', 140),  // 140 شمعة لـ 5 دقائق
+        getCandles(symbol, '5m', 220),  // 220 شمعة لـ 5 دقائق
         getCurrentPrice(symbol)
       ]);
     } catch (dataError) {

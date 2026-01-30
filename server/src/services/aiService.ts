@@ -397,19 +397,19 @@ export const analyzeMultiTimeframe = async (
   const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
   const cleanM5 = m5Image.replace(/^data:image\/\w+;base64,/, "");
 
-  // إضافة بيانات الشموع
+  // إضافة بيانات الشموع - نفس العدد الموجود في الصور
   let candleDataText = '';
   if (h1Candles && h1Candles.length > 0) {
-    const recentH1 = h1Candles.slice(-30);
-    candleDataText += '\n\n📊 بيانات شموع H1 (آخر 30 شمعة):\n';
+    const recentH1 = h1Candles.slice(-100); // 100 شمعة - نفس عدد الصورة
+    candleDataText += '\n\n📊 بيانات شموع H1 (آخر 100 شمعة):\n';
     candleDataText += recentH1.map((c, i) => 
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
   }
   
   if (m5Candles && m5Candles.length > 0) {
-    const recentM5 = m5Candles.slice(-70);
-    candleDataText += '\n\n📊 بيانات شموع M5 (آخر 70 شمعة):\n';
+    const recentM5 = m5Candles.slice(-220); // 220 شمعة - نفس عدد الصورة
+    candleDataText += '\n\n📊 بيانات شموع M5 (آخر 220 شمعة):\n';
     candleDataText += recentM5.map((c, i) => 
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
