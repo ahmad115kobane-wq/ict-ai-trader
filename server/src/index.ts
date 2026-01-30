@@ -405,7 +405,7 @@ app.get('/send-test-trade', async (req, res) => {
   }
 });
 
-// Send manual trade - بدون مصادقة
+// Send manual trade - مع مصادقة adminKey
 app.post('/send-manual-trade', async (req, res) => {
   try {
     console.log('📝 Sending manual trade...');
@@ -419,8 +419,18 @@ app.post('/send-manual-trade', async (req, res) => {
       tp3,
       score,
       confidence,
-      reasoning
+      reasoning,
+      adminKey
     } = req.body;
+
+    // التحقق من المفتاح الإداري
+    const ADMIN_KEY = process.env.ADMIN_KEY || 'admin123';
+    if (adminKey !== ADMIN_KEY) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid admin key'
+      });
+    }
 
     // التحقق من البيانات فقط
     if (!type || !entry || !sl || !tp1 || !tp2 || !tp3) {
@@ -2155,10 +2165,9 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
   }
 };
 
-// ===================== AUTO ANALYSIS - DISABLED =====================
-// تم تعطيل التحليل التلقائي - استخدم /api/manual-trade لإدخال الصفقات يدوياً
+// ===================== AUTO ANALYSIS - ENABLED =====================
 // بدء جدولة التحليل التلقائي الذكي
-// scheduleNextAnalysis(); // ❌ معطل
+scheduleNextAnalysis(); // ✅ مفعّل
 
 // ===================== Start Server =====================
 const startServer = async () => {
@@ -2190,9 +2199,9 @@ const startServer = async () => {
 ╚════════════════════════════════════════════════════╝
       `);
 
-      // ❌ التحليل التلقائي معطل - استخدم /manual-trade لإدخال الصفقات يدوياً
-      console.log('⚠️ Auto analysis is DISABLED - Use /manual-trade for manual entry');
-      // scheduleNextAnalysis(); // معطل
+      // ✅ التحليل التلقائي مفعّل
+      console.log('✅ Auto analysis is ENABLED - AI will analyze every 5 minutes');
+      scheduleNextAnalysis(); // مفعّل
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
