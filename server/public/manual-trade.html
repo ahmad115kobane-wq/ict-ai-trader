@@ -285,15 +285,15 @@
                 tp3: parseFloat(document.getElementById('tp3').value),
                 score: parseInt(document.getElementById('score').value),
                 confidence: parseInt(document.getElementById('confidence').value),
-                reasoning: document.getElementById('reasoning').value || 'صفقة يدوية'
+                reasoning: document.getElementById('reasoning').value || 'صفقة يدوية',
+                adminKey: token  // استخدام token كمفتاح إداري
             };
 
             try {
-                const response = await fetch(`${API_URL}/api/manual-trade`, {
+                const response = await fetch(`${API_URL}/api/manual-trade-admin`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(tradeData)
                 });
