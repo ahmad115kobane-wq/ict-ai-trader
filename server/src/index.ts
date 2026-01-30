@@ -53,6 +53,11 @@ app.get('/setup-telegram', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'setup-telegram.html'));
 });
 
+// Manual trade entry page
+app.get('/manual-trade', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'public', 'manual-trade.html'));
+});
+
 // Test screenshot route
 app.get('/test-screenshot', async (req, res) => {
   try {
@@ -1989,9 +1994,9 @@ const startServer = async () => {
 ╚════════════════════════════════════════════════════╝
       `);
 
-      // تشغيل التحليل الأول وبدء الجدولة الذكية
-      console.log('🔄 Starting smart auto analysis system...');
-      scheduleNextAnalysis();
+      // ❌ التحليل التلقائي معطل - استخدم /manual-trade لإدخال الصفقات يدوياً
+      console.log('⚠️ Auto analysis is DISABLED - Use /manual-trade for manual entry');
+      // scheduleNextAnalysis(); // معطل
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
