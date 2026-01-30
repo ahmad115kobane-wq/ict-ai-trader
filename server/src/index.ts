@@ -1870,6 +1870,39 @@ app.get('/api/economic-calendar/check-upcoming', async (req, res) => {
   }
 });
 
+// إرسال إشعار تجريبي للأحداث الاقتصادية
+app.get('/send-test-economic-notification', async (req, res) => {
+  try {
+    const { sendTestEconomicEventNotification } = await import('./services/economicEventNotificationService');
+    const result = await sendTestEconomicEventNotification();
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Failed to send test economic notification:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send test notification'
+    });
+  }
+});
+
+// الحصول على إحصائيات إشعارات الأحداث الاقتصادية
+app.get('/api/economic-calendar/notification-stats', async (req, res) => {
+  try {
+    const { getNotificationStats } = await import('./services/economicEventNotificationService');
+    const stats = getNotificationStats();
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('❌ Failed to get notification stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get notification stats'
+    });
+  }
+});
+
 // API info
 app.get('/api', (req, res) => {
   res.json({
@@ -2304,6 +2337,11 @@ const startServer = async () => {
       // ✅ التحليل التلقائي مفعّل
       console.log('✅ Auto analysis is ENABLED - AI will analyze every 5 minutes');
       scheduleNextAnalysis(); // مفعّل
+
+      // ✅ بدء مراقبة الأحداث الاقتصادية
+      const { startEconomicEventMonitoring } = require('./services/economicEventNotificationService');
+      startEconomicEventMonitoring();
+      console.log('✅ Economic event monitoring is ENABLED - Will notify 5 min before and at release');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -2319,6 +2357,15 @@ const gracefulShutdown = () => {
   if (autoAnalysisInterval) {
     clearTimeout(autoAnalysisInterval);
     console.log('⏹️ Auto analysis stopped');
+  }
+
+  // إيقاف مراقبة الأحداث الاقتصادية
+  try {
+    const { stopEconomicEventMonitoring } = require('./services/economicEventNotificationService');
+    stopEconomicEventMonitoring();
+    console.log('⏹️ Economic event monitoring stopped');
+  } catch (error) {
+    console.error('❌ Failed to stop economic event monitoring:', error);
   }
   process.exit(0);
 };
