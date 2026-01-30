@@ -246,6 +246,8 @@
     <script>
         const API_URL = window.location.origin;
         let token = localStorage.getItem('token');
+        
+        console.log('🔑 Current token:', token);
 
         // تحميل السعر الحالي
         async function loadCurrentPrice() {
@@ -286,11 +288,11 @@
                 score: parseInt(document.getElementById('score').value),
                 confidence: parseInt(document.getElementById('confidence').value),
                 reasoning: document.getElementById('reasoning').value || 'صفقة يدوية',
-                adminKey: token  // استخدام token كمفتاح إداري
+                adminKey: token || 'admin123'  // استخدام token أو admin123 كافتراضي
             };
-
-            try {
-                console.log('📤 Sending trade data:', tradeData);
+            
+            console.log('🔑 Token being sent:', token);
+            console.log('📤 Trade data:', tradeData);
                 
                 const response = await fetch(`${API_URL}/send-manual-trade`, {
                     method: 'POST',
