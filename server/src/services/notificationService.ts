@@ -320,8 +320,14 @@ export async function notifyTradeOpportunity(analysis: any, currentPrice: number
         timestamp: new Date()
       };
 
-      await sendTradeSignal(TELEGRAM_CHAT_ID, signal);
-      console.log('✅ Trade opportunity sent to Telegram');
+      const telegramSuccess = await sendTradeSignal(TELEGRAM_CHAT_ID, signal);
+      if (telegramSuccess) {
+        console.log('✅ Trade opportunity sent to Telegram');
+      } else {
+        console.error('❌ Failed to send trade opportunity to Telegram');
+      }
+    } else {
+      console.log('⚠️ TELEGRAM_CHAT_ID not configured - skipping Telegram notification');
     }
 
     // 2. إرسال Push Notifications للتطبيق
