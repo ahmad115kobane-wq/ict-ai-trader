@@ -202,7 +202,7 @@ async function fetchFromFXStreet(): Promise<EconomicEvent[]> {
   }
 }
 
-// ===================== Forex Factory API (Enhanced) =====================
+// ===================== Forex Factory API (Enhanced with Actual Results) =====================
 // استخدام Forex Factory Calendar API مع معالجة محسّنة
 async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
   try {
@@ -288,15 +288,17 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
           countryName = 'الصين';
         }
 
-        // معالجة النتيجة الفعلية - Forex Factory يضعها في حقول مختلفة
+        // معالجة النتيجة الفعلية - محاولة من حقول متعددة
         let actual = item.actual || item.result || item.value || undefined;
         
-        // إذا كان الحدث في الماضي ولا توجد نتيجة، نحاول استخدام forecast كـ actual
+        // إذا كان الحدث في الماضي ولا توجد نتيجة، نحاول استخدام forecast كـ placeholder
         const eventDateTime = new Date(`${eventDate}T${eventTime}`);
         const now = new Date();
-        if (eventDateTime < now && !actual && item.forecast) {
-          // الحدث مضى ولكن لا توجد نتيجة - قد تكون البيانات لم تُحدّث بعد
-          // نترك actual فارغاً
+        
+        // إذا مضى على الحدث أكثر من ساعة ولا توجد نتيجة، نضع علامة
+        if (eventDateTime < new Date(now.getTime() - 60 * 60 * 1000) && !actual) {
+          // الحدث مضى منذ أكثر من ساعة ولا توجد نتيجة
+          // نترك actual فارغاً - سيتم جلبه من مصدر آخر لاحقاً
         }
 
         const event: EconomicEvent = {
@@ -323,10 +325,82 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
     }
 
     console.log(`✅ Processed ${events.length} events (filtered low impact)`);
+    
+    // محاولة إضافة النتائج الفعلية من مصدر إضافي
+    await enrichWithActualResults(events);
+    
     return events;
   } catch (error) {
     console.error('❌ Failed to fetch from Forex Factory:', error);
     return [];
+  }
+}
+
+// دالة مساعدة لإضافة النتائج الفعلية من مصادر إضافية
+async function enrichWithActualResults(events: EconomicEvent[]): Promise<void> {
+  try {
+    // محاولة جلب النتائج الفعلية من FXStreet للأحداث التي مضت
+    const now = new Date();
+    const pastEvents = events.filter(e => {
+      const eventTime = new Date(`${e.date}T${e.time}`);
+      return eventTime < now && !e.actual;
+    });
+
+    if (pastEvents.length === 0) {
+      console.log('📊 No past events need actual results');
+      return;
+    }
+
+    console.log(`🔍 Trying to enrich ${pastEvents.length} past events with actual results...`);
+
+    // محاولة جلب من FXStreet
+    try {
+      const response = await axios.get('https://calendar-api.fxstreet.com/en/api/v1/eventDates', {
+        params: {
+          timezone: 'GMT',
+          rows: 100,
+          dateFrom: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          dateTo: now.toISOString().split('T')[0]
+        },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        timeout: 10000
+      });
+
+      if (response.data && Array.isArray(response.data)) {
+        let enrichedCount = 0;
+        
+        for (const event of pastEvents) {
+          // البحث عن الحدث المطابق في بيانات FXStreet
+          const match = response.data.find((item: any) => {
+            const itemDate = new Date(item.dateUtc || item.date);
+            const itemDateStr = itemDate.toISOString().split('T')[0];
+            const itemName = (item.name || item.title || '').toLowerCase();
+            const eventName = event.event.toLowerCase();
+            
+            // مطابقة التاريخ واسم الحدث (جزئي)
+            return itemDateStr === event.date && 
+                   (itemName.includes(eventName.substring(0, 10)) || 
+                    eventName.includes(itemName.substring(0, 10)));
+          });
+
+          if (match && match.actual) {
+            event.actual = match.actual;
+            enrichedCount++;
+            console.log(`✅ Enriched: ${event.event} = ${event.actual}`);
+          }
+        }
+
+        if (enrichedCount > 0) {
+          console.log(`📊 Successfully enriched ${enrichedCount} events with actual results`);
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Could not enrich with FXStreet data');
+    }
+  } catch (error) {
+    console.log('⚠️ Error enriching events:', error);
   }
 }
 
