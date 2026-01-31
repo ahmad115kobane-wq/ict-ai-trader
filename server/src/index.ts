@@ -7,6 +7,15 @@ import helmet from 'helmet';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
 import path from 'path';
+import { getCandles, getCurrentPrice } from './services/oandaService';
+import { renderDualCharts } from './services/chartService';
+import { analyzeMultiTimeframe } from './services/aiService';
+
+// ===== Database helpers =====
+import { saveAutoAnalysis, saveEnhancedAnalysis } from './db/index';
+
+// ===== Utils =====
+import { v4 as uuidv4 } from 'uuid';
 
 // تحميل المتغيرات البيئية
 dotenv.config();
