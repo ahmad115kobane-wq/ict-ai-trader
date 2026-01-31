@@ -1,5 +1,6 @@
 // economicCalendarService.ts - خدمة التقويم الاقتصادي
 import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 // ===================== Types =====================
 export interface EconomicEvent {
@@ -143,6 +144,72 @@ const eventTranslations: { [key: string]: string } = {
   'Kansas City Fed Manufacturing Index': 'مؤشر كانساس الصناعي',
 };
 
+// ===================== Investing.com Scraper (Real-time Actual Results) =====================
+// جلب النتائج الفعلية من Investing.com عبر web scraping
+async function scrapeInvestingComActuals(): Promise<Map<string, string>> {
+  const actualsMap = new Map<string, string>();
+  
+  try {
+    console.log('🔍 Scraping actual results from Investing.com...');
+    
+    // جلب صفحة التقويم الاقتصادي
+    const response = await axios.get('https://www.investing.com/economic-calendar/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Cache-Control': 'max-age=0'
+      },
+      timeout: 15000
+    });
+
+    const $ = cheerio.load(response.data);
+    
+    // البحث عن صفوف الأحداث في الجدول
+    $('#economicCalendarData tr.js-event-item').each((index, element) => {
+      try {
+        const $row = $(element);
+        
+        // اسم الحدث
+        const eventName = $row.find('td.event a').text().trim();
+        
+        // النتيجة الفعلية
+        const actual = $row.find('td.act').text().trim();
+        
+        // التاريخ والوقت
+        const time = $row.attr('data-event-datetime') || '';
+        
+        if (eventName && actual && actual !== '' && actual !== '--') {
+          // إنشاء مفتاح فريد للحدث
+          const eventKey = `${eventName}_${time}`.toLowerCase();
+          actualsMap.set(eventKey, actual);
+          
+          console.log(`📊 Scraped: ${eventName} = ${actual}`);
+        }
+      } catch (err) {
+        // تجاهل الأخطاء في صفوف فردية
+      }
+    });
+
+    console.log(`✅ Scraped ${actualsMap.size} actual results from Investing.com`);
+    return actualsMap;
+    
+  } catch (error: any) {
+    if (error.response?.status === 403) {
+      console.log('⚠️ Investing.com blocked scraping (403) - using fallback');
+    } else {
+      console.error('❌ Failed to scrape Investing.com:', error.message);
+    }
+    return actualsMap;
+  }
+}
+
 // ===================== Forex Factory API (Enhanced with Actual Results) =====================
 // استخدام Forex Factory Calendar API مع معالجة محسّنة
 async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
@@ -266,11 +333,72 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
     }
 
     console.log(`✅ Processed ${events.length} events (filtered low impact)`);
+    
+    // محاولة إثراء البيانات بالنتائج الفعلية من Investing.com
+    await enrichEventsWithInvestingActuals(events);
+    
     return events;
   } catch (error) {
     console.error('❌ Failed to fetch from Forex Factory:', error);
     return [];
   }
+}
+
+// دالة إثراء الأحداث بالنتائج الفعلية من Investing.com
+async function enrichEventsWithInvestingActuals(events: EconomicEvent[]): Promise<void> {
+  try {
+    // جلب النتائج الفعلية من Investing.com
+    const actualsMap = await scrapeInvestingComActuals();
+    
+    if (actualsMap.size === 0) {
+      console.log('⚠️ No actual results scraped from Investing.com');
+      return;
+    }
+
+    let enrichedCount = 0;
+    const now = new Date();
+
+    // إثراء الأحداث التي مضت ولا تحتوي على نتائج فعلية
+    for (const event of events) {
+      if (event.actual) continue; // تخطي الأحداث التي لديها نتائج بالفعل
+      
+      const eventTime = new Date(`${event.date}T${event.time}`);
+      if (eventTime > now) continue; // تخطي الأحداث المستقبلية
+
+      // محاولة مطابقة الحدث مع البيانات المستخرجة
+      // نبحث باستخدام اسم الحدث (بالإنجليزية الأصلي)
+      const eventNameEn = getOriginalEventName(event.event);
+      
+      // البحث في النتائج المستخرجة
+      for (const [key, actual] of actualsMap.entries()) {
+        if (key.includes(eventNameEn.toLowerCase().substring(0, 15))) {
+          event.actual = actual;
+          enrichedCount++;
+          console.log(`✅ Enriched from Investing: ${event.event} = ${actual}`);
+          break;
+        }
+      }
+    }
+
+    if (enrichedCount > 0) {
+      console.log(`📊 Successfully enriched ${enrichedCount} events with Investing.com actuals`);
+    }
+  } catch (error) {
+    console.log('⚠️ Could not enrich with Investing.com data:', error);
+  }
+}
+
+// دالة للحصول على الاسم الإنجليزي الأصلي للحدث
+function getOriginalEventName(arabicName: string): string {
+  // عكس الترجمة - البحث عن الاسم الإنجليزي
+  for (const [english, arabic] of Object.entries(eventTranslations)) {
+    if (arabic === arabicName) {
+      return english;
+    }
+  }
+  
+  // إذا لم نجد ترجمة، نعيد الاسم كما هو
+  return arabicName;
 }
 
 // ===================== Alternative: Trading Economics API =====================
