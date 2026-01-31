@@ -286,7 +286,8 @@ export async function getUserSystemNotifications(
       
       return result.rows.map((notif: any) => ({
         ...notif,
-        data: notif.data ? JSON.parse(notif.data) : null
+        // في PostgreSQL، JSONB يُرجع كـ object مباشرة، لا يحتاج parse
+        data: notif.data && typeof notif.data === 'string' ? JSON.parse(notif.data) : notif.data
       }));
     } else {
       // SQLite
