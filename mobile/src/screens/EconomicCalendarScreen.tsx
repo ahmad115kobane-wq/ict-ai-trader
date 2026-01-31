@@ -75,22 +75,29 @@ const EconomicCalendarScreen = () => {
   }, [events, selectedFilter]);
 
   const calculateFilterCounts = () => {
+    // إنشاء تاريخ اليوم بدقة (منتصف الليل UTC)
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
     const todayStr = today.toISOString().split('T')[0];
     
+    // غداً
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
     
-    const lastWeek = new Date(today);
-    lastWeek.setDate(lastWeek.getDate() - 7);
-    const lastWeekStr = lastWeek.toISOString().split('T')[0];
-    const yesterdayStr = new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // الأسبوع السابق: من (اليوم - 7) إلى (اليوم - 1)
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
     
-    const nextWeek = new Date(today);
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    const nextWeekStr = nextWeek.toISOString().split('T')[0];
+    const lastWeekStart = new Date(today);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0];
+    
+    // الأسبوع القادم: من (اليوم + 1) إلى (اليوم + 7)
+    const nextWeekEnd = new Date(today);
+    nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+    const nextWeekEndStr = nextWeekEnd.toISOString().split('T')[0];
     
     // فقط الأحداث التي لديها بيانات
     const eventsWithData = events.filter(e => e.forecast || e.previous || e.actual);
@@ -98,8 +105,8 @@ const EconomicCalendarScreen = () => {
     setFilterCounts({
       today: eventsWithData.filter(e => e.date === todayStr).length,
       tomorrow: eventsWithData.filter(e => e.date === tomorrowStr).length,
-      lastWeek: eventsWithData.filter(e => e.date >= lastWeekStr && e.date <= yesterdayStr).length,
-      nextWeek: eventsWithData.filter(e => e.date >= tomorrowStr && e.date <= nextWeekStr).length
+      lastWeek: eventsWithData.filter(e => e.date >= lastWeekStartStr && e.date <= yesterdayStr).length,
+      nextWeek: eventsWithData.filter(e => e.date >= tomorrowStr && e.date <= nextWeekEndStr).length
     });
   };
 
@@ -228,57 +235,70 @@ const EconomicCalendarScreen = () => {
   };
 
   const applyFilter = (filter: FilterType) => {
+    // إنشاء تاريخ اليوم بدقة (منتصف الليل UTC)
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
     const todayStr = today.toISOString().split('T')[0];
     
-    // الخطوة 1: تصفية الأحداث حسب الأسبوع الحالي فقط (من اليوم إلى 7 أيام قادمة)
-    const nextWeek = new Date(today);
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    const nextWeekStr = nextWeek.toISOString().split('T')[0];
+    console.log('🔍 Current filter:', filter);
+    console.log('📅 Today date:', todayStr);
     
-    let filtered = events.filter(e => {
-      // فقط الأحداث من اليوم إلى الأسبوع القادم
-      return e.date >= todayStr && e.date <= nextWeekStr;
-    });
+    // تصفية الأحداث التي لديها بيانات فقط
+    let filtered = events.filter(e => e.forecast || e.previous || e.actual);
     
-    // الخطوة 2: إخفاء الأحداث بدون بيانات (لا توقع ولا سابق ولا فعلي)
-    filtered = filtered.filter(e => {
-      return e.forecast || e.previous || e.actual;
-    });
+    console.log(`📊 Events with data: ${filtered.length} out of ${events.length}`);
 
-    // الخطوة 3: تطبيق الفلتر المحدد
+    // تطبيق الفلتر حسب التاريخ
     if (filter === 'today') {
-      // اليوم فقط
+      // اليوم فقط - تطابق تام
       filtered = filtered.filter(e => e.date === todayStr);
+      console.log(`✅ Today events: ${filtered.length}`);
+      
     } else if (filter === 'tomorrow') {
-      // غداً فقط
+      // غداً فقط - اليوم + 1
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      
+      console.log('📅 Tomorrow date:', tomorrowStr);
       filtered = filtered.filter(e => e.date === tomorrowStr);
-    } else if (filter === 'lastWeek') {
-      // الأسبوع السابق (آخر 7 أيام قبل اليوم)
-      const lastWeek = new Date(today);
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      const lastWeekStr = lastWeek.toISOString().split('T')[0];
-      const yesterdayStr = new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      console.log(`✅ Tomorrow events: ${filtered.length}`);
       
-      // إعادة تطبيق الفلتر للأسبوع السابق (بدون قيد الأسبوع الحالي)
-      filtered = events.filter(e => {
-        const hasData = e.forecast || e.previous || e.actual;
-        return hasData && e.date >= lastWeekStr && e.date <= yesterdayStr;
-      });
+    } else if (filter === 'lastWeek') {
+      // الأسبوع السابق: من (اليوم - 7) إلى (اليوم - 1)
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      
+      const lastWeekStart = new Date(today);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+      const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0];
+      
+      console.log('📅 Last week range:', lastWeekStartStr, 'to', yesterdayStr);
+      filtered = filtered.filter(e => e.date >= lastWeekStartStr && e.date <= yesterdayStr);
+      console.log(`✅ Last week events: ${filtered.length}`);
+      
     } else if (filter === 'nextWeek') {
-      // الأسبوع القادم (من غداً إلى 7 أيام)
+      // الأسبوع القادم: من (اليوم + 1) إلى (اليوم + 7)
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
       
-      filtered = filtered.filter(e => e.date >= tomorrowStr && e.date <= nextWeekStr);
+      const nextWeekEnd = new Date(today);
+      nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+      const nextWeekEndStr = nextWeekEnd.toISOString().split('T')[0];
+      
+      console.log('📅 Next week range:', tomorrowStr, 'to', nextWeekEndStr);
+      filtered = filtered.filter(e => e.date >= tomorrowStr && e.date <= nextWeekEndStr);
+      console.log(`✅ Next week events: ${filtered.length}`);
     }
 
-    console.log(`📊 Filtered ${filtered.length} events (with data, current week focus)`);
+    // عرض عينة من التواريخ المفلترة
+    if (filtered.length > 0) {
+      const sampleDates = filtered.slice(0, 3).map(e => `${e.event}: ${e.date}`);
+      console.log('📋 Sample filtered events:', sampleDates);
+    }
+
     setFilteredEvents(filtered);
   };
 
@@ -314,16 +334,21 @@ const EconomicCalendarScreen = () => {
   };
 
   const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    const today = new Date();
+    // استخدام نفس منطق التاريخ في applyFilter
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const todayStr = today.toISOString().split('T')[0];
+    
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-    if (dateStr === today.toISOString().split('T')[0]) {
+    if (dateStr === todayStr) {
       return 'اليوم';
-    } else if (dateStr === tomorrow.toISOString().split('T')[0]) {
+    } else if (dateStr === tomorrowStr) {
       return 'غداً';
     } else {
+      const date = new Date(dateStr + 'T00:00:00Z');
       return date.toLocaleDateString('ar-EG', {
         weekday: 'short',
         month: 'short',
@@ -334,10 +359,26 @@ const EconomicCalendarScreen = () => {
 
   const renderEvent = (event: EconomicEvent) => {
     const impactColor = getImpactColor(event.impact);
+    
+    // الحصول على الوقت الحالي بتوقيت مكة المكرمة (UTC+3)
     const now = new Date();
-    const eventTime = new Date(`${event.date}T${event.time}`);
-    const hasReleased = event.actual || eventTime < now;
-    const isPending = !event.actual && eventTime > now;
+    const meccaTime = new Date(now.getTime() + (3 * 60 * 60 * 1000)); // إضافة 3 ساعات
+    
+    // تحويل وقت الحدث إلى تاريخ كامل (UTC)
+    const eventDateTime = new Date(`${event.date}T${event.time}:00Z`);
+    
+    // تحديد حالة الحدث بدقة
+    const hasReleased = event.actual !== undefined && event.actual !== null && event.actual !== '';
+    const isPending = !hasReleased && eventDateTime > meccaTime;
+    
+    // تحويل وقت الحدث إلى توقيت مكة المكرمة
+    const eventMeccaTime = new Date(eventDateTime.getTime() + (3 * 60 * 60 * 1000));
+    const displayTime = eventMeccaTime.toLocaleTimeString('ar-SA', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'UTC'
+    });
 
     return (
       <View key={event.id} style={[styles.eventCard, { borderLeftColor: impactColor }]}>
@@ -352,7 +393,7 @@ const EconomicCalendarScreen = () => {
           </View>
           
           <View style={styles.eventHeaderRight}>
-            <Text style={styles.eventTime}>{event.time}</Text>
+            <Text style={styles.eventTime}>{displayTime}</Text>
             <Text style={styles.eventDate}>{formatDate(event.date)}</Text>
           </View>
         </View>
@@ -407,7 +448,7 @@ const EconomicCalendarScreen = () => {
         )}
 
         {/* Analysis Button - Only for unreleased events */}
-        {!event.actual && (
+        {!hasReleased && (
           <TouchableOpacity
             style={[
               styles.analyzeButton,
