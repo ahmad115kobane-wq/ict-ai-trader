@@ -143,82 +143,25 @@ const eventTranslations: { [key: string]: string } = {
   'Kansas City Fed Manufacturing Index': 'مؤشر كانساس الصناعي',
 };
 
-// ===================== Investing.com API (Free - with Actual Results) =====================
-// جلب البيانات من Investing.com مع النتائج الفعلية
-async function fetchFromInvestingCom(): Promise<EconomicEvent[]> {
-  try {
-    // استخدام API من Investing.com
-    const response = await axios.post('https://api.investing.com/api/financialdata/events/economicCalendar', {
-      dateFrom: new Date().toISOString().split('T')[0],
-      dateTo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      countries: [5, 17, 25, 32, 6, 37, 72, 22, 26, 36], // Major countries
-      importance: [2, 3], // Medium and High
-      limit: 300
-    }, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      timeout: 15000
-    });
-
-    const events: EconomicEvent[] = [];
-    
-    if (response.data && response.data.data && Array.isArray(response.data.data)) {
-      for (const item of response.data.data) {
-        const eventDate = new Date(item.eventDate || item.date);
-        
-        // تحويل رمز الدولة
-        const countryMap: { [key: string]: string } = {
-          '5': 'US', '17': 'EU', '25': 'GB', '32': 'JP',
-          '6': 'CA', '37': 'AU', '72': 'NZ', '22': 'CH', '26': 'CN'
-        };
-        const country = countryMap[item.countryId?.toString()] || 'US';
-        
-        const event: EconomicEvent = {
-          id: `inv_${item.eventId || eventDate.getTime()}`,
-          date: eventDate.toISOString().split('T')[0],
-          time: eventDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          country: country,
-          countryName: countryNames[country] || country,
-          currency: item.currencyCode || 'USD',
-          event: translateEvent(item.eventName || item.name),
-          impact: item.importance === 3 ? 'high' : 'medium',
-          forecast: item.forecast || undefined,
-          previous: item.previous || undefined,
-          actual: item.actual || undefined
-        };
-        
-        if (event.actual) {
-          console.log(`📊 Investing.com - Event with actual: ${event.event} = ${event.actual}`);
-        }
-        
-        events.push(event);
-      }
-    }
-
-    console.log(`✅ Fetched ${events.length} events from Investing.com`);
-    return events;
-  } catch (error) {
-    console.error('❌ Failed to fetch from Investing.com:', error);
-    return [];
-  }
-}
-
 // ===================== FXStreet API (Free Alternative) =====================
 // جلب البيانات من FXStreet
 async function fetchFromFXStreet(): Promise<EconomicEvent[]> {
   try {
+    const today = new Date();
+    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
     const response = await axios.get('https://calendar-api.fxstreet.com/en/api/v1/eventDates', {
       params: {
         timezone: 'GMT',
-        rows: 100,
+        rows: 300,
         volatilities: 'high,medium',
-        countries: 'US,EU,GB,JP,CA,AU,NZ,CH,CN'
+        countries: 'US,EU,GB,JP,CA,AU,NZ,CH,CN',
+        dateFrom: today.toISOString().split('T')[0],
+        dateTo: nextWeek.toISOString().split('T')[0]
       },
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json'
       },
       timeout: 15000
     });
@@ -473,19 +416,13 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
     console.log('🔄 Trying FXStreet...');
     events = await fetchFromFXStreet();
 
-    // 2. إذا فشل، جرب Investing.com
+    // 2. إذا فشل، جرب Forex Factory
     if (events.length === 0) {
-      console.log('🔄 FXStreet failed, trying Investing.com...');
-      events = await fetchFromInvestingCom();
-    }
-
-    // 3. إذا فشل، جرب Forex Factory
-    if (events.length === 0) {
-      console.log('🔄 Investing.com failed, trying Forex Factory...');
+      console.log('🔄 FXStreet failed, trying Forex Factory...');
       events = await fetchFromForexFactory();
     }
 
-    // 4. إذا فشل، جرب Trading Economics
+    // 3. إذا فشل، جرب Trading Economics
     if (events.length === 0) {
       console.log('🔄 Forex Factory failed, trying Trading Economics...');
       events = await fetchFromTradingEconomics();
