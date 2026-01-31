@@ -205,6 +205,10 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
             callback_data: 'subscription_details'
           }],
           [{
+            text: '📅 التقويم الاقتصادي',
+            callback_data: 'economic_calendar'
+          }],
+          [{
             text: '💬 الدعم الفني',
             url: 'https://t.me/iqbotict'
           } as any]
@@ -539,6 +543,109 @@ async function handleAutoToggle(chatId: number, telegramUser: TelegramUser, call
 }
 
 /**
+ * معالج زر التقويم الاقتصادي
+ */
+async function handleEconomicCalendar(chatId: number, telegramUser: TelegramUser, callbackQueryId: string): Promise<void> {
+  try {
+    await answerCallbackQuery(callbackQueryId, '📅 جاري تحميل التقويم...');
+    
+    // استيراد خدمة التقويم الاقتصادي
+    const { getEconomicCalendar } = await import('./economicCalendarService');
+    
+    // جلب الأحداث
+    const calendar = await getEconomicCalendar();
+    const events = calendar.events;
+    
+    if (!events || events.length === 0) {
+      await sendMessage(
+        chatId,
+        '⚠️ <b>لا توجد أحداث اقتصادية متاحة حالياً</b>\n\n' +
+        'يرجى المحاولة لاحقاً.'
+      );
+      return;
+    }
+    
+    // فلترة الأحداث المهمة (high impact) والقادمة
+    const now = new Date();
+    const upcomingEvents = events.filter((event: any) => {
+      const eventDate = new Date(`${event.date}T${event.time}`);
+      return eventDate > now && event.impact === 'high';
+    }).slice(0, 10); // أول 10 أحداث
+    
+    if (upcomingEvents.length === 0) {
+      await sendMessage(
+        chatId,
+        '📅 <b>التقويم الاقتصادي</b>\n\n' +
+        '✅ لا توجد أحداث مهمة قادمة في الوقت الحالي.\n\n' +
+        'سيتم إشعارك تلقائياً قبل 5 دقائق من أي حدث مهم.'
+      );
+      return;
+    }
+    
+    // بناء رسالة الأحداث
+    let message = '📅 <b>الأحداث الاقتصادية المهمة القادمة</b>\n\n';
+    
+    upcomingEvents.forEach((event: any, index: number) => {
+      const eventDate = new Date(`${event.date}T${event.time}`);
+      const timeUntil = Math.round((eventDate.getTime() - now.getTime()) / (1000 * 60)); // بالدقائق
+      
+      let timeText = '';
+      if (timeUntil < 60) {
+        timeText = `⏰ خلال ${timeUntil} دقيقة`;
+      } else if (timeUntil < 1440) {
+        timeText = `⏰ خلال ${Math.round(timeUntil / 60)} ساعة`;
+      } else {
+        timeText = `📅 ${eventDate.toLocaleDateString('ar-SA')}`;
+      }
+      
+      message += `${index + 1}. <b>${event.event}</b>\n`;
+      message += `   🌍 ${event.countryName}\n`;
+      message += `   ${timeText}\n`;
+      message += `   🔴 تأثير عالي\n`;
+      
+      if (event.forecast) {
+        message += `   📊 التوقع: ${event.forecast}\n`;
+      }
+      if (event.previous) {
+        message += `   📈 السابق: ${event.previous}\n`;
+      }
+      if (event.actual) {
+        message += `   ✅ الفعلي: ${event.actual}\n`;
+      }
+      
+      message += '\n';
+    });
+    
+    message += '💡 <b>ملاحظة:</b> سيتم إشعارك تلقائياً قبل 5 دقائق من كل حدث مهم.';
+    
+    const keyboard = {
+      inline_keyboard: [
+        [{
+          text: '🔄 تحديث',
+          callback_data: 'economic_calendar'
+        }],
+        [{
+          text: '🏠 الرئيسية',
+          callback_data: 'back_to_main'
+        }]
+      ]
+    };
+    
+    await sendMessage(chatId, message, keyboard);
+    console.log(`✅ Sent economic calendar to user: ${telegramUser.id}`);
+    
+  } catch (error) {
+    console.error(`❌ Error in handleEconomicCalendar:`, error);
+    await answerCallbackQuery(callbackQueryId, '❌ حدث خطأ');
+    await sendMessage(
+      chatId,
+      '❌ <b>حدث خطأ في تحميل التقويم الاقتصادي</b>\n\n' +
+      'يرجى المحاولة لاحقاً.'
+    );
+  }
+}
+
+/**
  * معالج أمر /auto - تفعيل/إيقاف التحليل التلقائي
  */
 async function handleAutoCommand(chatId: number, telegramUser: TelegramUser): Promise<void> {
@@ -648,6 +755,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       } else if (data === 'subscription_details') {
         console.log(`📊 Showing subscription details for user ${user.id}`);
         await handleSubscriptionDetails(chatId, user, callbackQuery.id);
+      } else if (data === 'economic_calendar') {
+        console.log(`📅 Showing economic calendar for user ${user.id}`);
+        await handleEconomicCalendar(chatId, user, callbackQuery.id);
       } else if (data === 'back_to_main' || data === 'main_menu') {
         console.log(`🏠 Going back to main menu for user ${user.id}`);
         await handleBackToMain(chatId, user, callbackQuery.id);
