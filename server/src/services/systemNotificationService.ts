@@ -200,20 +200,49 @@ async function saveSystemNotificationToDb(
   notification: SystemNotification
 ): Promise<void> {
   try {
-    const { db } = await import('../db/index');
+    // استخدام query مباشرة للوصول إلى قاعدة البيانات
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
     
-    await db.run(
-      `INSERT INTO system_notifications (user_id, type, title, message, priority, data, read, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'))`,
-      [
-        userId,
-        notification.type,
-        notification.title,
-        notification.message,
-        notification.priority,
-        notification.data ? JSON.stringify(notification.data) : null
-      ]
-    );
+    if (isProduction) {
+      // PostgreSQL
+      const { query } = await import('../db/postgresAdapter');
+      const { v4: uuidv4 } = await import('uuid');
+      
+      await query(
+        `INSERT INTO system_notifications (id, user_id, type, title, message, priority, data, read, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW())`,
+        [
+          uuidv4(),
+          userId,
+          notification.type,
+          notification.title,
+          notification.message,
+          notification.priority,
+          notification.data ? JSON.stringify(notification.data) : null
+        ]
+      );
+    } else {
+      // SQLite
+      const sqliteDb = await import('../db/database');
+      const db = (sqliteDb as any).default;
+      const { v4: uuidv4 } = await import('uuid');
+      
+      if (db) {
+        db.run(
+          `INSERT INTO system_notifications (id, user_id, type, title, message, priority, data, read, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))`,
+          [
+            uuidv4(),
+            userId,
+            notification.type,
+            notification.title,
+            notification.message,
+            notification.priority,
+            notification.data ? JSON.stringify(notification.data) : null
+          ]
+        );
+      }
+    }
     
     console.log(`✅ System notification saved to DB for user: ${userId}`);
   } catch (error) {
@@ -229,24 +258,62 @@ export async function getUserSystemNotifications(
   limit: number = 50
 ): Promise<any[]> {
   try {
-    const { db } = await import('../db/index');
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
     
-    const notifications = await db.all(
-      `SELECT * FROM system_notifications 
-       WHERE user_id = ? 
-       ORDER BY created_at DESC 
-       LIMIT ?`,
-      [userId, limit]
-    );
-    
-    return notifications.map(notif => ({
-      ...notif,
-      data: notif.data ? JSON.parse(notif.data) : null
-    }));
+    if (isProduction) {
+      // PostgreSQL
+      const { query } = await import('../db/postgresAdapter');
+      
+      const result = await query(
+        `SELECT * FROM system_notifications 
+         WHERE user_id = $1 
+         ORDER BY created_at DESC 
+         LIMIT $2`,
+        [userId, limit]
+      );
+      
+      return result.rows.map((notif: any) => ({
+        ...notif,
+        data: notif.data ? JSON.parse(notif.data) : null
+      }));
+    } else {
+      // SQLite
+      const sqliteDb = await import('../db/database');
+      const db = (sqliteDb as any).default;
+      
+      if (!db) return [];
+      
+      const notifications = db.exec(
+        `SELECT * FROM system_notifications 
+         WHERE user_id = ? 
+         ORDER BY created_at DESC 
+         LIMIT ?`,
+        [userId, limit]
+      );
+      
+      if (notifications.length === 0 || notifications[0].values.length === 0) return [];
+      
+      return notifications[0].values.map((row: any) => {
+        const notif = rowToObject(notifications[0].columns, row);
+        return {
+          ...notif,
+          data: notif.data ? JSON.parse(notif.data) : null
+        };
+      });
+    }
   } catch (error) {
     console.error('❌ Error getting system notifications:', error);
     return [];
   }
+}
+
+// Helper function for SQLite
+function rowToObject(columns: string[], values: any[]): any {
+  const obj: any = {};
+  columns.forEach((col, i) => {
+    obj[col] = values[i];
+  });
+  return obj;
 }
 
 /**
@@ -254,12 +321,28 @@ export async function getUserSystemNotifications(
  */
 export async function markSystemNotificationAsRead(notificationId: string): Promise<void> {
   try {
-    const { db } = await import('../db/index');
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
     
-    await db.run(
-      `UPDATE system_notifications SET read = 1 WHERE id = ?`,
-      [notificationId]
-    );
+    if (isProduction) {
+      // PostgreSQL
+      const { query } = await import('../db/postgresAdapter');
+      
+      await query(
+        `UPDATE system_notifications SET read = true WHERE id = $1`,
+        [notificationId]
+      );
+    } else {
+      // SQLite
+      const sqliteDb = await import('../db/database');
+      const db = (sqliteDb as any).default;
+      
+      if (db) {
+        db.run(
+          `UPDATE system_notifications SET read = 1 WHERE id = ?`,
+          [notificationId]
+        );
+      }
+    }
   } catch (error) {
     console.error('❌ Error marking notification as read:', error);
   }
@@ -270,12 +353,28 @@ export async function markSystemNotificationAsRead(notificationId: string): Prom
  */
 export async function markAllSystemNotificationsAsRead(userId: string): Promise<void> {
   try {
-    const { db } = await import('../db/index');
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
     
-    await db.run(
-      `UPDATE system_notifications SET read = 1 WHERE user_id = ?`,
-      [userId]
-    );
+    if (isProduction) {
+      // PostgreSQL
+      const { query } = await import('../db/postgresAdapter');
+      
+      await query(
+        `UPDATE system_notifications SET read = true WHERE user_id = $1`,
+        [userId]
+      );
+    } else {
+      // SQLite
+      const sqliteDb = await import('../db/database');
+      const db = (sqliteDb as any).default;
+      
+      if (db) {
+        db.run(
+          `UPDATE system_notifications SET read = 1 WHERE user_id = ?`,
+          [userId]
+        );
+      }
+    }
   } catch (error) {
     console.error('❌ Error marking all notifications as read:', error);
   }
@@ -286,12 +385,28 @@ export async function markAllSystemNotificationsAsRead(userId: string): Promise<
  */
 export async function deleteSystemNotification(notificationId: string): Promise<void> {
   try {
-    const { db } = await import('../db/index');
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
     
-    await db.run(
-      `DELETE FROM system_notifications WHERE id = ?`,
-      [notificationId]
-    );
+    if (isProduction) {
+      // PostgreSQL
+      const { query } = await import('../db/postgresAdapter');
+      
+      await query(
+        `DELETE FROM system_notifications WHERE id = $1`,
+        [notificationId]
+      );
+    } else {
+      // SQLite
+      const sqliteDb = await import('../db/database');
+      const db = (sqliteDb as any).default;
+      
+      if (db) {
+        db.run(
+          `DELETE FROM system_notifications WHERE id = ?`,
+          [notificationId]
+        );
+      }
+    }
   } catch (error) {
     console.error('❌ Error deleting notification:', error);
   }
@@ -302,54 +417,120 @@ export async function deleteSystemNotification(notificationId: string): Promise<
  */
 export async function checkSubscriptionExpirations(): Promise<void> {
   try {
-    const { db } = await import('../db/index');
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
     
-    // البحث عن الاشتراكات المنتهية
-    const expiredUsers = await db.all(
-      `SELECT id, email, subscription, subscription_expiry 
-       FROM users 
-       WHERE subscription != 'free' 
-       AND subscription_expiry IS NOT NULL 
-       AND datetime(subscription_expiry) <= datetime('now')
-       AND subscription_expiry_notified = 0`
-    );
-    
-    for (const user of expiredUsers) {
-      await notifySubscriptionExpired(user.id, user.subscription);
+    if (isProduction) {
+      // PostgreSQL
+      const { query } = await import('../db/postgresAdapter');
       
-      // تعليم المستخدم كمُشعَر
-      await db.run(
-        `UPDATE users SET subscription_expiry_notified = 1 WHERE id = ?`,
-        [user.id]
+      // البحث عن الاشتراكات المنتهية
+      const expiredUsers = await query(
+        `SELECT id, email, subscription, subscription_expiry 
+         FROM users 
+         WHERE subscription != 'free' 
+         AND subscription_expiry IS NOT NULL 
+         AND subscription_expiry <= NOW()
+         AND subscription_expiry_notified = false`
       );
-    }
-    
-    // البحث عن الاشتراكات القريبة من الانتهاء (3 أيام)
-    const expiringUsers = await db.all(
-      `SELECT id, email, subscription, subscription_expiry 
-       FROM users 
-       WHERE subscription != 'free' 
-       AND subscription_expiry IS NOT NULL 
-       AND datetime(subscription_expiry) > datetime('now')
-       AND datetime(subscription_expiry) <= datetime('now', '+3 days')
-       AND subscription_expiring_notified = 0`
-    );
-    
-    for (const user of expiringUsers) {
-      const expiryDate = new Date(user.subscription_expiry);
-      const now = new Date();
-      const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       
-      await notifySubscriptionExpiring(user.id, user.subscription, daysRemaining);
+      for (const user of expiredUsers.rows) {
+        await notifySubscriptionExpired(user.id, user.subscription);
+        
+        // تعليم المستخدم كمُشعَر
+        await query(
+          `UPDATE users SET subscription_expiry_notified = true WHERE id = $1`,
+          [user.id]
+        );
+      }
       
-      // تعليم المستخدم كمُشعَر
-      await db.run(
-        `UPDATE users SET subscription_expiring_notified = 1 WHERE id = ?`,
-        [user.id]
+      // البحث عن الاشتراكات القريبة من الانتهاء (3 أيام)
+      const expiringUsers = await query(
+        `SELECT id, email, subscription, subscription_expiry 
+         FROM users 
+         WHERE subscription != 'free' 
+         AND subscription_expiry IS NOT NULL 
+         AND subscription_expiry > NOW()
+         AND subscription_expiry <= NOW() + INTERVAL '3 days'
+         AND subscription_expiring_notified = false`
       );
+      
+      for (const user of expiringUsers.rows) {
+        const expiryDate = new Date(user.subscription_expiry);
+        const now = new Date();
+        const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        
+        await notifySubscriptionExpiring(user.id, user.subscription, daysRemaining);
+        
+        // تعليم المستخدم كمُشعَر
+        await query(
+          `UPDATE users SET subscription_expiring_notified = true WHERE id = $1`,
+          [user.id]
+        );
+      }
+      
+      console.log(`✅ Checked subscriptions: ${expiredUsers.rows.length} expired, ${expiringUsers.rows.length} expiring`);
+    } else {
+      // SQLite
+      const sqliteDb = await import('../db/database');
+      const db = (sqliteDb as any).default;
+      
+      if (!db) return;
+      
+      // البحث عن الاشتراكات المنتهية
+      const expiredUsers = db.exec(
+        `SELECT id, email, subscription, subscription_expiry 
+         FROM users 
+         WHERE subscription != 'free' 
+         AND subscription_expiry IS NOT NULL 
+         AND datetime(subscription_expiry) <= datetime('now')
+         AND subscription_expiry_notified = 0`
+      );
+      
+      if (expiredUsers.length > 0 && expiredUsers[0].values.length > 0) {
+        for (const row of expiredUsers[0].values) {
+          const user = rowToObject(expiredUsers[0].columns, row);
+          await notifySubscriptionExpired(user.id, user.subscription);
+          
+          // تعليم المستخدم كمُشعَر
+          db.run(
+            `UPDATE users SET subscription_expiry_notified = 1 WHERE id = ?`,
+            [user.id]
+          );
+        }
+      }
+      
+      // البحث عن الاشتراكات القريبة من الانتهاء (3 أيام)
+      const expiringUsers = db.exec(
+        `SELECT id, email, subscription, subscription_expiry 
+         FROM users 
+         WHERE subscription != 'free' 
+         AND subscription_expiry IS NOT NULL 
+         AND datetime(subscription_expiry) > datetime('now')
+         AND datetime(subscription_expiry) <= datetime('now', '+3 days')
+         AND subscription_expiring_notified = 0`
+      );
+      
+      if (expiringUsers.length > 0 && expiringUsers[0].values.length > 0) {
+        for (const row of expiringUsers[0].values) {
+          const user = rowToObject(expiringUsers[0].columns, row);
+          const expiryDate = new Date(user.subscription_expiry);
+          const now = new Date();
+          const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          
+          await notifySubscriptionExpiring(user.id, user.subscription, daysRemaining);
+          
+          // تعليم المستخدم كمُشعَر
+          db.run(
+            `UPDATE users SET subscription_expiring_notified = 1 WHERE id = ?`,
+            [user.id]
+          );
+        }
+      }
+      
+      const expiredCount = expiredUsers.length > 0 ? expiredUsers[0].values.length : 0;
+      const expiringCount = expiringUsers.length > 0 ? expiringUsers[0].values.length : 0;
+      console.log(`✅ Checked subscriptions: ${expiredCount} expired, ${expiringCount} expiring`);
     }
-    
-    console.log(`✅ Checked subscriptions: ${expiredUsers.length} expired, ${expiringUsers.length} expiring`);
   } catch (error) {
     console.error('❌ Error checking subscription expirations:', error);
   }

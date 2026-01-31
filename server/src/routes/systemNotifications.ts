@@ -1,8 +1,8 @@
 // routes/systemNotifications.ts
 // API endpoints لإشعارات النظام (منفصلة عن إشعارات الصفقات)
 
-import { Router, Request, Response } from 'express';
-import { authenticateToken } from '../middleware/auth';
+import { Router, Response } from 'express';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 import {
   getUserSystemNotifications,
   markSystemNotificationAsRead,
@@ -16,9 +16,9 @@ const router = Router();
  * GET /api/system-notifications
  * الحصول على إشعارات النظام للمستخدم
  */
-router.get('/', authenticateToken, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 50;
 
     const notifications = await getUserSystemNotifications(userId, limit);
@@ -41,9 +41,9 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
  * GET /api/system-notifications/unread-count
  * الحصول على عدد الإشعارات غير المقروءة
  */
-router.get('/unread-count', authenticateToken, async (req: Request, res: Response) => {
+router.get('/unread-count', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = req.userId!;
     const notifications = await getUserSystemNotifications(userId, 1000);
     const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -64,7 +64,7 @@ router.get('/unread-count', authenticateToken, async (req: Request, res: Respons
  * PUT /api/system-notifications/:id/read
  * تعليم إشعار كمقروء
  */
-router.put('/:id/read', authenticateToken, async (req: Request, res: Response) => {
+router.put('/:id/read', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     await markSystemNotificationAsRead(id);
@@ -86,9 +86,9 @@ router.put('/:id/read', authenticateToken, async (req: Request, res: Response) =
  * PUT /api/system-notifications/mark-all-read
  * تعليم جميع الإشعارات كمقروءة
  */
-router.put('/mark-all-read', authenticateToken, async (req: Request, res: Response) => {
+router.put('/mark-all-read', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = req.userId!;
     await markAllSystemNotificationsAsRead(userId);
 
     res.json({
@@ -108,7 +108,7 @@ router.put('/mark-all-read', authenticateToken, async (req: Request, res: Respon
  * DELETE /api/system-notifications/:id
  * حذف إشعار
  */
-router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     await deleteSystemNotification(id);
