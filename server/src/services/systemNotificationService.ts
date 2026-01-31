@@ -21,6 +21,9 @@ export async function sendSystemNotification(
   notification: SystemNotification
 ): Promise<boolean> {
   try {
+    console.log(`📨 sendSystemNotification called for user: ${userId}`);
+    console.log(`   Type: ${notification.type}, Title: ${notification.title}`);
+    
     const { getUserById } = await import('../db/index');
     const user = await getUserById(userId);
     
@@ -29,26 +32,36 @@ export async function sendSystemNotification(
       return false;
     }
 
+    console.log(`✅ User found: ${user.email}`);
+    console.log(`   Has Telegram: ${user.email?.startsWith('telegram_')}`);
+    console.log(`   Has Push Token: ${!!user.push_token}`);
+
     let success = false;
 
     // إرسال إلى Telegram إذا كان المستخدم مسجل عبر Telegram
     if (user.email && user.email.startsWith('telegram_')) {
       const telegramId = user.email.replace('telegram_', '').replace('@ict-trader.local', '');
+      console.log(`📱 Sending to Telegram: ${telegramId}`);
       const telegramSuccess = await sendSystemMessageToTelegram(telegramId, notification);
+      console.log(`   Telegram result: ${telegramSuccess ? '✅' : '❌'}`);
       success = success || telegramSuccess;
     }
 
     // إرسال Push Notification إذا كان لديه token
     if (user.push_token) {
+      console.log(`📲 Sending push notification to token: ${user.push_token.substring(0, 30)}...`);
       const pushSuccess = await sendFirebaseSystemNotification(
         [user.push_token],
         notification
       );
+      console.log(`   Push result: ${pushSuccess ? '✅' : '❌'}`);
       success = success || pushSuccess;
     }
 
     // حفظ الإشعار في قاعدة البيانات
+    console.log(`💾 Saving notification to database for user: ${userId}`);
     await saveSystemNotificationToDb(userId, notification);
+    console.log(`✅ Notification saved to DB`);
 
     return success;
   } catch (error) {
@@ -200,19 +213,29 @@ async function saveSystemNotificationToDb(
   notification: SystemNotification
 ): Promise<void> {
   try {
+    console.log(`💾 saveSystemNotificationToDb called for user: ${userId}`);
+    
     // استخدام query مباشرة للوصول إلى قاعدة البيانات
     const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
+    
+    console.log(`   Environment: ${isProduction ? 'Production (PostgreSQL)' : 'Development (SQLite)'}`);
     
     if (isProduction) {
       // PostgreSQL
       const { query } = await import('../db/postgresAdapter');
       const { v4: uuidv4 } = await import('uuid');
       
-      await query(
+      const notificationId = uuidv4();
+      console.log(`   Generated notification ID: ${notificationId}`);
+      console.log(`   User ID: ${userId}`);
+      console.log(`   Title: ${notification.title}`);
+      
+      const result = await query(
         `INSERT INTO system_notifications (id, user_id, type, title, message, priority, data, read, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW())`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW())
+         RETURNING id`,
         [
-          uuidv4(),
+          notificationId,
           userId,
           notification.type,
           notification.title,
@@ -221,6 +244,8 @@ async function saveSystemNotificationToDb(
           notification.data ? JSON.stringify(notification.data) : null
         ]
       );
+      
+      console.log(`✅ System notification saved to DB with ID: ${result.rows[0].id}`);
     } else {
       // SQLite
       const sqliteDb = await import('../db/database');
@@ -241,12 +266,12 @@ async function saveSystemNotificationToDb(
             notification.data ? JSON.stringify(notification.data) : null
           ]
         );
+        console.log(`✅ System notification saved to SQLite DB for user: ${userId}`);
       }
     }
-    
-    console.log(`✅ System notification saved to DB for user: ${userId}`);
   } catch (error) {
     console.error('❌ Error saving system notification to DB:', error);
+    console.error('   Error details:', error);
   }
 }
 
