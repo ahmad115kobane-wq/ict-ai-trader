@@ -636,15 +636,32 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       const data = callbackQuery.data;
       const user = callbackQuery.from;
 
+      console.log(`🔘 Processing callback query: ${data} from user ${user.id}`);
+
       if (data.startsWith('buy_')) {
         const packageId = data.replace('buy_', '');
+        console.log(`💰 Handling package purchase: ${packageId}`);
         await handlePackagePurchase(chatId, user, packageId, callbackQuery.id);
       } else if (data === 'toggle_auto') {
+        console.log(`🤖 Toggling auto analysis for user ${user.id}`);
         await handleAutoToggle(chatId, user, callbackQuery.id);
       } else if (data === 'subscription_details') {
+        console.log(`📊 Showing subscription details for user ${user.id}`);
         await handleSubscriptionDetails(chatId, user, callbackQuery.id);
       } else if (data === 'back_to_main' || data === 'main_menu') {
+        console.log(`🏠 Going back to main menu for user ${user.id}`);
         await handleBackToMain(chatId, user, callbackQuery.id);
+      } else if (data === 'test_button_1') {
+        console.log(`✅ Test button 1 clicked by user ${user.id}`);
+        await answerCallbackQuery(callbackQuery.id, '✅ الزر 1 يعمل بنجاح!');
+        await sendMessage(chatId, '✅ <b>الزر 1 يعمل!</b>\n\nWebhook يعمل بشكل صحيح.');
+      } else if (data === 'test_button_2') {
+        console.log(`🔘 Test button 2 clicked by user ${user.id}`);
+        await answerCallbackQuery(callbackQuery.id, '🔘 الزر 2 يعمل بنجاح!');
+        await sendMessage(chatId, '🔘 <b>الزر 2 يعمل!</b>\n\nجميع الأزرار تعمل بشكل صحيح.');
+      } else {
+        console.log(`⚠️ Unknown callback data: ${data}`);
+        await answerCallbackQuery(callbackQuery.id, 'غير معروف');
       }
     }
   } catch (error) {

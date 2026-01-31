@@ -7,69 +7,126 @@ import helmet from 'helmet';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getCandles, getCurrentPrice } from './services/oandaService';
+import { renderDualCharts } from './services/chartService';
+import { analyzeMultiTimeframe } from './services/aiService';
+
+// ===== Database helpers =====
+import { saveAutoAnalysis, saveEnhancedAnalysis } from './db/index';
+
+// ===== Utils =====
+import { v4 as uuidv4 } from 'uuid';
 
 // تحميل المتغيرات البيئية
 dotenv.config();
 
 // تحديد المسار الأساسي للملفات الثابتة
-// في وضع التطوير: server/src -> server
-// في وضع الإنتاج: server/dist/src -> server/dist
 const SERVER_ROOT = path.join(__dirname, '..');
 
+// Imports
 import { initDatabase } from './db/index';
 import authRoutes from './routes/auth';
 import analysisRoutes from './routes/analysis';
 import subscriptionRoutes from './routes/subscription';
 import telegramRoutes from './routes/telegram';
 import manualTradeRoutes from './routes/manualTrade';
-import { initializeDefaultPackages, checkAndExpireSubscriptions } from './services/subscriptionService';
-import { getCandles, getCurrentPrice } from './services/oandaService';
-import { renderDualCharts } from './services/chartService';
-import { analyzeMultiTimeframe } from './services/aiService';
-import { saveAutoAnalysis, saveEnhancedAnalysis } from './db/index';
-import { v4 as uuidv4 } from 'uuid';
 
+import {
+  initializeDefaultPackages,
+  checkAndExpireSubscriptions,
+} from './services/subscriptionService';
+
+import { setupTelegramWebhook } from './services/telegramBotService';
+
+// App init
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
+// ===== Middleware =====
+app.set('trust proxy', 1); // مهم لـ Railway
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+      },
     },
-  },
-}));
+  })
+);
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Serve static files from public directory
+// Static files
 app.use(express.static(path.join(SERVER_ROOT, 'public')));
 
-// Routes
+// ===== Routes =====
 app.use('/api/auth', authRoutes);
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/telegram', telegramRoutes);
-app.use('/api', manualTradeRoutes); // Manual trade entry
+app.use('/api', manualTradeRoutes);
 
-// Telegram setup page
+// صفحات HTML
 app.get('/setup-telegram', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'setup-telegram.html'));
 });
 
-// Manual trade entry page
+app.get('/test-telegram-webhook', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'public', 'test-telegram-webhook.html'));
+});
+
 app.get('/manual-trade', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'manual-trade.html'));
 });
 
-// Economic calendar page
 app.get('/economic-calendar', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'economic-calendar.html'));
+});
+
+// ===== Startup Logic =====
+(async () => {
+  try {
+    // Database
+    await initDatabase();
+    console.log('✅ Database initialized');
+
+    // Default packages
+    await initializeDefaultPackages();
+    console.log('✅ Default packages initialized');
+
+    // Telegram Webhook (يعمل تلقائيًا عند التشغيل)
+    const TELEGRAM_WEBHOOK_URL =
+      'https://ict-ai-trader-production.up.railway.app/api/telegram/webhook';
+
+    const ok = await setupTelegramWebhook(TELEGRAM_WEBHOOK_URL);
+    if (ok) {
+      console.log('✅ Telegram webhook initialized on startup');
+    } else {
+      console.error('❌ Telegram webhook setup failed');
+    }
+
+    // Cron: فحص الاشتراكات
+    cron.schedule('0 * * * *', async () => {
+      try {
+        await checkAndExpireSubscriptions();
+        console.log('⏱️ Subscription check completed');
+      } catch (err) {
+        console.error('❌ Subscription cron error:', err);
+      }
+    });
+  } catch (error) {
+    console.error('❌ Startup error:', error);
+  }
+})();
+
+// ===== Listen =====
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
 
 // Test screenshot route
