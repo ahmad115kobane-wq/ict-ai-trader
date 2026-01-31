@@ -12,7 +12,7 @@ const notifiedEventsBefore5Min = new Set<string>();
 let monitoringInterval: NodeJS.Timeout | null = null;
 
 /**
- * بدء مراقبة الأحداث الاقتصادية
+ * بدء مراقبة الأحداث الاقتصادية (ذكي - يتكيف حسب الحاجة)
  */
 export function startEconomicEventMonitoring() {
   if (monitoringInterval) {
@@ -20,15 +20,62 @@ export function startEconomicEventMonitoring() {
     return;
   }
 
-  console.log('📅 Starting economic event monitoring (every 30 seconds)...');
+  console.log('📅 Starting smart economic event monitoring...');
   
-  // فحص كل 30 ثانية للحصول على دقة أعلى
+  // فحص ذكي - يتكيف حسب قرب الأحداث
   monitoringInterval = setInterval(async () => {
-    await checkUpcomingEvents();
-  }, 30 * 1000); // كل 30 ثانية
+    await smartCheckUpcomingEvents();
+  }, 60 * 1000); // كل دقيقة (أقل استهلاكاً)
 
   // فحص فوري عند البدء
-  checkUpcomingEvents();
+  smartCheckUpcomingEvents();
+}
+
+/**
+ * فحص ذكي - يزيد التردد عند قرب الأحداث
+ */
+async function smartCheckUpcomingEvents() {
+  try {
+    const calendar = await getEconomicCalendar(); // استخدام cache
+    const now = new Date();
+    let hasUpcomingEvent = false;
+
+    for (const event of calendar.events) {
+      if (event.impact === 'low') continue;
+
+      const eventTime = new Date(`${event.date}T${event.time}`);
+      const minutesUntil = Math.floor((eventTime.getTime() - now.getTime()) / (1000 * 60));
+
+      // إذا كان هناك حدث خلال 10 دقائق، نزيد التردد
+      if (minutesUntil >= -5 && minutesUntil <= 10) {
+        hasUpcomingEvent = true;
+        break;
+      }
+    }
+
+    if (hasUpcomingEvent) {
+      // وضع الدقة العالية - فحص كل 30 ثانية
+      console.log('⚡ High-frequency mode: Event within 10 minutes');
+      await checkUpcomingEventsHighFrequency();
+    } else {
+      // وضع عادي - فحص عادي
+      await checkUpcomingEvents();
+    }
+  } catch (error) {
+    console.error('❌ Error in smart check:', error);
+  }
+}
+
+/**
+ * فحص عالي التردد - يُستخدم فقط عند قرب الأحداث
+ */
+async function checkUpcomingEventsHighFrequency() {
+  const checks = 2; // فحصين إضافيين (كل 30 ثانية)
+  
+  for (let i = 0; i < checks; i++) {
+    await new Promise(resolve => setTimeout(resolve, 30 * 1000));
+    await checkUpcomingEvents();
+  }
 }
 
 /**
@@ -47,7 +94,8 @@ export function stopEconomicEventMonitoring() {
  */
 async function checkUpcomingEvents() {
   try {
-    const calendar = await getEconomicCalendar(true); // فرض التحديث للحصول على أحدث البيانات
+    // استخدام cache للتقليل من الطلبات
+    const calendar = await getEconomicCalendar(); // يستخدم cache (3 دقائق)
     const now = new Date();
 
     for (const event of calendar.events) {
@@ -59,16 +107,15 @@ async function checkUpcomingEvents() {
       const secondsUntil = Math.floor(timeDiff / 1000);
       const minutesUntil = Math.floor(secondsUntil / 60);
 
-      // إشعار قبل 5 دقائق (نافذة 60 ثانية)
+      // إشعار قبل 5 دقائق (نافذة 90 ثانية)
       if (minutesUntil === 5 && secondsUntil <= 330 && !notifiedEventsBefore5Min.has(event.id)) {
         await sendEventNotification(event, 'before');
         notifiedEventsBefore5Min.add(event.id);
         console.log(`📅 Sent 5-minute warning for: ${event.event}`);
       }
 
-      // إشعار عند صدور الخبر - دقة عالية (نافذة 60 ثانية)
-      // يُرسل الإشعار فوراً عندما يحين وقت الخبر
-      if (secondsUntil <= 30 && secondsUntil >= -30 && !notifiedEvents.has(event.id)) {
+      // إشعار عند صدور الخبر - دقة عالية (نافذة 90 ثانية)
+      if (secondsUntil <= 60 && secondsUntil >= -30 && !notifiedEvents.has(event.id)) {
         // إرسال الإشعار فوراً
         await sendEventNotification(event, 'now');
         notifiedEvents.add(event.id);
@@ -77,7 +124,7 @@ async function checkUpcomingEvents() {
         // جدولة تحديث بعد دقيقة واحدة للتحقق من النتيجة الفعلية
         setTimeout(async () => {
           try {
-            const updatedCalendar = await getEconomicCalendar(true);
+            const updatedCalendar = await getEconomicCalendar(true); // فرض التحديث
             const updatedEvent = updatedCalendar.events.find(e => e.id === event.id);
             
             if (updatedEvent && updatedEvent.actual && updatedEvent.actual !== event.actual) {
