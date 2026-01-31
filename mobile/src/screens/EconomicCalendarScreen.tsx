@@ -20,6 +20,8 @@ import { useNavigation } from '@react-navigation/native';
 
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { API_BASE_URL } from '../config/api';
+import { useAuth } from '../context/AuthContext';
+import Header from '../components/Header';
 
 interface EconomicEvent {
   id: string;
@@ -46,6 +48,7 @@ type FilterType = 'all' | 'high' | 'today' | 'upcoming';
 
 const EconomicCalendarScreen = () => {
   const navigation = useNavigation();
+  const { user, logout } = useAuth();
   const [events, setEvents] = useState<EconomicEvent[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<EconomicEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -367,10 +370,20 @@ const EconomicCalendarScreen = () => {
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>التقويم الاقتصادي</Text>
-          <Text style={styles.headerSubtitle}>الأحداث المؤثرة على الأسواق</Text>
+      <Header 
+        coins={user?.coins || 0}
+        onLogout={logout}
+        showLogout={true}
+      />
+
+      {/* Page Title */}
+      <View style={styles.pageHeader}>
+        <View style={styles.pageTitleContainer}>
+          <Ionicons name="calendar" size={24} color={colors.primary} />
+          <View>
+            <Text style={styles.pageTitle}>التقويم الاقتصادي</Text>
+            <Text style={styles.pageSubtitle}>الأحداث المؤثرة على الأسواق</Text>
+          </View>
         </View>
         <TouchableOpacity
           style={styles.refreshButton}
@@ -572,7 +585,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSizes.md,
   },
-  header: {
+  pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -581,18 +594,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerCenter: {
-    flex: 1,
+  pageTitleContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
   },
-  headerTitle: {
+  pageTitle: {
     color: colors.text,
-    fontSize: fontSizes.xl,
+    fontSize: fontSizes.lg,
     fontWeight: '700',
   },
-  headerSubtitle: {
+  pageSubtitle: {
     color: colors.textSecondary,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.xs,
     marginTop: 2,
   },
   refreshButton: {
