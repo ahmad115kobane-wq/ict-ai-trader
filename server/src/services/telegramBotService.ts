@@ -205,6 +205,10 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
             callback_data: 'subscription_details'
           }],
           [{
+            text: '💎 الباقات',
+            callback_data: 'show_packages'
+          }],
+          [{
             text: '📅 التقويم الاقتصادي',
             callback_data: 'economic_calendar'
           }],
@@ -255,24 +259,30 @@ async function showPackages(chatId: number, user: any): Promise<void> {
     console.log(`✅ Found ${packages.length} packages`);
 
     let message = `🎁 <b>الباقات المتاحة</b>\n\n`;
-    message += `💰 رصيدك الحالي: ${user.coins} عملة\n\n`;
+    message += `💰 رصيدك الحالي: <b>${user.coins || 0} عملة</b>\n\n`;
+    message += `━━━━━━━━━━━━━━━━━━\n\n`;
     
     packages.forEach((pkg: any) => {
+      const coinPrice = Math.round(pkg.price * 100); // 1 دولار = 100 عملة
       message += `📦 <b>${pkg.name_ar}</b>\n`;
-      message += `💵 السعر: ${pkg.price} عملة\n`;
+      message += `💎 السعر: <b>${coinPrice} عملة</b> ($${pkg.price})\n`;
       message += `⏰ المدة: ${pkg.duration_days} يوم\n`;
-      message += `💎 عملات مجانية: ${pkg.coins_included}\n`;
-      message += `📊 الإشارات: غير محدودة\n`;
+      message += `🎁 عملات مجانية: +${pkg.coins_included} عملة\n`;
+      message += `📊 التحليلات: غير محدودة\n`;
       message += `\n`;
     });
 
+    message += `━━━━━━━━━━━━━━━━━━\n`;
     message += `👇 اختر الباقة المناسبة لك:`;
 
     // إنشاء الأزرار
-    const buttons = packages.map((pkg: any) => [{
-      text: `${pkg.name_ar} - ${pkg.price} عملة`,
-      callback_data: `buy_${pkg.id}`
-    }]);
+    const buttons = packages.map((pkg: any) => {
+      const coinPrice = Math.round(pkg.price * 100);
+      return [{
+        text: `💎 ${pkg.name_ar} - ${coinPrice} عملة`,
+        callback_data: `buy_${pkg.id}`
+      }];
+    });
     
     // إضافة أزرار التنقل
     buttons.push([
@@ -755,6 +765,10 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       } else if (data === 'subscription_details') {
         console.log(`📊 Showing subscription details for user ${user.id}`);
         await handleSubscriptionDetails(chatId, user, callbackQuery.id);
+      } else if (data === 'show_packages') {
+        console.log(`💎 Showing packages for user ${user.id}`);
+        await answerCallbackQuery(callbackQuery.id, '💎 عرض الباقات');
+        await showPackages(chatId, user);
       } else if (data === 'economic_calendar') {
         console.log(`📅 Showing economic calendar for user ${user.id}`);
         await handleEconomicCalendar(chatId, user, callbackQuery.id);
