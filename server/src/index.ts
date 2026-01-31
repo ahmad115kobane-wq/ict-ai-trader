@@ -124,10 +124,8 @@ app.get('/economic-calendar', (req, res) => {
   }
 })();
 
-// ===== Listen =====
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+// ===== Routes and Endpoints Below =====
+// Note: Server will start at the end of file via startServer()
 
 // Test screenshot route
 app.get('/test-screenshot', async (req, res) => {
