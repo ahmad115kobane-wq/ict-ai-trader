@@ -321,7 +321,7 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
         }
 
         const event: EconomicEvent = {
-          id: `${eventDate}_${eventTime}_${item.title || item.event}`,
+          id: `${eventDate}_${eventTime}_${country}_${item.title || item.event}`.replace(/\s+/g, '_'),
           date: eventDate,
           time: eventTime,
           country: country,
@@ -542,15 +542,29 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
       return dateA.getTime() - dateB.getTime();
     });
 
+    // إزالة الأحداث المكررة (نفس الاسم والوقت والدولة)
+    const uniqueEvents: EconomicEvent[] = [];
+    const seenKeys = new Set<string>();
+    
+    for (const event of events) {
+      const key = `${event.date}_${event.time}_${event.country}_${event.event}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        uniqueEvents.push(event);
+      } else {
+        console.log(`⚠️ Duplicate event removed: ${event.event} at ${event.time}`);
+      }
+    }
+
     // حفظ في الـ cache
-    cachedEvents = events;
+    cachedEvents = uniqueEvents;
     lastFetchTime = now;
 
-    console.log(`✅ Economic calendar loaded: ${events.length} events`);
+    console.log(`✅ Economic calendar loaded: ${uniqueEvents.length} unique events (${events.length - uniqueEvents.length} duplicates removed)`);
 
     return {
       success: true,
-      events,
+      events: uniqueEvents,
       lastUpdate: new Date(lastFetchTime).toISOString()
     };
 
