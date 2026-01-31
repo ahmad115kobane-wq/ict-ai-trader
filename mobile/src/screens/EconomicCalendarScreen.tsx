@@ -360,9 +360,19 @@ const EconomicCalendarScreen = () => {
   const renderEvent = (event: EconomicEvent) => {
     const impactColor = getImpactColor(event.impact);
     
+    // تسجيل قوة الخبر للتحقق
+    if (!event.impact || (event.impact !== 'high' && event.impact !== 'medium' && event.impact !== 'low')) {
+      console.warn('⚠️ Invalid impact for event:', event.event, 'Impact:', event.impact);
+    }
+    
     // الحصول على الوقت الحالي بتوقيت مكة المكرمة (UTC+3)
     const now = new Date();
-    const meccaTime = new Date(now.getTime() + (3 * 60 * 60 * 1000)); // إضافة 3 ساعات
+    const meccaTime = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const todayStr = today.toISOString().split('T')[0];
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
     
     // تحويل وقت الحدث إلى تاريخ كامل (UTC)
     const eventDateTime = new Date(`${event.date}T${event.time}:00Z`);
@@ -370,6 +380,9 @@ const EconomicCalendarScreen = () => {
     // تحديد حالة الحدث بدقة
     const hasReleased = event.actual !== undefined && event.actual !== null && event.actual !== '';
     const isPending = !hasReleased && eventDateTime > meccaTime;
+    
+    // تحديد إذا كان الحدث اليوم أو غداً (لعرض زر التحليل)
+    const isTodayOrTomorrow = event.date === todayStr || event.date === tomorrowStr;
     
     // تحويل وقت الحدث إلى توقيت مكة المكرمة
     const eventMeccaTime = new Date(eventDateTime.getTime() + (3 * 60 * 60 * 1000));
@@ -447,8 +460,8 @@ const EconomicCalendarScreen = () => {
           </View>
         )}
 
-        {/* Analysis Button - Only for unreleased events */}
-        {!hasReleased && (
+        {/* Analysis Button - Only for today and tomorrow unreleased events */}
+        {!hasReleased && isTodayOrTomorrow && (
           <TouchableOpacity
             style={[
               styles.analyzeButton,
@@ -465,9 +478,9 @@ const EconomicCalendarScreen = () => {
               </>
             ) : (
               <>
-                <Ionicons name="analytics-outline" size={20} color={colors.primary} />
+                <Ionicons name="analytics-outline" size={16} color={colors.primary} />
                 <Text style={styles.analyzeButtonText}>تحليل الخبر</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
               </>
             )}
           </TouchableOpacity>
@@ -882,11 +895,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     marginTop: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm,
     backgroundColor: colors.primary + '10',
-    borderRadius: borderRadius.md,
-    borderWidth: 1.5,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
     borderColor: colors.primary + '40',
   },
   analyzeButtonLoading: {
@@ -895,8 +908,8 @@ const styles = StyleSheet.create({
   },
   analyzeButtonText: {
     color: colors.primary,
-    fontSize: fontSizes.sm,
-    fontWeight: '700',
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,
