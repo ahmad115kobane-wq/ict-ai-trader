@@ -44,7 +44,7 @@ interface EconomicEvent {
   };
 }
 
-type FilterType = 'today' | 'tomorrow' | 'lastWeek' | 'nextWeek';
+type FilterType = 'today' | 'tomorrow' | 'nextWeek';
 
 const EconomicCalendarScreen = () => {
   const navigation = useNavigation();
@@ -61,7 +61,6 @@ const EconomicCalendarScreen = () => {
   const [filterCounts, setFilterCounts] = useState({
     today: 0,
     tomorrow: 0,
-    lastWeek: 0,
     nextWeek: 0
   });
 
@@ -85,15 +84,6 @@ const EconomicCalendarScreen = () => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
     
-    // الأسبوع السابق: من (اليوم - 7) إلى (اليوم - 1)
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    
-    const lastWeekStart = new Date(today);
-    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-    const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0];
-    
     // الأسبوع القادم: من (اليوم + 1) إلى (اليوم + 7)
     const nextWeekEnd = new Date(today);
     nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
@@ -105,7 +95,6 @@ const EconomicCalendarScreen = () => {
     setFilterCounts({
       today: eventsWithData.filter(e => e.date === todayStr).length,
       tomorrow: eventsWithData.filter(e => e.date === tomorrowStr).length,
-      lastWeek: eventsWithData.filter(e => e.date >= lastWeekStartStr && e.date <= yesterdayStr).length,
       nextWeek: eventsWithData.filter(e => e.date >= tomorrowStr && e.date <= nextWeekEndStr).length
     });
   };
@@ -263,20 +252,6 @@ const EconomicCalendarScreen = () => {
       console.log('📅 Tomorrow date:', tomorrowStr);
       filtered = filtered.filter(e => e.date === tomorrowStr);
       console.log(`✅ Tomorrow events: ${filtered.length}`);
-      
-    } else if (filter === 'lastWeek') {
-      // الأسبوع السابق: من (اليوم - 7) إلى (اليوم - 1)
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      
-      const lastWeekStart = new Date(today);
-      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-      const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0];
-      
-      console.log('📅 Last week range:', lastWeekStartStr, 'to', yesterdayStr);
-      filtered = filtered.filter(e => e.date >= lastWeekStartStr && e.date <= yesterdayStr);
-      console.log(`✅ Last week events: ${filtered.length}`);
       
     } else if (filter === 'nextWeek') {
       // الأسبوع القادم: من (اليوم + 1) إلى (اليوم + 7)
@@ -554,23 +529,6 @@ const EconomicCalendarScreen = () => {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              selectedFilter === 'lastWeek' && styles.filterButtonActive
-            ]}
-            onPress={() => setSelectedFilter('lastWeek')}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === 'lastWeek' && styles.filterTextActive
-              ]}
-            >
-              الأسبوع السابق {filterCounts.lastWeek > 0 && `(${filterCounts.lastWeek})`}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
               selectedFilter === 'nextWeek' && styles.filterButtonActive
             ]}
             onPress={() => setSelectedFilter('nextWeek')}
@@ -612,7 +570,6 @@ const EconomicCalendarScreen = () => {
             <Text style={styles.emptyText}>
               {selectedFilter === 'today' && 'لا توجد أحداث اليوم'}
               {selectedFilter === 'tomorrow' && 'لا توجد أحداث غداً'}
-              {selectedFilter === 'lastWeek' && 'لا توجد أحداث في الأسبوع السابق'}
               {selectedFilter === 'nextWeek' && 'لا توجد أحداث في الأسبوع القادم'}
             </Text>
             <Text style={styles.emptySubText}>
