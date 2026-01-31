@@ -1903,6 +1903,35 @@ app.get('/api/economic-calendar/notification-stats', async (req, res) => {
   }
 });
 
+// اختبار البيانات الخام من Forex Factory
+app.get('/api/economic-calendar/test-raw-data', async (req, res) => {
+  try {
+    const axios = await import('axios');
+    const response = await axios.default.get('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    // عرض أول 5 أحداث فقط للاختبار
+    const sample = Array.isArray(response.data) ? response.data.slice(0, 5) : [];
+    
+    res.json({
+      success: true,
+      totalEvents: Array.isArray(response.data) ? response.data.length : 0,
+      sampleEvents: sample,
+      note: 'Showing first 5 events from Forex Factory API'
+    });
+  } catch (error) {
+    console.error('❌ Failed to fetch raw data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch raw data'
+    });
+  }
+});
+
 // API info
 app.get('/api', (req, res) => {
   res.json({

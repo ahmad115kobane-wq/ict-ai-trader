@@ -238,10 +238,15 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
           currency: item.currency || 'USD',
           event: translateEvent(item.title || item.event || 'حدث اقتصادي'),
           impact: mapImpact(item.impact),
-          forecast: item.forecast || undefined,
-          previous: item.previous || undefined,
-          actual: item.actual || undefined
+          forecast: item.forecast || item.estimate || undefined,
+          previous: item.previous || item.prev || undefined,
+          actual: item.actual || item.result || undefined
         };
+
+        // Log للأحداث التي لها نتيجة فعلية
+        if (event.actual) {
+          console.log(`📊 Event with actual result: ${event.event} = ${event.actual}`);
+        }
 
         events.push(event);
       }
