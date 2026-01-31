@@ -258,11 +258,17 @@ export async function getUserSystemNotifications(
   limit: number = 50
 ): Promise<any[]> {
   try {
+    console.log(`🔍 getUserSystemNotifications called for user: ${userId}, limit: ${limit}`);
+    
     const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
+    
+    console.log(`🌍 Environment: ${isProduction ? 'Production (PostgreSQL)' : 'Development (SQLite)'}`);
     
     if (isProduction) {
       // PostgreSQL
       const { query } = await import('../db/postgresAdapter');
+      
+      console.log(`📥 Executing query for user: ${userId}`);
       
       const result = await query(
         `SELECT * FROM system_notifications 
@@ -271,6 +277,12 @@ export async function getUserSystemNotifications(
          LIMIT $2`,
         [userId, limit]
       );
+      
+      console.log(`✅ Query result: ${result.rows.length} notifications found`);
+      
+      if (result.rows.length > 0) {
+        console.log(`📋 First notification:`, result.rows[0]);
+      }
       
       return result.rows.map((notif: any) => ({
         ...notif,

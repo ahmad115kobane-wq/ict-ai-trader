@@ -47,6 +47,8 @@ const NotificationsScreen = () => {
       // جلب إشعارات النظام من API الجديد
       const token = await SecureStore.getItemAsync('token');
       
+      console.log('🔍 Loading notifications from:', `${API_BASE_URL}/api/system-notifications?limit=50`);
+      
       const response = await fetch(`${API_BASE_URL}/api/system-notifications?limit=50`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -55,7 +57,11 @@ const NotificationsScreen = () => {
       
       const data = await response.json();
       
+      console.log('📥 API Response:', JSON.stringify(data, null, 2));
+      
       if (data.success) {
+        console.log(`✅ Found ${data.notifications.length} notifications`);
+        
         // تحويل البيانات من الخادم إلى تنسيق الشاشة
         const formattedNotifications: Notification[] = data.notifications.map((notif: any) => ({
           id: notif.id,
@@ -66,10 +72,14 @@ const NotificationsScreen = () => {
           createdAt: notif.created_at,
         }));
         
+        console.log('📋 Formatted notifications:', formattedNotifications.length);
+        
         setNotifications(formattedNotifications);
+      } else {
+        console.log('❌ API returned success: false');
       }
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.error('❌ Error loading notifications:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
