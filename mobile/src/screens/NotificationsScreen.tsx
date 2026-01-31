@@ -15,10 +15,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
+import { API_URL } from '../config/api';
 
 interface Notification {
   id: string;
@@ -42,16 +44,23 @@ const NotificationsScreen = () => {
 
   const loadNotifications = async () => {
     try {
-      const response = await notificationService.getNotifications(50);
+      // جلب إشعارات النظام من API الجديد
+      const response = await fetch(`${API_URL}/system-notifications?limit=50`, {
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+        }
+      });
       
-      if (response.success) {
+      const data = await response.json();
+      
+      if (data.success) {
         // تحويل البيانات من الخادم إلى تنسيق الشاشة
-        const formattedNotifications: Notification[] = response.notifications.map((notif: any) => ({
+        const formattedNotifications: Notification[] = data.notifications.map((notif: any) => ({
           id: notif.id,
-          title: getNotificationTitle(notif.type, notif.title),
+          title: notif.title,
           message: notif.message,
           type: mapNotificationType(notif.type),
-          read: notif.read,
+          read: notif.read === 1,
           createdAt: notif.created_at,
         }));
         
@@ -68,11 +77,15 @@ const NotificationsScreen = () => {
   // تحويل نوع الإشعار من الخادم إلى نوع الشاشة
   const mapNotificationType = (serverType: string): 'trade' | 'analysis' | 'subscription' | 'system' => {
     switch (serverType) {
-      case 'event_reminder':
-        return 'analysis';
-      case 'subscription_purchased':
       case 'subscription_expired':
+      case 'subscription_expiring':
+      case 'subscription_purchased':
         return 'subscription';
+      case 'coins_low':
+        return 'system';
+      case 'system_update':
+      case 'welcome':
+        return 'system';
       default:
         return 'system';
     }
@@ -88,22 +101,61 @@ const NotificationsScreen = () => {
     await loadNotifications();
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(notif =>
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
+  const markAsRead = async (id: string) => {
+    try {
+      // تحديث في الواجهة فوراً
+      setNotifications(prev =>
+        prev.map(notif =>
+          notif.id === id ? { ...notif, read: true } : notif
+        )
+      );
+
+      // إرسال الطلب للخادم
+      await fetch(`${API_URL}/system-notifications/${id}/read`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+        }
+      });
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notif => ({ ...notif, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      // تحديث في الواجهة فوراً
+      setNotifications(prev =>
+        prev.map(notif => ({ ...notif, read: true }))
+      );
+
+      // إرسال الطلب للخادم
+      await fetch(`${API_URL}/system-notifications/mark-all-read`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+        }
+      });
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notif => notif.id !== id));
+  const deleteNotification = async (id: string) => {
+    try {
+      // حذف من الواجهة فوراً
+      setNotifications(prev => prev.filter(notif => notif.id !== id));
+
+      // إرسال الطلب للخادم
+      await fetch(`${API_URL}/system-notifications/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+        }
+      });
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
   };
 
   const getNotificationIcon = (type: string) => {

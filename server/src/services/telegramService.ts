@@ -137,3 +137,117 @@ export async function getBotInfo(): Promise<any> {
     return null;
   }
 }
+
+/**
+ * إرسال رسالة نظام (غير متعلقة بالصفقات) إلى Telegram
+ */
+export async function sendSystemMessageToTelegram(
+  chatId: string,
+  notification: {
+    type: string;
+    title: string;
+    message: string;
+    priority: string;
+    data?: Record<string, any>;
+  }
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error('❌ TELEGRAM_BOT_TOKEN not configured');
+    return false;
+  }
+
+  try {
+    // اختيار الأيقونة حسب نوع الإشعار
+    let emoji = '🔔';
+    switch (notification.type) {
+      case 'subscription_expired':
+        emoji = '⚠️';
+        break;
+      case 'subscription_expiring':
+        emoji = '⏰';
+        break;
+      case 'subscription_purchased':
+        emoji = '🎉';
+        break;
+      case 'coins_low':
+        emoji = '💰';
+        break;
+      case 'system_update':
+        emoji = '🔔';
+        break;
+      case 'welcome':
+        emoji = '👋';
+        break;
+    }
+
+    const message = `
+${emoji} <b>${notification.title}</b>
+
+${notification.message}
+
+<i>⏰ ${new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}</i>
+`.trim();
+
+    // إنشاء أزرار حسب نوع الإشعار
+    const buttons: any[] = [];
+    
+    if (notification.data?.action === 'renew_subscription') {
+      buttons.push([
+        {
+          text: '💎 تجديد الاشتراك',
+          callback_data: 'view_packages'
+        }
+      ]);
+    } else if (notification.data?.action === 'buy_coins') {
+      buttons.push([
+        {
+          text: '💰 شراء عملات',
+          callback_data: 'view_packages'
+        }
+      ]);
+    } else if (notification.data?.action === 'view_subscription') {
+      buttons.push([
+        {
+          text: '📊 عرض اشتراكي',
+          callback_data: 'my_subscription'
+        }
+      ]);
+    }
+    
+    // إضافة زر الرئيسية دائماً
+    buttons.push([
+      {
+        text: '🏠 الرئيسية',
+        callback_data: 'main_menu'
+      }
+    ]);
+
+    const response = await fetchFn(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: buttons
+        }
+      }),
+    });
+
+    const data: any = await response.json();
+
+    if (data.ok) {
+      console.log('✅ System notification sent to Telegram:', notification.type);
+      return true;
+    } else {
+      console.error('❌ Failed to send Telegram system notification:', data);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Error sending Telegram system notification:', error);
+    return false;
+  }
+}

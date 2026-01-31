@@ -148,6 +148,42 @@ const updateDatabaseSchema = async (): Promise<void> => {
       db.run(`CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_type ON enhanced_analysis_history(analysis_type)`);
     }
 
+    // إنشاء جدول إشعارات النظام (منفصل عن إشعارات الصفقات)
+    const systemNotificationsResult = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='system_notifications'");
+
+    if (systemNotificationsResult.length === 0 || systemNotificationsResult[0].values.length === 0) {
+      console.log('🔔 Creating system_notifications table...');
+
+      db.run(`
+        CREATE TABLE system_notifications (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          priority TEXT DEFAULT 'normal',
+          data TEXT,
+          read BOOLEAN DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // إنشاء فهارس للبحث السريع
+      db.run(`CREATE INDEX IF NOT EXISTS idx_system_notifications_user ON system_notifications(user_id, created_at DESC)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_system_notifications_read ON system_notifications(user_id, read)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_system_notifications_type ON system_notifications(type)`);
+    }
+
+    // إضافة أعمدة لتتبع إشعارات الاشتراك في جدول users
+    const usersColumnsCheck = db.exec("PRAGMA table_info(users)");
+    const usersColumnsList = usersColumnsCheck[0]?.values.map(row => row[1]) || [];
+
+    if (!usersColumnsList.includes('subscription_expiry_notified')) {
+      console.log('🔧 Adding subscription notification columns to users table...');
+      db.run('ALTER TABLE users ADD COLUMN subscription_expiry_notified BOOLEAN DEFAULT 0');
+      db.run('ALTER TABLE users ADD COLUMN subscription_expiring_notified BOOLEAN DEFAULT 0');
+    }
+
     saveDatabase();
     console.log('✅ Database schema updated successfully');
 

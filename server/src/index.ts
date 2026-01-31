@@ -31,6 +31,7 @@ import subscriptionRoutes from './routes/subscription';
 import telegramRoutes from './routes/telegram';
 import manualTradeRoutes from './routes/manualTrade';
 import economicAnalysisRoutes from './routes/economicAnalysis';
+import systemNotificationsRoutes from './routes/systemNotifications';
 
 import {
   initializeDefaultPackages,
@@ -72,6 +73,7 @@ app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api', manualTradeRoutes);
 app.use('/api/economic-analysis', economicAnalysisRoutes);
+app.use('/api/system-notifications', systemNotificationsRoutes);
 
 // صفحات HTML
 app.get('/setup-telegram', (req, res) => {
@@ -2098,6 +2100,19 @@ cron.schedule('0 0 * * *', async () => {
   }
 }, {
   timezone: 'Asia/Riyadh' // توقيت السعودية
+});
+
+// فحص الاشتراكات المنتهية والقريبة من الانتهاء كل 6 ساعات
+cron.schedule('0 */6 * * *', async () => {
+  console.log('🔄 Checking subscriptions for expiration notifications...');
+
+  try {
+    const { checkSubscriptionExpirations } = await import('./services/systemNotificationService');
+    await checkSubscriptionExpirations();
+    console.log('✅ Subscription expiration check completed');
+  } catch (error) {
+    console.error('❌ Subscription expiration check failed:', error);
+  }
 });
 
 // فحص إضافي كل 6 ساعات للتأكد

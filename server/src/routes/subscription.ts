@@ -198,6 +198,16 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
     // الحصول على حالة الاشتراك الجديدة
     const newSubscriptionStatus = await getUserSubscriptionStatus(userId);
 
+    // إرسال إشعار نظام بنجاح الشراء
+    try {
+      const { notifySubscriptionPurchased } = await import('../services/systemNotificationService');
+      const expiryDate = new Date(result.expiresAt!);
+      await notifySubscriptionPurchased(userId, packageDetails.nameAr, expiryDate);
+    } catch (notifError) {
+      console.error('Failed to send subscription purchase notification:', notifError);
+      // لا نوقف العملية إذا فشل الإشعار
+    }
+
     res.json({
       success: true,
       message: `تم شراء باقة ${packageDetails.nameAr} بنجاح! تم خصم ${coinPrice} عملة من رصيدك.`,

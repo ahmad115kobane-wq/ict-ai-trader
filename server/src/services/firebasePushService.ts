@@ -156,6 +156,46 @@ export const sendFirebaseTradeNotification = async (
   }
 };
 
+// إرسال إشعار نظام (غير متعلق بالصفقات)
+export const sendFirebaseSystemNotification = async (
+  expoPushTokens: string[],
+  notification: {
+    type: string;
+    title: string;
+    message: string;
+    priority: string;
+    data?: Record<string, any>;
+  }
+): Promise<boolean> => {
+  const { sendPushNotifications } = await import('./expoPushService');
+  
+  try {
+    // تحديد الأولوية
+    const priority = notification.priority === 'high' ? 'high' : 'normal';
+    
+    const result = await sendPushNotifications(
+      expoPushTokens,
+      notification.title,
+      notification.message,
+      {
+        type: 'system',
+        notificationType: notification.type,
+        ...notification.data
+      },
+      {
+        priority: priority as 'high' | 'normal',
+        sound: 'default',
+        badge: 1,
+      }
+    );
+    
+    return result.success;
+  } catch (error) {
+    console.error('❌ Error sending system notification:', error);
+    return false;
+  }
+};
+
 // التحقق من صحة Expo Push Token
 export const isValidExpoPushToken = (token: string): boolean => {
   if (!token) return false;
@@ -167,5 +207,6 @@ export default {
   sendFirebasePushNotification,
   sendFirebasePushNotifications,
   sendFirebaseTradeNotification,
+  sendFirebaseSystemNotification,
   isValidExpoPushToken,
 };
