@@ -44,7 +44,7 @@ interface EconomicEvent {
   };
 }
 
-type FilterType = 'all' | 'high' | 'today' | 'upcoming';
+type FilterType = 'today' | 'tomorrow' | 'lastWeek' | 'nextWeek';
 
 const EconomicCalendarScreen = () => {
   const navigation = useNavigation();
@@ -53,7 +53,7 @@ const EconomicCalendarScreen = () => {
   const [filteredEvents, setFilteredEvents] = useState<EconomicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>('today');
   const [lastUpdate, setLastUpdate] = useState<string>('');
   const [analyzingEventId, setAnalyzingEventId] = useState<string | null>(null);
   const [selectedEventAnalysis, setSelectedEventAnalysis] = useState<any>(null);
@@ -193,18 +193,33 @@ const EconomicCalendarScreen = () => {
 
   const applyFilter = (filter: FilterType) => {
     let filtered = events;
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
 
-    if (filter === 'high') {
-      filtered = events.filter(e => e.impact === 'high');
-    } else if (filter === 'today') {
-      const today = new Date().toISOString().split('T')[0];
-      filtered = events.filter(e => e.date === today);
-    } else if (filter === 'upcoming') {
-      const now = new Date();
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    if (filter === 'today') {
+      // اليوم
+      filtered = events.filter(e => e.date === todayStr);
+    } else if (filter === 'tomorrow') {
+      // غداً
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      filtered = events.filter(e => e.date === tomorrowStr);
+    } else if (filter === 'lastWeek') {
+      // الأسبوع السابق (آخر 7 أيام)
+      const lastWeek = new Date(today);
+      lastWeek.setDate(lastWeek.getDate() - 7);
       filtered = events.filter(e => {
-        const eventTime = new Date(`${e.date}T${e.time}`);
-        return eventTime >= now && eventTime <= tomorrow;
+        const eventDate = new Date(e.date);
+        return eventDate >= lastWeek && eventDate < today;
+      });
+    } else if (filter === 'nextWeek') {
+      // الأسبوع القادم (القادم 7 أيام)
+      const nextWeek = new Date(today);
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      filtered = events.filter(e => {
+        const eventDate = new Date(e.date);
+        return eventDate > today && eventDate <= nextWeek;
       });
     }
 
@@ -399,44 +414,15 @@ const EconomicCalendarScreen = () => {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              selectedFilter === 'all' && styles.filterButtonActive
-            ]}
-            onPress={() => setSelectedFilter('all')}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === 'all' && styles.filterTextActive
-              ]}
-            >
-              الكل
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedFilter === 'high' && styles.filterButtonActive
-            ]}
-            onPress={() => setSelectedFilter('high')}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === 'high' && styles.filterTextActive
-              ]}
-            >
-              تأثير عالي 🔴
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
               selectedFilter === 'today' && styles.filterButtonActive
             ]}
             onPress={() => setSelectedFilter('today')}
           >
+            <Ionicons 
+              name="today-outline" 
+              size={16} 
+              color={selectedFilter === 'today' ? colors.primary : colors.textMuted} 
+            />
             <Text
               style={[
                 styles.filterText,
@@ -450,17 +436,66 @@ const EconomicCalendarScreen = () => {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              selectedFilter === 'upcoming' && styles.filterButtonActive
+              selectedFilter === 'tomorrow' && styles.filterButtonActive
             ]}
-            onPress={() => setSelectedFilter('upcoming')}
+            onPress={() => setSelectedFilter('tomorrow')}
           >
+            <Ionicons 
+              name="sunny-outline" 
+              size={16} 
+              color={selectedFilter === 'tomorrow' ? colors.primary : colors.textMuted} 
+            />
             <Text
               style={[
                 styles.filterText,
-                selectedFilter === 'upcoming' && styles.filterTextActive
+                selectedFilter === 'tomorrow' && styles.filterTextActive
               ]}
             >
-              القادمة (24 ساعة)
+              غداً
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              selectedFilter === 'lastWeek' && styles.filterButtonActive
+            ]}
+            onPress={() => setSelectedFilter('lastWeek')}
+          >
+            <Ionicons 
+              name="arrow-back-outline" 
+              size={16} 
+              color={selectedFilter === 'lastWeek' ? colors.primary : colors.textMuted} 
+            />
+            <Text
+              style={[
+                styles.filterText,
+                selectedFilter === 'lastWeek' && styles.filterTextActive
+              ]}
+            >
+              الأسبوع السابق
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              selectedFilter === 'nextWeek' && styles.filterButtonActive
+            ]}
+            onPress={() => setSelectedFilter('nextWeek')}
+          >
+            <Ionicons 
+              name="arrow-forward-outline" 
+              size={16} 
+              color={selectedFilter === 'nextWeek' ? colors.primary : colors.textMuted} 
+            />
+            <Text
+              style={[
+                styles.filterText,
+                selectedFilter === 'nextWeek' && styles.filterTextActive
+              ]}
+            >
+              الأسبوع القادم
             </Text>
           </TouchableOpacity>
         </ScrollView>
