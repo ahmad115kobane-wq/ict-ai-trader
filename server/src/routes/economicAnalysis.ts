@@ -20,7 +20,7 @@ const router = express.Router();
  */
 router.get('/today', authMiddleware, async (req, res) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).userId;
     
     console.log(`📊 Analyzing today's events for user: ${userId}`);
     
@@ -46,8 +46,18 @@ router.get('/today', authMiddleware, async (req, res) => {
  */
 router.get('/event/:eventId', authMiddleware, async (req, res) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).userId;
     const { eventId } = req.params;
+    
+    console.log(`🔍 Getting analysis for event: ${eventId}, user: ${userId}`);
+    
+    if (!userId) {
+      console.error('❌ No userId found in request');
+      return res.status(401).json({
+        success: false,
+        error: 'User ID not found'
+      });
+    }
     
     // البحث عن تحليل موجود فقط
     const analysis = await getAnalysis(eventId, userId);
@@ -79,10 +89,18 @@ router.get('/event/:eventId', authMiddleware, async (req, res) => {
  */
 router.post('/event/:eventId', authMiddleware, async (req, res) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).userId;
     const { eventId } = req.params;
     
     console.log(`📊 Creating analysis for event: ${eventId}, user: ${userId}`);
+    
+    if (!userId) {
+      console.error('❌ No userId found in request');
+      return res.status(401).json({
+        success: false,
+        error: 'User ID not found'
+      });
+    }
     
     // التحقق من وجود تحليل مسبق
     const existingAnalysis = await getAnalysis(eventId, userId);
@@ -137,7 +155,7 @@ router.post('/event/:eventId', authMiddleware, async (req, res) => {
  */
 router.get('/my-analyses', authMiddleware, async (req, res) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).userId;
     
     const analyses = await getUserTodayAnalyses(userId);
     
@@ -193,7 +211,7 @@ router.post('/search', authMiddleware, async (req, res) => {
  */
 router.get('/calendar-with-analysis', authMiddleware, async (req, res) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).userId;
     
     // جلب التقويم
     const calendar = await getEconomicCalendar();
