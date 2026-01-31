@@ -143,8 +143,125 @@ const eventTranslations: { [key: string]: string } = {
   'Kansas City Fed Manufacturing Index': 'مؤشر كانساس الصناعي',
 };
 
-// ===================== Forex Factory API =====================
-// استخدام Forex Factory Calendar API
+// ===================== Myfxbook API (Free - with Actual Results) =====================
+// جلب البيانات من Myfxbook مع النتائج الفعلية
+async function fetchFromMyfxbook(): Promise<EconomicEvent[]> {
+  try {
+    // Myfxbook يوفر API مجاني للتقويم الاقتصادي
+    const response = await axios.get('https://www.myfxbook.com/api/get-economic-calendar.json', {
+      params: {
+        countries: 'US,EU,GB,JP,CA,AU,NZ,CH,CN',
+        impacts: 'high,medium'
+      },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 15000
+    });
+
+    const events: EconomicEvent[] = [];
+    
+    if (response.data && Array.isArray(response.data)) {
+      for (const item of response.data) {
+        // تحويل التاريخ
+        const eventDate = new Date(item.date || item.time);
+        
+        // تحديد الدولة
+        let country = item.country || item.currency || 'US';
+        if (country.length === 3) {
+          // تحويل رمز العملة إلى رمز الدولة
+          const currencyToCountry: { [key: string]: string } = {
+            'USD': 'US', 'EUR': 'EU', 'GBP': 'GB', 'JPY': 'JP',
+            'CAD': 'CA', 'AUD': 'AU', 'NZD': 'NZ', 'CHF': 'CH', 'CNY': 'CN'
+          };
+          country = currencyToCountry[country] || country;
+        }
+        
+        const event: EconomicEvent = {
+          id: `mfx_${item.id || eventDate.getTime()}_${item.title}`,
+          date: eventDate.toISOString().split('T')[0],
+          time: eventDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+          country: country,
+          countryName: countryNames[country] || country,
+          currency: item.currency || 'USD',
+          event: translateEvent(item.title || item.name || item.event),
+          impact: mapImpact(item.impact || item.importance || 'medium'),
+          forecast: item.forecast || item.consensus || undefined,
+          previous: item.previous || item.prev || undefined,
+          actual: item.actual || item.result || undefined
+        };
+        
+        if (event.actual) {
+          console.log(`📊 Myfxbook - Event with actual: ${event.event} = ${event.actual}`);
+        }
+        
+        events.push(event);
+      }
+    }
+
+    console.log(`✅ Fetched ${events.length} events from Myfxbook`);
+    return events;
+  } catch (error) {
+    console.error('❌ Failed to fetch from Myfxbook:', error);
+    return [];
+  }
+}
+
+// ===================== FXStreet API (Free Alternative) =====================
+// جلب البيانات من FXStreet
+async function fetchFromFXStreet(): Promise<EconomicEvent[]> {
+  try {
+    const response = await axios.get('https://calendar-api.fxstreet.com/en/api/v1/eventDates', {
+      params: {
+        timezone: 'GMT',
+        rows: 100,
+        volatilities: 'high,medium',
+        countries: 'US,EU,GB,JP,CA,AU,NZ,CH,CN'
+      },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 15000
+    });
+
+    const events: EconomicEvent[] = [];
+    
+    if (response.data && Array.isArray(response.data)) {
+      for (const item of response.data) {
+        const eventDate = new Date(item.dateUtc || item.date);
+        
+        const event: EconomicEvent = {
+          id: `fxs_${item.id}`,
+          date: eventDate.toISOString().split('T')[0],
+          time: eventDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+          country: item.countryCode || 'US',
+          countryName: countryNames[item.countryCode] || item.country,
+          currency: item.currencyCode || 'USD',
+          event: translateEvent(item.name || item.title),
+          impact: mapImpact(item.volatility || 'medium'),
+          forecast: item.consensus || undefined,
+          previous: item.previous || undefined,
+          actual: item.actual || undefined
+        };
+        
+        if (event.actual) {
+          console.log(`📊 FXStreet - Event with actual: ${event.event} = ${event.actual}`);
+        }
+        
+        events.push(event);
+      }
+    }
+
+    console.log(`✅ Fetched ${events.length} events from FXStreet`);
+    return events;
+  } catch (error) {
+    console.error('❌ Failed to fetch from FXStreet:', error);
+    return [];
+  }
+}
+
+// ===================== Forex Factory API (Enhanced) =====================
+// استخدام Forex Factory Calendar API مع معالجة محسّنة
 async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
   try {
     // استخدام API من nfs.faireconomy.media (يوفر بيانات Forex Factory)
@@ -163,7 +280,7 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
     if (Array.isArray(data)) {
       for (const item of data) {
         // تصفية الأحداث ذات التأثير المنخفض
-        if (item.impact === 'Low' || item.impact === 'low') continue;
+        if (item.impact === 'Low' || item.impact === 'low' || item.impact === 'Holiday') continue;
 
         // تحويل التاريخ والوقت من ISO
         let eventDate: string;
@@ -229,6 +346,17 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
           countryName = 'الصين';
         }
 
+        // معالجة النتيجة الفعلية - Forex Factory يضعها في حقول مختلفة
+        let actual = item.actual || item.result || item.value || undefined;
+        
+        // إذا كان الحدث في الماضي ولا توجد نتيجة، نحاول استخدام forecast كـ actual
+        const eventDateTime = new Date(`${eventDate}T${eventTime}`);
+        const now = new Date();
+        if (eventDateTime < now && !actual && item.forecast) {
+          // الحدث مضى ولكن لا توجد نتيجة - قد تكون البيانات لم تُحدّث بعد
+          // نترك actual فارغاً
+        }
+
         const event: EconomicEvent = {
           id: `${eventDate}_${eventTime}_${item.title || item.event}`,
           date: eventDate,
@@ -240,7 +368,7 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
           impact: mapImpact(item.impact),
           forecast: item.forecast || item.estimate || undefined,
           previous: item.previous || item.prev || undefined,
-          actual: item.actual || item.result || undefined
+          actual: actual
         };
 
         // Log للأحداث التي لها نتيجة فعلية
@@ -339,12 +467,28 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
 
     console.log('📅 Fetching fresh economic calendar...');
 
-    // محاولة جلب البيانات من Forex Factory أولاً
-    let events = await fetchFromForexFactory();
+    // محاولة جلب البيانات من مصادر متعددة بالترتيب
+    let events: EconomicEvent[] = [];
 
-    // إذا فشل Forex Factory، جرب Trading Economics
+    // 1. محاولة Myfxbook (يوفر actual results)
+    console.log('🔄 Trying Myfxbook...');
+    events = await fetchFromMyfxbook();
+
+    // 2. إذا فشل، جرب FXStreet
     if (events.length === 0) {
-      console.log('⚠️ Forex Factory failed, trying Trading Economics...');
+      console.log('🔄 Myfxbook failed, trying FXStreet...');
+      events = await fetchFromFXStreet();
+    }
+
+    // 3. إذا فشل، جرب Forex Factory
+    if (events.length === 0) {
+      console.log('🔄 FXStreet failed, trying Forex Factory...');
+      events = await fetchFromForexFactory();
+    }
+
+    // 4. إذا فشل، جرب Trading Economics
+    if (events.length === 0) {
+      console.log('🔄 Forex Factory failed, trying Trading Economics...');
       events = await fetchFromTradingEconomics();
     }
 
