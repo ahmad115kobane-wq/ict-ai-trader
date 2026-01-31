@@ -19,6 +19,7 @@ import TradesScreen from '../screens/TradesScreen';
 import SubscriptionScreen from '../screens/SubscriptionScreen';
 import FullChartScreen from '../screens/FullChartScreen';
 import EconomicCalendarScreen from '../screens/EconomicCalendarScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 
 // أنواع المسارات
 export type AuthStackParamList = {
@@ -37,6 +38,7 @@ export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
   FullChart: undefined;
+  Notifications: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -198,6 +200,13 @@ const AppNavigator = () => {
               options={{
                 animation: 'slide_from_bottom',
                 presentation: 'fullScreenModal',
+              }}
+            />
+            <Stack.Screen 
+              name="Notifications" 
+              component={NotificationsScreen}
+              options={{
+                animation: 'slide_from_right',
               }}
             />
           </>

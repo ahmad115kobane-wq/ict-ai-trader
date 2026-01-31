@@ -4,15 +4,26 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 
 interface HeaderProps {
   coins: number;
   onLogout?: () => void;
   showLogout?: boolean;
+  showNotifications?: boolean;
+  unreadCount?: number;
 }
 
-const Header: React.FC<HeaderProps> = ({ coins, onLogout, showLogout = true }) => {
+const Header: React.FC<HeaderProps> = ({ 
+  coins, 
+  onLogout, 
+  showLogout = true,
+  showNotifications = true,
+  unreadCount = 0
+}) => {
+  const navigation = useNavigation();
+
   return (
     <View style={styles.header}>
       <View style={styles.headerTitle}>
@@ -27,13 +38,31 @@ const Header: React.FC<HeaderProps> = ({ coins, onLogout, showLogout = true }) =
         </View>
       </View>
 
-      {showLogout && onLogout ? (
-        <TouchableOpacity onPress={onLogout} style={styles.logoutButton}>
-          <Ionicons name="exit-outline" size={22} color={colors.error} />
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.placeholder} />
-      )}
+      <View style={styles.headerRight}>
+        {showNotifications && (
+          <TouchableOpacity 
+            onPress={() => (navigation as any).navigate('Notifications')} 
+            style={styles.notificationButton}
+          >
+            <Ionicons name="notifications-outline" size={22} color={colors.text} />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+        
+        {showLogout && onLogout ? (
+          <TouchableOpacity onPress={onLogout} style={styles.logoutButton}>
+            <Ionicons name="exit-outline" size={22} color={colors.error} />
+          </TouchableOpacity>
+        ) : !showNotifications ? (
+          <View style={styles.placeholder} />
+        ) : null}
+      </View>
     </View>
   );
 };
@@ -48,6 +77,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  notificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.backgroundSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: colors.error,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   logoutButton: {
     width: 40,
