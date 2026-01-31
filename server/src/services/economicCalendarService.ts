@@ -23,7 +23,7 @@ export interface CalendarResponse {
 }
 
 // ===================== Configuration =====================
-const CALENDAR_CACHE_DURATION = 15 * 60 * 1000; // 15 دقيقة
+const CALENDAR_CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق (تحديث أسرع للنتائج الفعلية)
 let cachedEvents: EconomicEvent[] = [];
 let lastFetchTime = 0;
 
@@ -142,65 +142,6 @@ const eventTranslations: { [key: string]: string } = {
   'Richmond Fed Manufacturing Index': 'مؤشر ريتشموند الصناعي',
   'Kansas City Fed Manufacturing Index': 'مؤشر كانساس الصناعي',
 };
-
-// ===================== FXStreet API (Free Alternative) =====================
-// جلب البيانات من FXStreet
-async function fetchFromFXStreet(): Promise<EconomicEvent[]> {
-  try {
-    const today = new Date();
-    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-    
-    const response = await axios.get('https://calendar-api.fxstreet.com/en/api/v1/eventDates', {
-      params: {
-        timezone: 'GMT',
-        rows: 300,
-        volatilities: 'high,medium',
-        countries: 'US,EU,GB,JP,CA,AU,NZ,CH,CN',
-        dateFrom: today.toISOString().split('T')[0],
-        dateTo: nextWeek.toISOString().split('T')[0]
-      },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json'
-      },
-      timeout: 15000
-    });
-
-    const events: EconomicEvent[] = [];
-    
-    if (response.data && Array.isArray(response.data)) {
-      for (const item of response.data) {
-        const eventDate = new Date(item.dateUtc || item.date);
-        
-        const event: EconomicEvent = {
-          id: `fxs_${item.id}`,
-          date: eventDate.toISOString().split('T')[0],
-          time: eventDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          country: item.countryCode || 'US',
-          countryName: countryNames[item.countryCode] || item.country,
-          currency: item.currencyCode || 'USD',
-          event: translateEvent(item.name || item.title),
-          impact: mapImpact(item.volatility || 'medium'),
-          forecast: item.consensus || undefined,
-          previous: item.previous || undefined,
-          actual: item.actual || undefined
-        };
-        
-        if (event.actual) {
-          console.log(`📊 FXStreet - Event with actual: ${event.event} = ${event.actual}`);
-        }
-        
-        events.push(event);
-      }
-    }
-
-    console.log(`✅ Fetched ${events.length} events from FXStreet`);
-    return events;
-  } catch (error) {
-    console.error('❌ Failed to fetch from FXStreet:', error);
-    return [];
-  }
-}
 
 // ===================== Forex Factory API (Enhanced with Actual Results) =====================
 // استخدام Forex Factory Calendar API مع معالجة محسّنة
@@ -325,82 +266,10 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
     }
 
     console.log(`✅ Processed ${events.length} events (filtered low impact)`);
-    
-    // محاولة إضافة النتائج الفعلية من مصدر إضافي
-    await enrichWithActualResults(events);
-    
     return events;
   } catch (error) {
     console.error('❌ Failed to fetch from Forex Factory:', error);
     return [];
-  }
-}
-
-// دالة مساعدة لإضافة النتائج الفعلية من مصادر إضافية
-async function enrichWithActualResults(events: EconomicEvent[]): Promise<void> {
-  try {
-    // محاولة جلب النتائج الفعلية من FXStreet للأحداث التي مضت
-    const now = new Date();
-    const pastEvents = events.filter(e => {
-      const eventTime = new Date(`${e.date}T${e.time}`);
-      return eventTime < now && !e.actual;
-    });
-
-    if (pastEvents.length === 0) {
-      console.log('📊 No past events need actual results');
-      return;
-    }
-
-    console.log(`🔍 Trying to enrich ${pastEvents.length} past events with actual results...`);
-
-    // محاولة جلب من FXStreet
-    try {
-      const response = await axios.get('https://calendar-api.fxstreet.com/en/api/v1/eventDates', {
-        params: {
-          timezone: 'GMT',
-          rows: 100,
-          dateFrom: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          dateTo: now.toISOString().split('T')[0]
-        },
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
-        timeout: 10000
-      });
-
-      if (response.data && Array.isArray(response.data)) {
-        let enrichedCount = 0;
-        
-        for (const event of pastEvents) {
-          // البحث عن الحدث المطابق في بيانات FXStreet
-          const match = response.data.find((item: any) => {
-            const itemDate = new Date(item.dateUtc || item.date);
-            const itemDateStr = itemDate.toISOString().split('T')[0];
-            const itemName = (item.name || item.title || '').toLowerCase();
-            const eventName = event.event.toLowerCase();
-            
-            // مطابقة التاريخ واسم الحدث (جزئي)
-            return itemDateStr === event.date && 
-                   (itemName.includes(eventName.substring(0, 10)) || 
-                    eventName.includes(itemName.substring(0, 10)));
-          });
-
-          if (match && match.actual) {
-            event.actual = match.actual;
-            enrichedCount++;
-            console.log(`✅ Enriched: ${event.event} = ${event.actual}`);
-          }
-        }
-
-        if (enrichedCount > 0) {
-          console.log(`📊 Successfully enriched ${enrichedCount} events with actual results`);
-        }
-      }
-    } catch (error) {
-      console.log('⚠️ Could not enrich with FXStreet data');
-    }
-  } catch (error) {
-    console.log('⚠️ Error enriching events:', error);
   }
 }
 
@@ -483,20 +352,14 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
 
     console.log('📅 Fetching fresh economic calendar...');
 
-    // محاولة جلب البيانات من مصادر متعددة بالترتيب
+    // استخدام Forex Factory كمصدر أساسي (موثوق ومستقر)
     let events: EconomicEvent[] = [];
 
-    // 1. محاولة FXStreet (موثوق ويوفر actual results)
-    console.log('🔄 Trying FXStreet...');
-    events = await fetchFromFXStreet();
+    // 1. محاولة Forex Factory (المصدر الأساسي)
+    console.log('🔄 Fetching from Forex Factory...');
+    events = await fetchFromForexFactory();
 
-    // 2. إذا فشل، جرب Forex Factory
-    if (events.length === 0) {
-      console.log('🔄 FXStreet failed, trying Forex Factory...');
-      events = await fetchFromForexFactory();
-    }
-
-    // 3. إذا فشل، جرب Trading Economics
+    // 2. إذا فشل، جرب Trading Economics (إذا كان API key متوفر)
     if (events.length === 0) {
       console.log('🔄 Forex Factory failed, trying Trading Economics...');
       events = await fetchFromTradingEconomics();
