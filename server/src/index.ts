@@ -2407,7 +2407,7 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
       // إرسال إشعار بعدم وجود فرصة (اختياري)
       try {
         const { notifyNoTrade } = await import('./services/notificationService');
-        await notifyNoTrade(analysis, currentPrice);
+        await notifyNoTrade(reasonsText);
       } catch (notificationError) {
         console.error('❌ Failed to send no-trade notification:', notificationError);
       }

@@ -303,10 +303,13 @@ export async function notifyTradeOpportunity(analysis: any, currentPrice: number
     const trade = analysis.suggestedTrade;
     if (!trade) return;
 
+    // تحديد نوع الصفقة بشكل صحيح
+    const tradeType: 'BUY' | 'SELL' = trade.type.includes('BUY') ? 'BUY' : 'SELL';
+
     // 1. إرسال عبر Telegram
     if (TELEGRAM_CHAT_ID) {
       const signal = {
-        type: trade.type.includes('BUY') ? 'BUY' : 'SELL',
+        type: tradeType,
         entry: trade.entry,
         sl: trade.sl,
         tp1: trade.tp1,
