@@ -19,7 +19,6 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
-import { notificationService } from '../services/apiService';
 
 interface Notification {
   id: string;
@@ -36,7 +35,6 @@ const NotificationsScreen = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     loadNotifications();
@@ -58,13 +56,9 @@ const NotificationsScreen = () => {
         }));
         
         setNotifications(formattedNotifications);
-        setUnreadCount(response.unreadCount || 0);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error loading notifications:', error);
-      // في حالة عدم توفر الخدمة، نعرض قائمة فارغة
-      setNotifications([]);
-      setUnreadCount(0);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -94,39 +88,22 @@ const NotificationsScreen = () => {
     await loadNotifications();
   };
 
-  const markAsRead = async (id: string) => {
-    try {
-      await notificationService.markAsRead(id);
-      setNotifications(prev =>
-        prev.map(notif =>
-          notif.id === id ? { ...notif, read: true } : notif
-        )
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking as read:', error);
-    }
+  const markAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(notif =>
+        notif.id === id ? { ...notif, read: true } : notif
+      )
+    );
   };
 
-  const markAllAsRead = async () => {
-    try {
-      await notificationService.markAllAsRead();
-      setNotifications(prev =>
-        prev.map(notif => ({ ...notif, read: true }))
-      );
-      setUnreadCount(0);
-    } catch (error) {
-      console.error('Error marking all as read:', error);
-    }
+  const markAllAsRead = () => {
+    setNotifications(prev =>
+      prev.map(notif => ({ ...notif, read: true }))
+    );
   };
 
-  const deleteNotification = async (id: string) => {
-    try {
-      await notificationService.deleteNotification(id);
-      setNotifications(prev => prev.filter(notif => notif.id !== id));
-    } catch (error) {
-      console.error('Error deleting notification:', error);
-    }
+  const deleteNotification = (id: string) => {
+    setNotifications(prev => prev.filter(notif => notif.id !== id));
   };
 
   const getNotificationIcon = (type: string) => {
@@ -216,16 +193,13 @@ const NotificationsScreen = () => {
     );
   };
 
+  const unreadCount = notifications.filter(n => !n.read).length;
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
-        <Header 
-          coins={user?.coins || 0} 
-          onLogout={logout} 
-          showLogout={true}
-          showNotifications={false}
-        />
+        <Header coins={user?.coins || 0} onLogout={logout} showLogout={true} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>جاري تحميل الإشعارات...</Text>
@@ -239,12 +213,7 @@ const NotificationsScreen = () => {
       <StatusBar style="light" />
 
       {/* Header */}
-      <Header 
-        coins={user?.coins || 0} 
-        onLogout={logout} 
-        showLogout={true}
-        showNotifications={false}
-      />
+      <Header coins={user?.coins || 0} onLogout={logout} showLogout={true} />
 
       {/* Page Title */}
       <View style={styles.titleContainer}>

@@ -31,7 +31,6 @@ import subscriptionRoutes from './routes/subscription';
 import telegramRoutes from './routes/telegram';
 import manualTradeRoutes from './routes/manualTrade';
 import economicAnalysisRoutes from './routes/economicAnalysis';
-import notificationsRoutes from './routes/notifications';
 
 import {
   initializeDefaultPackages,
@@ -73,7 +72,6 @@ app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api', manualTradeRoutes);
 app.use('/api/economic-analysis', economicAnalysisRoutes);
-app.use('/api/notifications', notificationsRoutes);
 
 // صفحات HTML
 app.get('/setup-telegram', (req, res) => {
@@ -2435,10 +2433,6 @@ const startServer = async () => {
     // تهيئة قاعدة البيانات
     await initDatabase();
 
-    // تهيئة جدول الإشعارات
-    const { initNotificationsTable } = await import('./services/notificationService');
-    await initNotificationsTable();
-
     // تهيئة الباقات الافتراضية
     await initializeDefaultPackages();
 
@@ -2471,10 +2465,6 @@ const startServer = async () => {
       const { startEconomicEventMonitoring } = require('./services/economicEventNotificationService');
       startEconomicEventMonitoring();
       console.log('✅ Economic event monitoring is ENABLED - Will notify 5 min before and at release');
-
-      // ✅ بدء الإشعارات المجدولة (تذكيرات الأحداث وانتهاء الاشتراكات)
-      const { startAllScheduledNotifications } = require('./services/scheduledNotifications');
-      startAllScheduledNotifications();
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -2500,16 +2490,6 @@ const gracefulShutdown = () => {
   } catch (error) {
     console.error('❌ Failed to stop economic event monitoring:', error);
   }
-
-  // إيقاف الإشعارات المجدولة
-  try {
-    const { stopAllScheduledNotifications } = require('./services/scheduledNotifications');
-    stopAllScheduledNotifications();
-    console.log('⏹️ Scheduled notifications stopped');
-  } catch (error) {
-    console.error('❌ Failed to stop scheduled notifications:', error);
-  }
-
   process.exit(0);
 };
 

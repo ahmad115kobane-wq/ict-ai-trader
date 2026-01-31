@@ -1,289 +1,168 @@
 // services/notificationService.ts
-// خدمة الإشعارات - إدارة الإشعارات داخل التطبيق
+// خدمة الإشعارات للمستخدمين
 
-import { query } from '../db/postgresAdapter';
-import { v4 as uuidv4 } from 'uuid';
+import { sendTradeSignal } from './telegramService';
+import { sendFirebaseTradeNotification } from './firebasePushService';
 
-// ===================== Types =====================
-export interface Notification {
-  id: string;
-  user_id: string;
-  title: string;
-  message: string;
-  type: 'event_reminder' | 'subscription_purchased' | 'subscription_expired';
-  read: boolean;
-  created_at: string;
-  data?: any; // بيانات إضافية (JSON)
-}
+// إعدادات Telegram Bot (اختيارية)
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
-// ===================== Database Functions =====================
-
-/**
- * تهيئة جدول الإشعارات
- */
-export async function initNotificationsTable(): Promise<void> {
-  try {
-    await query(`
-      CREATE TABLE IF NOT EXISTS notifications (
-        id VARCHAR(255) PRIMARY KEY,
-        user_id VARCHAR(255) NOT NULL,
-        title VARCHAR(500) NOT NULL,
-        message TEXT NOT NULL,
-        type VARCHAR(50) NOT NULL,
-        read BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        data JSONB,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-
-    // إنشاء index للأداء
-    await query(`
-      CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-      CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
-      CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
-    `);
-
-    console.log('✅ Notifications table initialized');
-  } catch (error) {
-    console.error('❌ Failed to initialize notifications table:', error);
-    throw error;
+// إرسال إشعار Telegram
+export const sendTelegramNotification = async (message: string): Promise<boolean> => {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.log('📱 Telegram not configured, skipping notification');
+    return false;
   }
-}
 
-/**
- * إنشاء إشعار جديد
- */
-export async function createNotification(
-  userId: string,
-  title: string,
-  message: string,
-  type: 'event_reminder' | 'subscription_purchased' | 'subscription_expired',
-  data?: any
-): Promise<string> {
   try {
-    const id = uuidv4();
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'HTML',
+      }),
+    });
+
+    if (response.ok) {
+      console.log('📱 Telegram notification sent successfully');
+      return true;
+    } else {
+      console.error('❌ Failed to send Telegram notification:', response.statusText);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Telegram notification error:', error);
+    return false;
+  }
+};
+
+// إرسال إشعار بفرصة تداول - باستخدام التنسيق الجديد
+export const notifyTradeOpportunity = async (analysis: any, currentPrice: number): Promise<void> => {
+  if (analysis.decision !== 'PLACE_PENDING' || !analysis.suggestedTrade) {
+    return;
+  }
+
+  const trade = analysis.suggestedTrade;
+  
+  // إرسال باستخدام خدمة تليجرام للمستخدمين المشتركين
+  try {
+    const { getUsersWithAutoAnalysisEnabled } = await import('../db/index');
+    const users = await getUsersWithAutoAnalysisEnabled();
     
-    await query(
-      `INSERT INTO notifications (id, user_id, title, message, type, data)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, userId, title, message, type, data ? JSON.stringify(data) : null]
-    );
-
-    console.log(`✅ Notification created for user ${userId}: ${title}`);
-    return id;
-  } catch (error) {
-    console.error('❌ Failed to create notification:', error);
-    throw error;
-  }
-}
-
-/**
- * جلب إشعارات المستخدم
- */
-export async function getUserNotifications(
-  userId: string,
-  limit: number = 50
-): Promise<Notification[]> {
-  try {
-    const result = await query(
-      `SELECT * FROM notifications
-       WHERE user_id = $1
-       ORDER BY created_at DESC
-       LIMIT $2`,
-      [userId, limit]
-    );
-
-    return result.rows.map((row: any) => ({
-      ...row,
-      data: row.data ? JSON.parse(row.data) : null
-    }));
-  } catch (error) {
-    console.error('❌ Failed to get user notifications:', error);
-    return [];
-  }
-}
-
-/**
- * عدد الإشعارات غير المقروءة
- */
-export async function getUnreadCount(userId: string): Promise<number> {
-  try {
-    const result = await query(
-      `SELECT COUNT(*) as count FROM notifications
-       WHERE user_id = $1 AND read = FALSE`,
-      [userId]
-    );
-
-    return parseInt(result.rows[0]?.count || '0');
-  } catch (error) {
-    console.error('❌ Failed to get unread count:', error);
-    return 0;
-  }
-}
-
-/**
- * تعليم إشعار كمقروء
- */
-export async function markAsRead(notificationId: string, userId: string): Promise<boolean> {
-  try {
-    const result = await query(
-      `UPDATE notifications
-       SET read = TRUE
-       WHERE id = $1 AND user_id = $2`,
-      [notificationId, userId]
-    );
-
-    return result.rowCount > 0;
-  } catch (error) {
-    console.error('❌ Failed to mark as read:', error);
-    return false;
-  }
-}
-
-/**
- * تعليم جميع الإشعارات كمقروءة
- */
-export async function markAllAsRead(userId: string): Promise<boolean> {
-  try {
-    await query(
-      `UPDATE notifications
-       SET read = TRUE
-       WHERE user_id = $1 AND read = FALSE`,
-      [userId]
-    );
-
-    return true;
-  } catch (error) {
-    console.error('❌ Failed to mark all as read:', error);
-    return false;
-  }
-}
-
-/**
- * حذف إشعار
- */
-export async function deleteNotification(notificationId: string, userId: string): Promise<boolean> {
-  try {
-    const result = await query(
-      `DELETE FROM notifications
-       WHERE id = $1 AND user_id = $2`,
-      [notificationId, userId]
-    );
-
-    return result.rowCount > 0;
-  } catch (error) {
-    console.error('❌ Failed to delete notification:', error);
-    return false;
-  }
-}
-
-/**
- * حذف الإشعارات القديمة (أكثر من 30 يوم)
- */
-export async function deleteOldNotifications(): Promise<number> {
-  try {
-    const result = await query(
-      `DELETE FROM notifications
-       WHERE created_at < NOW() - INTERVAL '30 days'`
-    );
-
-    const deletedCount = result.rowCount;
-    if (deletedCount > 0) {
-      console.log(`🗑️ Deleted ${deletedCount} old notifications`);
+    console.log(`📱 Sending trade signal to ${users.length} users with auto analysis enabled`);
+    
+    // جمع Push Tokens للإشعارات
+    const pushTokens: string[] = [];
+    
+    for (const user of users) {
+      // إرسال إلى Telegram
+      if (user.email && user.email.startsWith('telegram_')) {
+        const telegramId = user.email.replace('telegram_', '').replace('@ict-trader.local', '');
+        
+        await sendTradeSignal(telegramId, {
+          type: trade.type.includes('BUY') ? 'BUY' : 'SELL',
+          entry: trade.entry,
+          sl: trade.sl,
+          tp1: trade.tp1,
+          tp2: trade.tp2,
+          tp3: trade.tp3,
+          confidence: analysis.confidence || analysis.score * 10,
+          pair: 'XAUUSD',
+          timestamp: new Date()
+        });
+        
+        console.log(`✅ Trade signal sent to Telegram user: ${telegramId}`);
+      }
+      
+      // جمع Push Tokens
+      if (user.push_token) {
+        pushTokens.push(user.push_token);
+      }
     }
-
-    return deletedCount;
-  } catch (error) {
-    console.error('❌ Failed to delete old notifications:', error);
-    return 0;
-  }
-}
-
-// ===================== Notification Creators =====================
-
-/**
- * إنشاء إشعار تذكير بحدث اقتصادي (قبل 5 دقائق)
- */
-export async function createEventReminderNotification(
-  userId: string,
-  eventName: string,
-  eventTime: string,
-  impact: string
-): Promise<void> {
-  const impactEmoji = impact === 'high' ? '🔴' : impact === 'medium' ? '🟡' : '🟢';
-  
-  await createNotification(
-    userId,
-    `${impactEmoji} تذكير: حدث اقتصادي قريب`,
-    `سيصدر خبر "${eventName}" خلال 5 دقائق (${eventTime})`,
-    'event_reminder',
-    { eventName, eventTime, impact }
-  );
-}
-
-/**
- * إنشاء إشعار شراء اشتراك
- */
-export async function createSubscriptionPurchasedNotification(
-  userId: string,
-  packageName: string,
-  duration: number
-): Promise<void> {
-  const durationText = duration === 7 ? 'أسبوع' : duration === 30 ? 'شهر' : duration === 365 ? 'سنة' : `${duration} يوم`;
-  
-  await createNotification(
-    userId,
-    '🎉 تم تفعيل الاشتراك',
-    `تم تفعيل باقة ${packageName} لمدة ${durationText} بنجاح`,
-    'subscription_purchased',
-    { packageName, duration }
-  );
-}
-
-/**
- * إنشاء إشعار انتهاء اشتراك
- */
-export async function createSubscriptionExpiredNotification(
-  userId: string,
-  packageName: string
-): Promise<void> {
-  await createNotification(
-    userId,
-    '⚠️ انتهت صلاحية اشتراكك',
-    `انتهت صلاحية باقة ${packageName}. قم بتجديد اشتراكك للاستمرار في الاستفادة من الخدمات`,
-    'subscription_expired',
-    { packageName }
-  );
-}
-
-/**
- * إرسال إشعارات لجميع المستخدمين المشتركين
- */
-export async function notifyAllSubscribers(
-  title: string,
-  message: string,
-  type: 'event_reminder' | 'subscription_purchased' | 'subscription_expired'
-): Promise<number> {
-  try {
-    // جلب جميع المستخدمين المشتركين
-    const result = await query(`
-      SELECT id FROM users
-      WHERE subscription IS NOT NULL
-        AND subscription != 'free'
-        AND subscription_expiry > NOW()
-    `);
-
-    let count = 0;
-    for (const user of result.rows) {
-      await createNotification(user.id, title, message, type);
-      count++;
+    
+    // إرسال Push Notifications باستخدام Firebase Admin SDK
+    if (pushTokens.length > 0) {
+      console.log(`📱 Sending Firebase push notifications to ${pushTokens.length} devices`);
+      const success = await sendFirebaseTradeNotification(
+        pushTokens,
+        trade,
+        analysis.score || 0,
+        currentPrice
+      );
+      
+      if (success) {
+        console.log(`✅ Firebase push notifications sent successfully`);
+      } else {
+        console.log(`⚠️ Some Firebase push notifications failed`);
+      }
     }
-
-    console.log(`📢 Sent notification to ${count} subscribers`);
-    return count;
   } catch (error) {
-    console.error('❌ Failed to notify all subscribers:', error);
-    return 0;
+    console.error('❌ Error sending trade signals:', error);
   }
-}
+
+  console.log('📱 Trade opportunity notification sent');
+};
+
+// إرسال إشعار بعدم وجود فرصة (اختياري)
+export const notifyNoTrade = async (analysis: any, currentPrice: number): Promise<void> => {
+  // يمكن تعطيل هذا لتجنب الإزعاج
+  const SEND_NO_TRADE_NOTIFICATIONS = false;
+
+  if (!SEND_NO_TRADE_NOTIFICATIONS) {
+    return;
+  }
+
+  const reasons = analysis.reasons || ['لا توجد فرصة مناسبة حالياً'];
+  const message = `
+⏳ <b>تحليل تلقائي - لا توجد فرصة</b>
+
+📋 <b>السبب:</b> ${reasons[0]}
+💲 <b>السعر الحالي:</b> ${currentPrice.toFixed(2)}
+⭐ <b>التقييم:</b> ${analysis.score}/10
+🕐 <b>الوقت:</b> ${new Date().toLocaleString('ar-EG')}
+  `.trim();
+
+  await sendTelegramNotification(message);
+};
+
+// إرسال إشعار يومي بالإحصائيات
+export const sendDailyStats = async (): Promise<void> => {
+  const message = `
+📊 <b>إحصائيات اليوم - ${new Date().toLocaleDateString('ar-EG')}</b>
+
+🤖 التحليل التلقائي يعمل بنجاح
+⚡ يتم التحليل كل 5 دقائق عند إغلاق شمعة M5
+💎 متاح للمشتركين فقط
+
+🔄 النظام يعمل في الخلفية 24/7
+  `.trim();
+
+  await sendTelegramNotification(message);
+};
+
+// إرسال إشعار بخطأ في النظام
+export const notifySystemError = async (error: string): Promise<void> => {
+  const message = `
+⚠️ <b>تنبيه نظام</b>
+
+❌ <b>خطأ:</b> ${error}
+🕐 <b>الوقت:</b> ${new Date().toLocaleString('ar-EG')}
+
+يرجى التحقق من النظام.
+  `.trim();
+
+  await sendTelegramNotification(message);
+};
+
+export default {
+  sendTelegramNotification,
+  notifyTradeOpportunity,
+  notifyNoTrade,
+  sendDailyStats,
+  notifySystemError
+};

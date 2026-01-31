@@ -13,7 +13,6 @@ import {
   addCoinsToUser,
   getSubscriptionStats
 } from '../services/subscriptionService';
-import { createSubscriptionPurchasedNotification } from '../services/notificationService';
 
 const router = Router();
 
@@ -198,13 +197,6 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
 
     // الحصول على حالة الاشتراك الجديدة
     const newSubscriptionStatus = await getUserSubscriptionStatus(userId);
-
-    // إنشاء إشعار بنجاح الاشتراك
-    await createSubscriptionPurchasedNotification(
-      userId,
-      packageDetails.nameAr,
-      packageDetails.durationDays
-    );
 
     res.json({
       success: true,
