@@ -131,10 +131,20 @@ export const authService = {
   // تسجيل الخروج
   logout: async () => {
     try {
+      // حذف Push Token من السيرفر قبل تسجيل الخروج
+      await apiRequest(ENDPOINTS.auth.removePushToken, {
+        method: 'POST',
+      });
+    } catch (e) {
+      console.log('Failed to remove push token:', e);
+    }
+    
+    try {
       await apiRequest(ENDPOINTS.auth.logout, { method: 'POST' });
     } catch (e) {
       // تجاهل الخطأ
     }
+    
     await removeToken();
   },
 };
