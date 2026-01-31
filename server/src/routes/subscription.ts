@@ -1,5 +1,5 @@
 // routes/subscription.ts
-// مسارات إدارة الاشتراكات والباقات - نظام الدفع بالعملات
+// مسارات إدارة الاشتراكات والباقات - نظام الدفع بالعملات مع منع الشراء المتكرر
 
 import { Router, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
@@ -95,7 +95,7 @@ router.get('/packages/:packageId', async (req, res) => {
 
 // ===================== Protected Routes (تحتاج تسجيل دخول) =====================
 
-// شراء اشتراك جديد (بالعملات)
+// شراء اشتراك جديد (بالعملات) - مع منع الشراء المتكرر والسماح بالترقية
 router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { packageId } = req.body;
@@ -109,13 +109,42 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
       });
     }
 
-    // التحقق من وجود الباقة
+    // التحقق من وجود الباقة المطلوبة
     const packageDetails = await getPackageDetails(packageId);
     if (!packageDetails) {
       return res.status(404).json({
         success: false,
         error: 'الباقة المطلوبة غير موجودة'
       });
+    }
+
+    // التحقق من وجود اشتراك نشط
+    const subscriptionStatus = await getUserSubscriptionStatus(userId);
+    
+    if (subscriptionStatus.hasActiveSubscription && subscriptionStatus.subscription) {
+      const currentSubscription = subscriptionStatus.subscription;
+      const currentDuration = currentSubscription.plan_name.includes('شهر') ? 30 : 
+                             currentSubscription.plan_name.includes('أسبوع') ? 7 : 365;
+      const newDuration = packageDetails.durationDays;
+      
+      console.log(`📊 Current subscription: ${currentDuration} days, New package: ${newDuration} days`);
+      
+      // السماح بالترقية فقط من شهري إلى سنوي
+      const isUpgrade = currentDuration === 30 && newDuration === 365;
+      
+      if (!isUpgrade) {
+        return res.status(400).json({
+          success: false,
+          error: `لديك اشتراك نشط بالفعل (${currentSubscription.package_name_ar}). لا يمكنك شراء باقة جديدة إلا إذا كنت تريد الترقية من الباقة الشهرية إلى السنوية.`,
+          currentSubscription: {
+            name: currentSubscription.package_name_ar,
+            expiresAt: currentSubscription.expires_at
+          },
+          canUpgrade: currentDuration === 30 && newDuration > currentDuration
+        });
+      }
+      
+      console.log(`✅ Upgrade allowed: Monthly to Yearly`);
     }
 
     // حساب سعر الباقة بالعملات (1 دولار = 100 عملة)
@@ -167,7 +196,7 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
     }
 
     // الحصول على حالة الاشتراك الجديدة
-    const subscriptionStatus = await getUserSubscriptionStatus(userId);
+    const newSubscriptionStatus = await getUserSubscriptionStatus(userId);
 
     res.json({
       success: true,
@@ -186,7 +215,7 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
         previousBalance: user.coins,
         newBalance: newBalance
       },
-      subscriptionStatus
+      subscriptionStatus: newSubscriptionStatus
     });
 
   } catch (error) {
