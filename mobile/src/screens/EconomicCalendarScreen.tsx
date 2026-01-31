@@ -507,6 +507,12 @@ const EconomicCalendarScreen = () => {
               </TouchableOpacity>
             </View>
             
+            {/* Scroll Indicator */}
+            <View style={styles.scrollIndicator}>
+              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+              <Text style={styles.scrollIndicatorText}>مرر للأسفل لمتابعة القراءة</Text>
+            </View>
+            
             {/* Content */}
             <ScrollView style={styles.modalBody}>
               {selectedEventAnalysis && (
@@ -526,16 +532,9 @@ const EconomicCalendarScreen = () => {
                   </View>
                   
                   <View style={styles.analysisSection}>
-                    <Text style={styles.analysisSectionTitle}>📈 توقعات السوق</Text>
+                    <Text style={styles.analysisSectionTitle}>� توقعات السوق</Text>
                     <Text style={styles.analysisText}>
                       {selectedEventAnalysis.marketExpectation}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.analysisSection}>
-                    <Text style={styles.analysisSectionTitle}>💡 توصيات التداول</Text>
-                    <Text style={styles.analysisRecommendation}>
-                      {selectedEventAnalysis.tradingRecommendation}
                     </Text>
                   </View>
                 </>
@@ -822,6 +821,18 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.lg,
     fontWeight: '700',
   },
+  scrollIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
+    backgroundColor: colors.primary + '10',
+  },
+  scrollIndicatorText: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+  },
   modalBody: {
     padding: spacing.md,
   },
@@ -838,14 +849,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSizes.sm,
     lineHeight: 20,
-  },
-  analysisRecommendation: {
-    color: colors.text,
-    fontSize: fontSizes.sm,
-    lineHeight: 20,
-    backgroundColor: colors.primary + '10',
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
   },
   modalFooter: {
     padding: spacing.md,
