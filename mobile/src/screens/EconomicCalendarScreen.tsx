@@ -31,9 +31,31 @@ interface EconomicEvent {
   forecast?: string;
   previous?: string;
   actual?: string;
+  hasAnalysis?: boolean;
+  analysis?: {
+    analysis: string;
+    impact: string;
+    marketExpectation: string;
+    tradingRecommendation: string;
+  };
+}
+
+interface TodayAnalysis {
+  summary: string;
+  analyses: Array<{
+    id: string;
+    eventName: string;
+    analysis: string;
+    impact: string;
+    marketExpectation: string;
+    tradingRecommendation: string;
+  }>;
+  totalEvents: number;
+  highImpactEvents: number;
 }
 
 type FilterType = 'all' | 'high' | 'today' | 'upcoming';
+type TabType = 'calendar' | 'analysis';
 
 const EconomicCalendarScreen = () => {
   const navigation = useNavigation();
@@ -42,11 +64,20 @@ const EconomicCalendarScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
+  const [selectedTab, setSelectedTab] = useState<TabType>('calendar');
   const [lastUpdate, setLastUpdate] = useState<string>('');
+  const [todayAnalysis, setTodayAnalysis] = useState<TodayAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
   useEffect(() => {
     loadCalendar();
   }, []);
+
+  useEffect(() => {
+    if (selectedTab === 'analysis' && !todayAnalysis) {
+      loadTodayAnalysis();
+    }
+  }, [selectedTab]);
 
   useEffect(() => {
     applyFilter(selectedFilter);
@@ -75,7 +106,43 @@ const EconomicCalendarScreen = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadCalendar(true);
+    if (selectedTab === 'calendar') {
+      await loadCalendar(true);
+    } else {
+      await loadTodayAnalysis();
+    }
+  };
+
+  const loadTodayAnalysis = async () => {
+    try {
+      setAnalysisLoading(true);
+      
+      // جلب token من AsyncStorage
+      const { getToken } = await import('../context/AuthContext');
+      const token = await getToken();
+      
+      if (!token) {
+        console.error('No auth token found');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/economic-analysis/today`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setTodayAnalysis(data);
+      }
+    } catch (error) {
+      console.error('Error loading today analysis:', error);
+    } finally {
+      setAnalysisLoading(false);
+      setRefreshing(false);
+    }
   };
 
   const applyFilter = (filter: FilterType) => {
@@ -220,6 +287,37 @@ const EconomicCalendarScreen = () => {
     );
   };
 
+  const renderAnalysisCard = (analysis: TodayAnalysis['analyses'][0]) => {
+    return (
+      <View key={analysis.id} style={styles.analysisCard}>
+        <View style={styles.analysisHeader}>
+          <Ionicons name="analytics" size={24} color={colors.primary} />
+          <Text style={styles.analysisTitle}>{analysis.eventName}</Text>
+        </View>
+
+        <View style={styles.analysisSection}>
+          <Text style={styles.analysisSectionTitle}>📊 التحليل</Text>
+          <Text style={styles.analysisText}>{analysis.analysis}</Text>
+        </View>
+
+        <View style={styles.analysisSection}>
+          <Text style={styles.analysisSectionTitle}>🎯 التأثير المتوقع</Text>
+          <Text style={styles.analysisText}>{analysis.impact}</Text>
+        </View>
+
+        <View style={styles.analysisSection}>
+          <Text style={styles.analysisSectionTitle}>📈 توقعات السوق</Text>
+          <Text style={styles.analysisText}>{analysis.marketExpectation}</Text>
+        </View>
+
+        <View style={styles.analysisSection}>
+          <Text style={styles.analysisSectionTitle}>💡 توصيات التداول</Text>
+          <Text style={styles.analysisRecommendation}>{analysis.tradingRecommendation}</Text>
+        </View>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -250,82 +348,115 @@ const EconomicCalendarScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Filters */}
-      <View style={styles.filtersContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filters}
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === 'calendar' && styles.tabActive]}
+          onPress={() => setSelectedTab('calendar')}
         >
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedFilter === 'all' && styles.filterButtonActive
-            ]}
-            onPress={() => setSelectedFilter('all')}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === 'all' && styles.filterTextActive
-              ]}
-            >
-              الكل
-            </Text>
-          </TouchableOpacity>
+          <Ionicons 
+            name="calendar-outline" 
+            size={20} 
+            color={selectedTab === 'calendar' ? colors.primary : colors.textMuted} 
+          />
+          <Text style={[styles.tabText, selectedTab === 'calendar' && styles.tabTextActive]}>
+            التقويم
+          </Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedFilter === 'high' && styles.filterButtonActive
-            ]}
-            onPress={() => setSelectedFilter('high')}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === 'high' && styles.filterTextActive
-              ]}
-            >
-              تأثير عالي 🔴
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedFilter === 'today' && styles.filterButtonActive
-            ]}
-            onPress={() => setSelectedFilter('today')}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === 'today' && styles.filterTextActive
-              ]}
-            >
-              اليوم
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedFilter === 'upcoming' && styles.filterButtonActive
-            ]}
-            onPress={() => setSelectedFilter('upcoming')}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === 'upcoming' && styles.filterTextActive
-              ]}
-            >
-              القادمة (24 ساعة)
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === 'analysis' && styles.tabActive]}
+          onPress={() => setSelectedTab('analysis')}
+        >
+          <Ionicons 
+            name="analytics" 
+            size={20} 
+            color={selectedTab === 'analysis' ? colors.primary : colors.textMuted} 
+          />
+          <Text style={[styles.tabText, selectedTab === 'analysis' && styles.tabTextActive]}>
+            تحليل الأخبار اليوم
+          </Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Filters - Only show for calendar tab */}
+      {selectedTab === 'calendar' && (
+        <View style={styles.filtersContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+          >
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                selectedFilter === 'all' && styles.filterButtonActive
+              ]}
+              onPress={() => setSelectedFilter('all')}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  selectedFilter === 'all' && styles.filterTextActive
+                ]}
+              >
+                الكل
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                selectedFilter === 'high' && styles.filterButtonActive
+              ]}
+              onPress={() => setSelectedFilter('high')}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  selectedFilter === 'high' && styles.filterTextActive
+                ]}
+              >
+                تأثير عالي 🔴
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                selectedFilter === 'today' && styles.filterButtonActive
+              ]}
+              onPress={() => setSelectedFilter('today')}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  selectedFilter === 'today' && styles.filterTextActive
+                ]}
+              >
+                اليوم
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                selectedFilter === 'upcoming' && styles.filterButtonActive
+              ]}
+              onPress={() => setSelectedFilter('upcoming')}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  selectedFilter === 'upcoming' && styles.filterTextActive
+                ]}
+              >
+                القادمة (24 ساعة)
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      )}
 
       {/* Last Update */}
       {lastUpdate && (
@@ -335,7 +466,7 @@ const EconomicCalendarScreen = () => {
         </View>
       )}
 
-      {/* Events List */}
+      {/* Content */}
       <ScrollView
         style={styles.content}
         refreshControl={
@@ -346,15 +477,74 @@ const EconomicCalendarScreen = () => {
           />
         }
       >
-        {filteredEvents.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={64} color={colors.textMuted} />
-            <Text style={styles.emptyText}>لا توجد أحداث متاحة</Text>
-          </View>
+        {selectedTab === 'calendar' ? (
+          /* Calendar Tab */
+          filteredEvents.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="calendar-outline" size={64} color={colors.textMuted} />
+              <Text style={styles.emptyText}>لا توجد أحداث متاحة</Text>
+            </View>
+          ) : (
+            <View style={styles.eventsContainer}>
+              {filteredEvents.map(renderEvent)}
+            </View>
+          )
         ) : (
-          <View style={styles.eventsContainer}>
-            {filteredEvents.map(renderEvent)}
-          </View>
+          /* Analysis Tab */
+          analysisLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>جاري تحليل أحداث اليوم...</Text>
+            </View>
+          ) : todayAnalysis ? (
+            <View style={styles.analysisContainer}>
+              {/* Summary Card */}
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryHeader}>
+                  <Ionicons name="newspaper" size={24} color={colors.primary} />
+                  <Text style={styles.summaryTitle}>ملخص اليوم</Text>
+                </View>
+                <Text style={styles.summaryText}>{todayAnalysis.summary}</Text>
+                
+                <View style={styles.summaryStats}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{todayAnalysis.totalEvents}</Text>
+                    <Text style={styles.statLabel}>إجمالي الأحداث</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, { color: colors.error }]}>
+                      {todayAnalysis.highImpactEvents}
+                    </Text>
+                    <Text style={styles.statLabel}>تأثير عالي</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, { color: colors.success }]}>
+                      {todayAnalysis.analyses.length}
+                    </Text>
+                    <Text style={styles.statLabel}>تحليلات جاهزة</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Analysis Cards */}
+              {todayAnalysis.analyses.length > 0 ? (
+                todayAnalysis.analyses.map(renderAnalysisCard)
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="analytics-outline" size={64} color={colors.textMuted} />
+                  <Text style={styles.emptyText}>لا توجد تحليلات متاحة بعد</Text>
+                  <Text style={styles.emptySubtext}>
+                    سيتم إضافة التحليلات تلقائياً عند توفرها
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="analytics-outline" size={64} color={colors.textMuted} />
+              <Text style={styles.emptyText}>لا توجد تحليلات متاحة</Text>
+            </View>
+          )
         )}
 
         <View style={styles.bottomSpacer} />
@@ -584,6 +774,135 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 100,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: colors.primary,
+  },
+  tabText: {
+    color: colors.textMuted,
+    fontSize: fontSizes.sm,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: colors.primary,
+  },
+  analysisContainer: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  summaryCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  summaryTitle: {
+    color: colors.text,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+  },
+  summaryText: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.md,
+    lineHeight: 24,
+    marginBottom: spacing.md,
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    color: colors.primary,
+    fontSize: fontSizes.xxl,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  statLabel: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+  },
+  analysisCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  analysisHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  analysisTitle: {
+    flex: 1,
+    color: colors.text,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+  },
+  analysisSection: {
+    marginBottom: spacing.md,
+  },
+  analysisSectionTitle: {
+    color: colors.primary,
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  analysisText: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.sm,
+    lineHeight: 20,
+  },
+  analysisRecommendation: {
+    color: colors.text,
+    fontSize: fontSizes.sm,
+    lineHeight: 20,
+    backgroundColor: colors.primary + '10',
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  emptySubtext: {
+    color: colors.textMuted,
+    fontSize: fontSizes.sm,
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
 });
 
