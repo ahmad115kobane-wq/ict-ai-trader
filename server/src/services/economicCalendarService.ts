@@ -24,11 +24,9 @@ export interface CalendarResponse {
 }
 
 // ===================== Configuration =====================
-const CALENDAR_CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق (زيادة Cache لتقليل الطلبات)
+const CALENDAR_CACHE_DURATION = 3 * 60 * 1000; // 3 دقائق (تحديث أسرع للنتائج الفعلية)
 let cachedEvents: EconomicEvent[] = [];
 let lastFetchTime = 0;
-let lastFetchAttempt = 0; // آخر محاولة جلب
-const MIN_FETCH_INTERVAL = 60 * 1000; // دقيقة واحدة على الأقل بين الطلبات
 
 // ترجمة أسماء الدول
 const countryNames: { [key: string]: string } = {
@@ -490,21 +488,9 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
   try {
     const now = Date.now();
 
-    // حماية من الطلبات الكثيرة - دقيقة واحدة على الأقل بين الطلبات
-    if (forceRefresh && (now - lastFetchAttempt) < MIN_FETCH_INTERVAL) {
-      console.log('⚠️ Rate limit: Using cached data (last fetch was recent)');
-      if (cachedEvents.length > 0) {
-        return {
-          success: true,
-          events: cachedEvents,
-          lastUpdate: new Date(lastFetchTime).toISOString()
-        };
-      }
-    }
-
     // استخدام الـ cache إذا كان حديثاً
     if (!forceRefresh && cachedEvents.length > 0 && (now - lastFetchTime) < CALENDAR_CACHE_DURATION) {
-      console.log('� Using cached economic calendar');
+      console.log('📅 Using cached economic calendar');
       return {
         success: true,
         events: cachedEvents,
@@ -512,8 +498,7 @@ export async function getEconomicCalendar(forceRefresh = false): Promise<Calenda
       };
     }
 
-    console.log('� Fetching fresh economic calendar...');
-    lastFetchAttempt = now; // تسجيل المحاولة
+    console.log('📅 Fetching fresh economic calendar...');
 
     // استخدام Forex Factory كمصدر أساسي (موثوق ومستقر)
     let events: EconomicEvent[] = [];

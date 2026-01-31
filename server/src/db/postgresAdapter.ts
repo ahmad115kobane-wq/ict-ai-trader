@@ -230,6 +230,33 @@ const createTables = async (client: PoolClient): Promise<void> => {
       )
     `);
 
+    // جدول التحليلات الاقتصادية
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS economic_analyses (
+        id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL,
+        event_name TEXT NOT NULL,
+        event_date DATE NOT NULL,
+        analysis TEXT NOT NULL,
+        impact TEXT NOT NULL,
+        market_expectation TEXT NOT NULL,
+        trading_recommendation TEXT NOT NULL,
+        analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        user_id TEXT NOT NULL,
+        UNIQUE(event_id, user_id)
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_economic_analyses_user_date 
+      ON economic_analyses(user_id, event_date DESC)
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_economic_analyses_event 
+      ON economic_analyses(event_id)
+    `);
+
     await client.query('COMMIT');
     console.log('✅ All PostgreSQL tables created successfully');
   } catch (error) {
