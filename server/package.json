@@ -7,7 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc && node copy-public.js",
     "start": "node dist/index.js",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "test:welcome": "node test-welcome-notification.js",
+    "notify": "node send-notification.js"
   },
   "engines": {
     "node": ">=18.0.0",
