@@ -81,7 +81,8 @@ async function checkUpcomingEvents(): Promise<void> {
       SELECT id FROM users
       WHERE subscription IS NOT NULL
         AND subscription != 'free'
-        AND subscription_expiry > NOW()
+        AND subscription_expiry IS NOT NULL
+        AND subscription_expiry::timestamp > NOW()
     `);
 
     const users = usersResult.rows;
@@ -155,14 +156,13 @@ export function startSubscriptionExpiryCheck(): void {
  */
 async function checkExpiredSubscriptions(): Promise<void> {
   try {
-    // جلب الاشتراكات التي انتهت خلال الساعة الماضية ولم يتم إرسال إشعار لها
+    // جلب المستخدمين اللي انتهى اشتراكهم خلال الساعة الماضية ولم يتم إرسال إشعار لهم
     const result = await query(`
-      SELECT u.id as user_id, u.email, u.subscription, s.package_id, p.name_ar
+      SELECT u.id as user_id, u.email, u.subscription
       FROM users u
-      LEFT JOIN subscriptions s ON u.id = s.user_id AND s.is_active = FALSE
-      LEFT JOIN packages p ON s.package_id = p.id
-      WHERE u.subscription_expiry > NOW() - INTERVAL '1 hour'
-        AND u.subscription_expiry <= NOW()
+      WHERE u.subscription_expiry IS NOT NULL
+        AND u.subscription_expiry::timestamp > NOW() - INTERVAL '1 hour'
+        AND u.subscription_expiry::timestamp <= NOW()
         AND u.subscription != 'free'
         AND NOT EXISTS (
           SELECT 1 FROM notifications n
@@ -179,7 +179,7 @@ async function checkExpiredSubscriptions(): Promise<void> {
 
     // إرسال إشعار لكل مستخدم
     for (const user of expiredUsers) {
-      const packageName = user.name_ar || user.subscription || 'الباقة';
+      const packageName = user.subscription || 'الباقة';
       
       await createSubscriptionExpiredNotification(
         user.user_id,

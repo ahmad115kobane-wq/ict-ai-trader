@@ -271,7 +271,8 @@ export async function notifyAllSubscribers(
       SELECT id FROM users
       WHERE subscription IS NOT NULL
         AND subscription != 'free'
-        AND subscription_expiry > NOW()
+        AND subscription_expiry IS NOT NULL
+        AND subscription_expiry::timestamp > NOW()
     `);
 
     let count = 0;
