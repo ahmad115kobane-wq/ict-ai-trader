@@ -306,28 +306,41 @@ export async function notifyTradeOpportunity(analysis: any, currentPrice: number
     // تحديد نوع الصفقة بشكل صحيح
     const tradeType: 'BUY' | 'SELL' = trade.type.includes('BUY') ? 'BUY' : 'SELL';
 
-    // 1. إرسال عبر Telegram
-    if (TELEGRAM_CHAT_ID) {
-      const signal = {
-        type: tradeType,
-        entry: trade.entry,
-        sl: trade.sl,
-        tp1: trade.tp1,
-        tp2: trade.tp2,
-        tp3: trade.tp3,
-        confidence: analysis.confidence || analysis.score * 10,
-        pair: 'XAUUSD',
-        timestamp: new Date()
-      };
+    const signal = {
+      type: tradeType,
+      entry: trade.entry,
+      sl: trade.sl,
+      tp1: trade.tp1,
+      tp2: trade.tp2,
+      tp3: trade.tp3,
+      confidence: analysis.confidence || analysis.score * 10,
+      pair: 'XAUUSD',
+      timestamp: new Date()
+    };
 
-      const telegramSuccess = await sendTradeSignal(TELEGRAM_CHAT_ID, signal);
-      if (telegramSuccess) {
-        console.log('✅ Trade opportunity sent to Telegram');
-      } else {
-        console.error('❌ Failed to send trade opportunity to Telegram');
+    // 1. إرسال عبر Telegram لكل المستخدمين المشتركين
+    try {
+      const { getUsersWithAutoAnalysisEnabled } = await import('../db/index');
+      const users = await getUsersWithAutoAnalysisEnabled();
+      
+      let telegramSentCount = 0;
+      for (const user of users) {
+        // إرسال فقط للمستخدمين اللي عندهم telegram_id
+        if (user.telegram_id) {
+          const success = await sendTradeSignal(user.telegram_id, signal);
+          if (success) {
+            telegramSentCount++;
+          }
+        }
       }
-    } else {
-      console.log('⚠️ TELEGRAM_CHAT_ID not configured - skipping Telegram notification');
+      
+      if (telegramSentCount > 0) {
+        console.log(`✅ Trade opportunity sent to ${telegramSentCount} Telegram users`);
+      } else {
+        console.log('⚠️ No Telegram users to notify');
+      }
+    } catch (telegramError) {
+      console.error('❌ Failed to send Telegram notifications:', telegramError);
     }
 
     // 2. إرسال Push Notifications للتطبيق
