@@ -287,3 +287,157 @@ export async function notifyAllSubscribers(
     return 0;
   }
 }
+
+// ===================== Legacy Functions (for backward compatibility) =====================
+// إشعارات Telegram و Push Notifications للصفقات
+
+import { sendTradeSignal, sendTelegramMessage } from './telegramService';
+
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+
+/**
+ * إرسال إشعار بفرصة تداول عبر Telegram + Push Notifications
+ */
+export async function notifyTradeOpportunity(analysis: any, currentPrice: number): Promise<void> {
+  try {
+    const trade = analysis.suggestedTrade;
+    if (!trade) return;
+
+    // 1. إرسال عبر Telegram
+    if (TELEGRAM_CHAT_ID) {
+      const signal = {
+        type: trade.type.includes('BUY') ? 'BUY' : 'SELL',
+        entry: trade.entry,
+        sl: trade.sl,
+        tp1: trade.tp1,
+        tp2: trade.tp2,
+        tp3: trade.tp3,
+        confidence: analysis.confidence || analysis.score * 10,
+        pair: 'XAUUSD',
+        timestamp: new Date()
+      };
+
+      await sendTradeSignal(TELEGRAM_CHAT_ID, signal);
+      console.log('✅ Trade opportunity sent to Telegram');
+    }
+
+    // 2. إرسال Push Notifications للتطبيق
+    try {
+      const { getUsersWithPushTokens } = await import('../db/index');
+      const { sendFirebaseTradeNotification } = await import('./firebasePushService');
+
+      const usersWithTokens = await getUsersWithPushTokens();
+      const pushTokens = usersWithTokens.map((u: any) => u.push_token).filter(Boolean);
+
+      if (pushTokens.length > 0) {
+        const success = await sendFirebaseTradeNotification(
+          pushTokens,
+          { ...trade, rrRatio: String(trade.rrRatio) },
+          analysis.score,
+          currentPrice
+        );
+        if (success) {
+          console.log(`✅ Push notifications sent to ${pushTokens.length} devices`);
+        }
+      }
+    } catch (pushError) {
+      console.error('❌ Push notification failed:', pushError);
+    }
+
+  } catch (error) {
+    console.error('❌ Failed to send trade opportunity notifications:', error);
+  }
+}
+
+/**
+ * إرسال إحصائيات يومية عبر Telegram
+ */
+export async function sendDailyStats(): Promise<void> {
+  if (!TELEGRAM_CHAT_ID) {
+    console.log('⚠️ TELEGRAM_CHAT_ID not configured - skipping daily stats');
+    return;
+  }
+
+  try {
+    const message = `
+📊 *إحصائيات اليوم*
+
+✅ النظام يعمل بشكل طبيعي
+🤖 التحليل التلقائي نشط
+📈 المراقبة مستمرة
+
+_تم إرسالها بواسطة ICT AI Trader_
+    `.trim();
+
+    await sendTelegramMessage(TELEGRAM_CHAT_ID, message);
+    console.log('✅ Daily stats sent to Telegram');
+  } catch (error) {
+    console.error('❌ Failed to send daily stats to Telegram:', error);
+  }
+}
+
+/**
+ * إرسال إشعار خطأ في النظام عبر Telegram
+ */
+export async function notifySystemError(error: string): Promise<void> {
+  if (!TELEGRAM_CHAT_ID) {
+    console.log('⚠️ TELEGRAM_CHAT_ID not configured - skipping error notification');
+    return;
+  }
+
+  try {
+    const message = `
+⚠️ *تنبيه: خطأ في النظام*
+
+${error}
+
+_تم إرسالها بواسطة ICT AI Trader_
+    `.trim();
+
+    await sendTelegramMessage(TELEGRAM_CHAT_ID, message);
+    console.log('✅ System error sent to Telegram');
+  } catch (error) {
+    console.error('❌ Failed to send system error to Telegram:', error);
+  }
+}
+
+/**
+ * إرسال إشعار بعدم وجود صفقة عبر Telegram
+ */
+export async function notifyNoTrade(reason: string): Promise<void> {
+  if (!TELEGRAM_CHAT_ID) {
+    return; // لا نرسل هذا النوع إذا لم يكن Telegram مفعل
+  }
+
+  try {
+    const message = `
+📊 *لا توجد فرصة تداول*
+
+السبب: ${reason}
+
+_تم إرسالها بواسطة ICT AI Trader_
+    `.trim();
+
+    await sendTelegramMessage(TELEGRAM_CHAT_ID, message);
+    console.log('✅ No trade notification sent to Telegram');
+  } catch (error) {
+    console.error('❌ Failed to send no trade notification to Telegram:', error);
+  }
+}
+
+/**
+ * إرسال إشعار عام عبر Telegram
+ */
+export async function sendTelegramNotification(message: string): Promise<void> {
+  if (!TELEGRAM_CHAT_ID) {
+    console.log('⚠️ TELEGRAM_CHAT_ID not configured - skipping Telegram notification');
+    return;
+  }
+
+  try {
+    await sendTelegramMessage(TELEGRAM_CHAT_ID, message);
+    console.log('✅ Telegram notification sent');
+  } catch (error) {
+    console.error('❌ Failed to send Telegram notification:', error);
+  }
+}
