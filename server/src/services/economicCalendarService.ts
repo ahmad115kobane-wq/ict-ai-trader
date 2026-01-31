@@ -24,7 +24,7 @@ export interface CalendarResponse {
 }
 
 // ===================== Configuration =====================
-const CALENDAR_CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق (تحديث أسرع للنتائج الفعلية)
+const CALENDAR_CACHE_DURATION = 3 * 60 * 1000; // 3 دقائق (تحديث أسرع للنتائج الفعلية)
 let cachedEvents: EconomicEvent[] = [];
 let lastFetchTime = 0;
 
@@ -345,8 +345,8 @@ async function fetchFromForexFactory(): Promise<EconomicEvent[]> {
 
     console.log(`✅ Processed ${events.length} events (filtered low impact)`);
     
-    // محاولة إثراء البيانات بالنتائج الفعلية من Investing.com
-    await enrichEventsWithInvestingActuals(events);
+    // ملاحظة: النتائج الفعلية تظهر في Forex Factory بعد 5-15 دقيقة من صدور الخبر
+    // مع Cache = 3 دقائق، سيتم تحديث البيانات تلقائياً
     
     return events;
   } catch (error) {
