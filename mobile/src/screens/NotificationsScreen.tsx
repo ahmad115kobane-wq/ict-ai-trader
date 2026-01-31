@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
+import { notificationService } from '../services/apiService';
 
 interface Notification {
   id: string;
@@ -35,6 +36,7 @@ const NotificationsScreen = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     loadNotifications();
@@ -42,42 +44,49 @@ const NotificationsScreen = () => {
 
   const loadNotifications = async () => {
     try {
-      // TODO: جلب الإشعارات من API
-      // محاكاة البيانات للآن
-      const mockNotifications: Notification[] = [
-        {
-          id: '1',
-          title: '📊 تحليل جديد',
-          message: 'تم نشر تحليل جديد لزوج EUR/USD',
-          type: 'analysis',
-          read: false,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          title: '💰 صفقة جديدة',
-          message: 'تم فتح صفقة شراء على GBP/USD',
-          type: 'trade',
-          read: false,
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: '3',
-          title: '🎁 اشتراك',
-          message: 'تم تجديد اشتراكك بنجاح',
-          type: 'subscription',
-          read: true,
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-      ];
+      const response = await notificationService.getNotifications(50);
       
-      setNotifications(mockNotifications);
-    } catch (error) {
+      if (response.success) {
+        // تحويل البيانات من الخادم إلى تنسيق الشاشة
+        const formattedNotifications: Notification[] = response.notifications.map((notif: any) => ({
+          id: notif.id,
+          title: getNotificationTitle(notif.type, notif.title),
+          message: notif.message,
+          type: mapNotificationType(notif.type),
+          read: notif.read,
+          createdAt: notif.created_at,
+        }));
+        
+        setNotifications(formattedNotifications);
+        setUnreadCount(response.unreadCount || 0);
+      }
+    } catch (error: any) {
       console.error('Error loading notifications:', error);
+      // في حالة عدم توفر الخدمة، نعرض قائمة فارغة
+      setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  // تحويل نوع الإشعار من الخادم إلى نوع الشاشة
+  const mapNotificationType = (serverType: string): 'trade' | 'analysis' | 'subscription' | 'system' => {
+    switch (serverType) {
+      case 'event_reminder':
+        return 'analysis';
+      case 'subscription_purchased':
+      case 'subscription_expired':
+        return 'subscription';
+      default:
+        return 'system';
+    }
+  };
+
+  // الحصول على عنوان الإشعار
+  const getNotificationTitle = (type: string, defaultTitle: string): string => {
+    return defaultTitle; // العنوان يأتي من الخادم
   };
 
   const onRefresh = async () => {
@@ -85,22 +94,39 @@ const NotificationsScreen = () => {
     await loadNotifications();
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(notif =>
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
+  const markAsRead = async (id: string) => {
+    try {
+      await notificationService.markAsRead(id);
+      setNotifications(prev =>
+        prev.map(notif =>
+          notif.id === id ? { ...notif, read: true } : notif
+        )
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking as read:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notif => ({ ...notif, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications(prev =>
+        prev.map(notif => ({ ...notif, read: true }))
+      );
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notif => notif.id !== id));
+  const deleteNotification = async (id: string) => {
+    try {
+      await notificationService.deleteNotification(id);
+      setNotifications(prev => prev.filter(notif => notif.id !== id));
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
   };
 
   const getNotificationIcon = (type: string) => {
@@ -190,13 +216,16 @@ const NotificationsScreen = () => {
     );
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
-        <Header coins={user?.coins || 0} onLogout={logout} showLogout={true} />
+        <Header 
+          coins={user?.coins || 0} 
+          onLogout={logout} 
+          showLogout={true}
+          showNotifications={false}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>جاري تحميل الإشعارات...</Text>
@@ -210,7 +239,12 @@ const NotificationsScreen = () => {
       <StatusBar style="light" />
 
       {/* Header */}
-      <Header coins={user?.coins || 0} onLogout={logout} showLogout={true} />
+      <Header 
+        coins={user?.coins || 0} 
+        onLogout={logout} 
+        showLogout={true}
+        showNotifications={false}
+      />
 
       {/* Page Title */}
       <View style={styles.titleContainer}>

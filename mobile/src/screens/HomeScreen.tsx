@@ -22,7 +22,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 import { useAuth } from '../context/AuthContext';
-import { analysisService, subscriptionService } from '../services/apiService';
+import { analysisService, subscriptionService, notificationService } from '../services/apiService';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { Analysis } from '../types';
 import { API_BASE_URL } from '../config/api';
@@ -43,6 +43,7 @@ const HomeScreen = () => {
   const [selectedTimeframe, setSelectedTimeframe] = useState<'5m' | '1h'>('5m');
   const [chartHigh, setChartHigh] = useState(0);
   const [chartLow, setChartLow] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -77,7 +78,21 @@ const HomeScreen = () => {
     await Promise.all([
       fetchPriceAndAnalysis(),
       refreshUser(),
+      fetchUnreadCount(),
     ]);
+  };
+
+  const fetchUnreadCount = async () => {
+    try {
+      const response = await notificationService.getUnreadCount();
+      if (response.success) {
+        setUnreadNotifications(response.count || 0);
+      }
+    } catch (error) {
+      // تجاهل الخطأ - غير حرج
+      // في حالة عدم توفر الخدمة، نعرض 0
+      setUnreadNotifications(0);
+    }
   };
 
   const fetchPriceAndAnalysis = async () => {
@@ -565,6 +580,7 @@ const HomeScreen = () => {
       {/* Header */}
       <Header 
         coins={user?.coins || 0}
+        unreadCount={unreadNotifications}
         onLogout={() => {
           Alert.alert(
             'تسجيل الخروج',

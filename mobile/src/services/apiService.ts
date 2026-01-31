@@ -219,3 +219,38 @@ export default {
   setToken,
   removeToken,
 };
+
+// ================== دوال الإشعارات ==================
+
+export const notificationService = {
+  // جلب إشعارات المستخدم
+  getNotifications: async (limit: number = 50) => {
+    return await apiRequest(`/api/notifications?limit=${limit}`);
+  },
+
+  // عدد الإشعارات غير المقروءة
+  getUnreadCount: async () => {
+    return await apiRequest('/api/notifications/unread-count');
+  },
+
+  // تعليم إشعار كمقروء
+  markAsRead: async (notificationId: string) => {
+    return await apiRequest(`/api/notifications/${notificationId}/read`, {
+      method: 'POST',
+    });
+  },
+
+  // تعليم جميع الإشعارات كمقروءة
+  markAllAsRead: async () => {
+    return await apiRequest('/api/notifications/mark-all-read', {
+      method: 'POST',
+    });
+  },
+
+  // حذف إشعار
+  deleteNotification: async (notificationId: string) => {
+    return await apiRequest(`/api/notifications/${notificationId}`, {
+      method: 'DELETE',
+    });
+  },
+};

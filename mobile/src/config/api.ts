@@ -44,4 +44,12 @@ export const ENDPOINTS = {
     history: '/api/subscription/history',
     addCoins: '/api/subscription/add-coins',
   },
+  // الإشعارات
+  notifications: {
+    list: '/api/notifications',
+    unreadCount: '/api/notifications/unread-count',
+    markAsRead: '/api/notifications/:id/read',
+    markAllAsRead: '/api/notifications/mark-all-read',
+    delete: '/api/notifications/:id',
+  },
 };
