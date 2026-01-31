@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { useAuth } from '../context/AuthContext';
@@ -45,9 +45,11 @@ const NotificationsScreen = () => {
   const loadNotifications = async () => {
     try {
       // جلب إشعارات النظام من API الجديد
+      const token = await SecureStore.getItemAsync('token');
+      
       const response = await fetch(`${API_URL}/system-notifications?limit=50`, {
         headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -111,10 +113,12 @@ const NotificationsScreen = () => {
       );
 
       // إرسال الطلب للخادم
+      const token = await SecureStore.getItemAsync('token');
+      
       await fetch(`${API_URL}/system-notifications/${id}/read`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
     } catch (error) {
@@ -130,10 +134,12 @@ const NotificationsScreen = () => {
       );
 
       // إرسال الطلب للخادم
+      const token = await SecureStore.getItemAsync('token');
+      
       await fetch(`${API_URL}/system-notifications/mark-all-read`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
     } catch (error) {
@@ -147,10 +153,12 @@ const NotificationsScreen = () => {
       setNotifications(prev => prev.filter(notif => notif.id !== id));
 
       // إرسال الطلب للخادم
+      const token = await SecureStore.getItemAsync('token');
+      
       await fetch(`${API_URL}/system-notifications/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
     } catch (error) {
