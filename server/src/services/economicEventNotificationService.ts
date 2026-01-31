@@ -20,12 +20,12 @@ export function startEconomicEventMonitoring() {
     return;
   }
 
-  console.log('📅 Starting economic event monitoring...');
+  console.log('📅 Starting economic event monitoring (every 30 seconds)...');
   
-  // فحص كل دقيقة
+  // فحص كل 30 ثانية للحصول على دقة أعلى
   monitoringInterval = setInterval(async () => {
     await checkUpcomingEvents();
-  }, 60 * 1000); // كل دقيقة
+  }, 30 * 1000); // كل 30 ثانية
 
   // فحص فوري عند البدء
   checkUpcomingEvents();
@@ -56,27 +56,39 @@ async function checkUpcomingEvents() {
 
       const eventTime = new Date(`${event.date}T${event.time}`);
       const timeDiff = eventTime.getTime() - now.getTime();
-      const minutesUntil = Math.floor(timeDiff / (1000 * 60));
+      const secondsUntil = Math.floor(timeDiff / 1000);
+      const minutesUntil = Math.floor(secondsUntil / 60);
 
-      // إشعار قبل 5 دقائق
-      if (minutesUntil === 5 && !notifiedEventsBefore5Min.has(event.id)) {
+      // إشعار قبل 5 دقائق (نافذة 60 ثانية)
+      if (minutesUntil === 5 && secondsUntil <= 330 && !notifiedEventsBefore5Min.has(event.id)) {
         await sendEventNotification(event, 'before');
         notifiedEventsBefore5Min.add(event.id);
         console.log(`📅 Sent 5-minute warning for: ${event.event}`);
       }
 
-      // إشعار عند صدور الخبر (في نفس الدقيقة أو بعدها مباشرة)
-      // نتحقق إذا كان الوقت قد حان ولم نرسل إشعار من قبل
-      if (minutesUntil <= 0 && minutesUntil >= -5 && !notifiedEvents.has(event.id)) {
-        // إعادة جلب البيانات للتأكد من وجود النتيجة الفعلية
-        const updatedCalendar = await getEconomicCalendar(true);
-        const updatedEvent = updatedCalendar.events.find(e => e.id === event.id);
+      // إشعار عند صدور الخبر - دقة عالية (نافذة 60 ثانية)
+      // يُرسل الإشعار فوراً عندما يحين وقت الخبر
+      if (secondsUntil <= 30 && secondsUntil >= -30 && !notifiedEvents.has(event.id)) {
+        // إرسال الإشعار فوراً
+        await sendEventNotification(event, 'now');
+        notifiedEvents.add(event.id);
+        console.log(`📅 ⚡ INSTANT notification sent for: ${event.event} (${secondsUntil}s)`);
         
-        if (updatedEvent) {
-          await sendEventNotification(updatedEvent, 'now');
-          notifiedEvents.add(event.id);
-          console.log(`📅 Sent release notification for: ${updatedEvent.event}${updatedEvent.actual ? ' (Actual: ' + updatedEvent.actual + ')' : ''}`);
-        }
+        // جدولة تحديث بعد دقيقة واحدة للتحقق من النتيجة الفعلية
+        setTimeout(async () => {
+          try {
+            const updatedCalendar = await getEconomicCalendar(true);
+            const updatedEvent = updatedCalendar.events.find(e => e.id === event.id);
+            
+            if (updatedEvent && updatedEvent.actual && updatedEvent.actual !== event.actual) {
+              // إرسال تحديث بالنتيجة الفعلية
+              await sendEventNotification(updatedEvent, 'update');
+              console.log(`📊 Sent actual result update: ${updatedEvent.event} = ${updatedEvent.actual}`);
+            }
+          } catch (err) {
+            console.log('⚠️ Could not fetch actual result update');
+          }
+        }, 60 * 1000); // بعد دقيقة واحدة
       }
 
       // تنظيف الأحداث القديمة (أكثر من ساعة)
@@ -95,7 +107,7 @@ async function checkUpcomingEvents() {
  */
 async function sendEventNotification(
   event: EconomicEvent, 
-  timing: 'before' | 'now'
+  timing: 'before' | 'now' | 'update'
 ) {
   const impactEmoji = event.impact === 'high' ? '🔴' : '🟡';
   
@@ -111,24 +123,36 @@ async function sendEventNotification(
     if (event.previous) {
       message += `\n📈 السابق: ${event.previous}`;
     }
+  } else if (timing === 'update') {
+    // إشعار تحديث بالنتيجة الفعلية
+    title = `📊 تحديث: ${event.event}`;
+    message = `${impactEmoji} ${event.countryName} (${event.currency})\n\n✅ النتيجة الفعلية: ${event.actual}`;
+    if (event.forecast) {
+      message += `\n📊 التوقع كان: ${event.forecast}`;
+    }
+    if (event.previous) {
+      message += `\n📈 القراءة السابقة: ${event.previous}`;
+    }
   } else {
-    // إشعار عند الصدور - مع التركيز على النتيجة
+    // إشعار عند الصدور - فوري
+    title = `⚡ صدر الآن: ${event.event}`;
+    message = `${impactEmoji} ${event.countryName} (${event.currency})\n🕐 ${event.time}\n\n`;
+    
     if (event.actual) {
-      title = `📢 صدر الآن: ${event.event}`;
-      message = `${impactEmoji} ${event.countryName} (${event.currency})\n\n✅ النتيجة الفعلية: ${event.actual}`;
+      message += `✅ النتيجة الفعلية: ${event.actual}\n`;
       if (event.forecast) {
-        message += `\n📊 التوقع كان: ${event.forecast}`;
-      }
-      if (event.previous) {
-        message += `\n📈 القراءة السابقة: ${event.previous}`;
+        message += `📊 التوقع كان: ${event.forecast}\n`;
       }
     } else {
-      // إذا لم تتوفر النتيجة بعد
-      title = `📢 حان وقت: ${event.event}`;
-      message = `${impactEmoji} ${event.countryName} (${event.currency})\n🕐 ${event.time}\n\n⏳ في انتظار النتيجة...`;
+      message += `⏳ في انتظار النتيجة...\n`;
       if (event.forecast) {
-        message += `\n📊 التوقع: ${event.forecast}`;
+        message += `📊 التوقع: ${event.forecast}\n`;
       }
+      message += `\n💡 سيتم إرسال النتيجة عند توفرها`;
+    }
+    
+    if (event.previous) {
+      message += `\n📈 القراءة السابقة: ${event.previous}`;
     }
   }
 
