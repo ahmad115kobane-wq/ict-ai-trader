@@ -269,48 +269,53 @@ const EconomicCalendarScreen = () => {
     const isPending = !event.actual && eventTime > now;
 
     return (
-      <View key={event.id} style={[styles.eventCard, { borderRightColor: impactColor }]}>
+      <View key={event.id} style={[styles.eventCard, { borderLeftColor: impactColor }]}>
+        {/* Header Section */}
         <View style={styles.eventHeader}>
-          <View style={styles.eventLeft}>
-            <View style={styles.eventTitleRow}>
-              <Text style={styles.eventTitle}>{event.event}</Text>
-              {hasReleased && (
-                <View style={styles.releasedBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                  <Text style={styles.releasedText}>صدر</Text>
-                </View>
-              )}
-              {isPending && (
-                <View style={styles.pendingBadge}>
-                  <Ionicons name="time-outline" size={16} color={colors.warning} />
-                  <Text style={styles.pendingText}>لم يصدر بعد</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.eventCountry}>
-              <Text style={styles.countryFlag}>{getCountryFlag(event.country)}</Text>
-              <Text style={styles.countryText}>
-                {event.countryName} ({event.currency})
-              </Text>
-            </View>
-            <View style={[styles.impactBadge, { backgroundColor: impactColor + '20' }]}>
-              <Text style={[styles.impactText, { color: impactColor }]}>
-                {getImpactText(event.impact)}
-              </Text>
+          <View style={styles.eventHeaderLeft}>
+            <Text style={styles.countryFlag}>{getCountryFlag(event.country)}</Text>
+            <View style={styles.eventInfo}>
+              <Text style={styles.eventTitle} numberOfLines={2}>{event.event}</Text>
+              <Text style={styles.countryText}>{event.countryName} • {event.currency}</Text>
             </View>
           </View>
-          <View style={styles.eventRight}>
-            <Text style={styles.eventDate}>{formatDate(event.date)}</Text>
+          
+          <View style={styles.eventHeaderRight}>
             <Text style={styles.eventTime}>{event.time}</Text>
+            <Text style={styles.eventDate}>{formatDate(event.date)}</Text>
           </View>
         </View>
 
+        {/* Status Badge */}
+        <View style={styles.statusRow}>
+          <View style={[styles.impactBadge, { backgroundColor: impactColor + '15' }]}>
+            <Text style={[styles.impactText, { color: impactColor }]}>
+              {getImpactText(event.impact)}
+            </Text>
+          </View>
+          
+          {hasReleased && (
+            <View style={styles.releasedBadge}>
+              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+              <Text style={styles.releasedText}>صدر</Text>
+            </View>
+          )}
+          
+          {isPending && (
+            <View style={styles.pendingBadge}>
+              <Ionicons name="time-outline" size={14} color={colors.warning} />
+              <Text style={styles.pendingText}>لم يصدر</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Data Section */}
         {(event.forecast || event.previous || event.actual) && (
           <View style={styles.eventDetails}>
             {event.actual && (
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>النتيجة الفعلية</Text>
-                <Text style={[styles.detailValue, { color: colors.success, fontSize: fontSizes.lg, fontWeight: '700' }]}>
+                <Text style={styles.detailLabel}>الفعلي</Text>
+                <Text style={[styles.detailValue, styles.actualValue]}>
                   {event.actual}
                 </Text>
               </View>
@@ -330,19 +335,27 @@ const EconomicCalendarScreen = () => {
           </View>
         )}
 
-        {/* زر التحليل - فقط للأحداث التي لم تصدر بعد */}
+        {/* Analysis Button - Only for unreleased events */}
         {!event.actual && (
           <TouchableOpacity
-            style={styles.analyzeButton}
+            style={[
+              styles.analyzeButton,
+              analyzingEventId === event.id && styles.analyzeButtonLoading
+            ]}
             onPress={() => analyzeEvent(event)}
             disabled={analyzingEventId === event.id}
+            activeOpacity={0.7}
           >
             {analyzingEventId === event.id ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+              <>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.analyzeButtonText}>جاري التحليل...</Text>
+              </>
             ) : (
               <>
-                <Ionicons name="analytics-outline" size={18} color={colors.primary} />
+                <Ionicons name="analytics-outline" size={20} color={colors.primary} />
                 <Text style={styles.analyzeButtonText}>تحليل الخبر</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.primary} />
               </>
             )}
           </TouchableOpacity>
@@ -375,23 +388,6 @@ const EconomicCalendarScreen = () => {
         onLogout={logout}
         showLogout={true}
       />
-
-      {/* Page Title */}
-      <View style={styles.pageHeader}>
-        <View style={styles.pageTitleContainer}>
-          <Ionicons name="calendar" size={24} color={colors.primary} />
-          <View>
-            <Text style={styles.pageTitle}>التقويم الاقتصادي</Text>
-            <Text style={styles.pageSubtitle}>الأحداث المؤثرة على الأسواق</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.refreshButton}
-          onPress={() => onRefresh()}
-        >
-          <Ionicons name="refresh" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
 
       {/* Filters */}
       <View style={styles.filtersContainer}>
@@ -585,38 +581,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSizes.md,
   },
-  pageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  pageTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  pageTitle: {
-    color: colors.text,
-    fontSize: fontSizes.lg,
-    fontWeight: '700',
-  },
-  pageSubtitle: {
-    color: colors.textSecondary,
-    fontSize: fontSizes.xs,
-    marginTop: 2,
-  },
-  refreshButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   filtersContainer: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -669,40 +633,81 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderRightWidth: 4,
+    borderLeftWidth: 4,
     padding: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   eventHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
   },
-  eventLeft: {
+  eventHeaderLeft: {
     flex: 1,
-  },
-  eventRight: {
-    alignItems: 'flex-end',
-    marginLeft: spacing.md,
-  },
-  eventTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
-    marginBottom: spacing.xs,
-    flexWrap: 'wrap',
+  },
+  countryFlag: {
+    fontSize: 28,
+    marginTop: 2,
+  },
+  eventInfo: {
+    flex: 1,
   },
   eventTitle: {
     color: colors.text,
     fontSize: fontSizes.md,
     fontWeight: '700',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  countryText: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+  },
+  eventHeaderRight: {
+    alignItems: 'flex-end',
+    marginLeft: spacing.sm,
+  },
+  eventTime: {
+    color: colors.primary,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  eventDate: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  impactBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  impactText: {
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
   },
   releasedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.success + '20',
+    backgroundColor: colors.success + '15',
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: borderRadius.sm,
   },
   releasedText: {
@@ -714,9 +719,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.warning + '20',
+    backgroundColor: colors.warning + '15',
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: borderRadius.sm,
   },
   pendingText: {
@@ -724,50 +729,18 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     fontWeight: '600',
   },
-  eventCountry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  countryFlag: {
-    fontSize: 18,
-  },
-  countryText: {
-    color: colors.textSecondary,
-    fontSize: fontSizes.sm,
-  },
-  impactBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-  },
-  impactText: {
-    fontSize: fontSizes.xs,
-    fontWeight: '600',
-  },
-  eventDate: {
-    color: colors.textMuted,
-    fontSize: fontSizes.sm,
-    marginBottom: 4,
-  },
-  eventTime: {
-    color: colors.primary,
-    fontSize: fontSizes.lg,
-    fontWeight: '700',
-  },
   eventDetails: {
     flexDirection: 'row',
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   detailItem: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: spacing.xs,
   },
   detailLabel: {
     color: colors.textMuted,
@@ -778,6 +751,33 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: fontSizes.md,
     fontWeight: '600',
+  },
+  actualValue: {
+    color: colors.success,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+  },
+  analyzeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary + '40',
+  },
+  analyzeButtonLoading: {
+    backgroundColor: colors.backgroundSecondary,
+    borderColor: colors.border,
+  },
+  analyzeButtonText: {
+    color: colors.primary,
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
   },
   emptyContainer: {
     flex: 1,
@@ -792,24 +792,6 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 100,
-  },
-  analyzeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.primary + '10',
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
-  },
-  analyzeButtonText: {
-    color: colors.primary,
-    fontSize: fontSizes.sm,
-    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
