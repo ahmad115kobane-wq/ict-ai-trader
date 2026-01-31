@@ -42,29 +42,21 @@ router.get('/today', authMiddleware, async (req, res) => {
 
 /**
  * GET /api/economic-analysis/event/:eventId
- * تحليل حدث محدد
+ * جلب تحليل موجود لحدث محدد
  */
 router.get('/event/:eventId', authMiddleware, async (req, res) => {
   try {
     const userId = (req as any).user.userId;
     const { eventId } = req.params;
     
-    // البحث عن تحليل موجود
-    let analysis = await getAnalysis(eventId, userId);
+    // البحث عن تحليل موجود فقط
+    const analysis = await getAnalysis(eventId, userId);
     
     if (!analysis) {
-      // إنشاء تحليل جديد
-      const calendar = await getEconomicCalendar();
-      const event = calendar.events.find(e => e.id === eventId);
-      
-      if (!event) {
-        return res.status(404).json({
-          success: false,
-          error: 'الحدث غير موجود'
-        });
-      }
-      
-      analysis = await analyzeEconomicEvent(event, userId);
+      return res.json({
+        success: true,
+        analysis: null
+      });
     }
     
     res.json({
@@ -73,10 +65,68 @@ router.get('/event/:eventId', authMiddleware, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Failed to analyze event:', error);
+    console.error('❌ Failed to get analysis:', error);
     res.status(500).json({
       success: false,
-      error: 'فشل تحليل الحدث'
+      error: 'فشل جلب التحليل'
+    });
+  }
+});
+
+/**
+ * POST /api/economic-analysis/event/:eventId
+ * إنشاء تحليل جديد لحدث محدد
+ */
+router.post('/event/:eventId', authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { eventId } = req.params;
+    
+    console.log(`📊 Creating analysis for event: ${eventId}, user: ${userId}`);
+    
+    // التحقق من وجود تحليل مسبق
+    const existingAnalysis = await getAnalysis(eventId, userId);
+    if (existingAnalysis) {
+      return res.json({
+        success: true,
+        analysis: existingAnalysis,
+        message: 'التحليل موجود مسبقاً'
+      });
+    }
+    
+    // جلب الحدث من التقويم
+    const calendar = await getEconomicCalendar();
+    const event = calendar.events.find(e => e.id === eventId);
+    
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        error: 'الحدث غير موجود'
+      });
+    }
+    
+    // التحقق من أن الحدث لم يصدر بعد
+    if (event.actual) {
+      return res.status(400).json({
+        success: false,
+        error: 'لا يمكن تحليل حدث صدر بالفعل'
+      });
+    }
+    
+    // إنشاء تحليل جديد
+    const analysis = await analyzeEconomicEvent(event, userId);
+    
+    res.json({
+      success: true,
+      analysis,
+      message: 'تم إنشاء التحليل بنجاح'
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to create analysis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'فشل إنشاء التحليل'
     });
   }
 });

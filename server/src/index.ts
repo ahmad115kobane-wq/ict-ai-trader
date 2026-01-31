@@ -1989,146 +1989,6 @@ app.get('/api/economic-calendar/test-raw-data', async (req, res) => {
   }
 });
 
-// ===================== Economic Analysis Endpoints (VIP Only) =====================
-// تحليل حدث اقتصادي باستخدام AI (للمشتركين فقط)
-app.post('/api/economic-analysis/analyze', async (req, res) => {
-  try {
-    const { eventId } = req.body;
-    const userId = req.body.userId; // يجب أن يأتي من auth middleware
-    
-    if (!eventId || !userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'eventId and userId are required'
-      });
-    }
-
-    // التحقق من الاشتراك النشط
-    const { getUserSubscriptionStatus } = await import('./services/subscriptionService');
-    const subscriptionStatus = await getUserSubscriptionStatus(userId);
-    
-    if (!subscriptionStatus.hasActiveSubscription) {
-      return res.status(403).json({
-        success: false,
-        error: 'يتطلب اشتراك نشط للوصول لهذه الميزة',
-        code: 'ACTIVE_SUBSCRIPTION_REQUIRED'
-      });
-    }
-
-    // التحقق من وجود تحليل سابق
-    const { getAnalysis, analyzeEconomicEvent } = await import('./services/economicAnalysisService');
-    const existingAnalysis = await getAnalysis(eventId, userId);
-    
-    if (existingAnalysis) {
-      return res.json({
-        success: true,
-        analysis: existingAnalysis,
-        message: 'تم استرجاع التحليل السابق',
-        cached: true
-      });
-    }
-
-    // جلب بيانات الحدث
-    const { getEconomicCalendar } = await import('./services/economicCalendarService');
-    const calendar = await getEconomicCalendar();
-    const event = calendar.events.find(e => e.id === eventId);
-    
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        error: 'Event not found'
-      });
-    }
-
-    // تحليل الحدث
-    console.log(`🔍 Analyzing economic event: ${event.event} for user: ${userId}`);
-    const analysis = await analyzeEconomicEvent(event, userId);
-    
-    res.json({
-      success: true,
-      analysis,
-      message: 'تم تحليل الحدث بنجاح',
-      cached: false
-    });
-
-  } catch (error) {
-    console.error('❌ Failed to analyze economic event:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to analyze economic event',
-      message: (error as Error).message
-    });
-  }
-});
-
-// الحصول على تحليل حدث محدد
-app.get('/api/economic-analysis/:eventId', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const userId = req.query.userId as string;
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'userId is required'
-      });
-    }
-
-    const { getAnalysis } = await import('./services/economicAnalysisService');
-    const analysis = await getAnalysis(eventId, userId);
-    
-    if (!analysis) {
-      return res.status(404).json({
-        success: false,
-        error: 'Analysis not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      analysis
-    });
-
-  } catch (error) {
-    console.error('❌ Failed to get analysis:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get analysis'
-    });
-  }
-});
-
-// الحصول على جميع تحليلات اليوم للمستخدم
-app.get('/api/economic-analysis/today', async (req, res) => {
-  try {
-    const userId = req.query.userId as string;
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'userId is required'
-      });
-    }
-
-    const { getUserTodayAnalyses } = await import('./services/economicAnalysisService');
-    const analyses = await getUserTodayAnalyses(userId);
-    
-    res.json({
-      success: true,
-      analyses,
-      count: analyses.length,
-      date: new Date().toISOString().split('T')[0]
-    });
-
-  } catch (error) {
-    console.error('❌ Failed to get today analyses:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get today analyses'
-    });
-  }
-});
-
 // API info
 app.get('/api', (req, res) => {
   res.json({
@@ -2284,6 +2144,44 @@ cron.schedule('0 * * * *', async () => {
     }
   } catch (error) {
     console.error('❌ Failed to cleanup sessions:', error);
+  }
+});
+
+// تنظيف تحليلات الأحداث التي صدرت كل ساعة
+cron.schedule('0 * * * *', async () => {
+  console.log('🗑️ Cleaning up analyses for released events...');
+
+  try {
+    const { getEconomicCalendar } = await import('./services/economicCalendarService');
+    const { query } = await import('./db/postgresAdapter');
+    
+    // جلب التقويم
+    const calendar = await getEconomicCalendar();
+    
+    // الأحداث التي صدرت (لديها actual)
+    const releasedEventIds = calendar.events
+      .filter(e => e.actual)
+      .map(e => e.id);
+    
+    if (releasedEventIds.length > 0) {
+      // حذف التحليلات للأحداث التي صدرت
+      const result = await query(
+        'DELETE FROM economic_analyses WHERE event_id = ANY($1)',
+        [releasedEventIds]
+      );
+      
+      const deletedCount = result.rowCount || 0;
+      
+      if (deletedCount > 0) {
+        console.log(`✅ Deleted ${deletedCount} analyses for ${releasedEventIds.length} released events`);
+      } else {
+        console.log('✅ No analyses to clean for released events');
+      }
+    } else {
+      console.log('✅ No released events found');
+    }
+  } catch (error) {
+    console.error('❌ Failed to cleanup analyses:', error);
   }
 });
 

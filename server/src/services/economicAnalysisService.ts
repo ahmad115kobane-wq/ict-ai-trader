@@ -17,8 +17,9 @@ export interface EconomicAnalysis {
 }
 
 // ===================== Configuration =====================
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || '';
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'https://api.openai.com';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
 
 // تخزين التحليلات في الذاكرة (يمكن نقلها لقاعدة البيانات لاحقاً)
 const analysisCache = new Map<string, EconomicAnalysis>();
@@ -177,7 +178,7 @@ async function fetchTodayAnalysis(event: EconomicEvent, today: string): Promise<
 }
 
 /**
- * توليد التحليل باستخدام الذكاء الاصطناعي
+ * توليد التحليل باستخدام الذكاء الاصطناعي (Ollama)
  */
 async function generateAIAnalysis(
   event: EconomicEvent,
@@ -189,43 +190,112 @@ async function generateAIAnalysis(
   tradingRecommendation: string;
 }> {
   try {
-    const prompt = `أنت محلل اقتصادي خبير. قم بتحليل الحدث الاقتصادي التالي بشكل مفصل باللغة العربية:
+    const prompt = `أنت محلل اقتصادي خبير متخصص في الأسواق المالية والفوركس. قم بتحليل الحدث الاقتصادي التالي بشكل احترافي ومفصل باللغة العربية:
 
 ${eventInfo}
 
-قدم تحليلاً شاملاً يتضمن:
-1. شرح مفصل للحدث الاقتصادي وأهميته
-2. تأثيره المتوقع على الأسواق المالية
-3. توقعات السوق وردود الفعل المحتملة
-4. توصيات للمتداولين (شراء/بيع/انتظار)
+المطلوب منك تحليل شامل ومفصل يتضمن 4 أقسام رئيسية:
 
-اجعل التحليل احترافياً ومفيداً للمتداولين.`;
+═══════════════════════════════════════
+القسم الأول: التحليل الرئيسي
+═══════════════════════════════════════
+- اشرح ما هو هذا الحدث الاقتصادي بالتفصيل
+- ما أهميته للاقتصاد؟
+- لماذا يهتم المتداولون به؟
+- ما العوامل التي تؤثر على نتيجته؟
+- السياق الاقتصادي الحالي
+- مقارنة مع القراءات السابقة
+(اكتب 4-6 جمل مفصلة)
 
-    // استخدام Gemini API
-    if (GEMINI_API_KEY) {
+═══════════════════════════════════════
+القسم الثاني: التأثير المتوقع
+═══════════════════════════════════════
+- كيف سيؤثر على العملات؟
+- كيف سيؤثر على الذهب والنفط؟
+- كيف سيؤثر على الأسهم؟
+- ما حجم التقلبات المتوقعة؟
+- أي أزواج عملات ستتأثر أكثر؟
+(اكتب 3-4 جمل مفصلة)
+
+═══════════════════════════════════════
+القسم الثالث: توقعات السوق
+═══════════════════════════════════════
+- ما يتوقعه المحللون؟
+- ما احتمالات النتائج المختلفة؟
+- كيف سيتفاعل السوق مع كل سيناريو؟
+- ما المفاجآت المحتملة؟
+(اكتب 3-4 جمل مفصلة)
+
+═══════════════════════════════════════
+القسم الرابع: توصيات التداول
+═══════════════════════════════════════
+- استراتيجية التداول المقترحة
+- متى تدخل الصفقة؟
+- أي أزواج عملات تراقب؟
+- نصائح لإدارة المخاطر
+- ما يجب تجنبه
+(اكتب 4-5 نقاط واضحة)
+
+═══════════════════════════════════════
+
+⚠️ مهم جداً:
+- اكتب تحليل احترافي مفصل وليس كلام عام
+- استخدم معلومات اقتصادية حقيقية
+- اذكر أرقام وبيانات محددة
+- كن دقيقاً في التوقعات
+- اجعل التحليل مفيداً للمتداولين
+
+اكتب التحليل الآن بشكل مفصل:`;
+
+    // استخدام Ollama API
+    if (OLLAMA_API_KEY) {
+      console.log(`🤖 Using Ollama API: ${OLLAMA_BASE_URL} | Model: ${OLLAMA_MODEL}`);
+      
       const response = await axios.post(
-        `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
+        `${OLLAMA_BASE_URL}/v1/chat/completions`,
         {
-          contents: [{
-            parts: [{ text: prompt }]
-          }]
+          model: OLLAMA_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: 'أنت محلل اقتصادي خبير متخصص في الأسواق المالية. تقدم تحليلات مفصلة واحترافية باللغة العربية.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.4,
+          max_tokens: 3000
         },
         {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 30000
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OLLAMA_API_KEY}`
+          },
+          timeout: 45000
         }
       );
 
-      const aiResponse = response.data.candidates[0].content.parts[0].text;
+      const aiResponse = response.data.choices?.[0]?.message?.content || '';
       
-      return parseAIResponse(aiResponse);
+      if (aiResponse && aiResponse.length > 100) {
+        console.log('✅ Ollama analysis completed');
+        console.log(`📊 Analysis length: ${aiResponse.length} characters`);
+        return parseAIResponse(aiResponse);
+      } else {
+        console.log('⚠️ AI response too short, using basic analysis');
+        return generateBasicAnalysis(event);
+      }
     }
 
     // Fallback: تحليل أساسي
+    console.log('⚠️ No Ollama API key, using basic analysis');
     return generateBasicAnalysis(event);
 
   } catch (error) {
-    console.error('⚠️ AI analysis failed, using basic analysis:', error);
+    console.error('⚠️ AI analysis failed:', error);
+    console.log('📝 Using basic analysis as fallback');
     return generateBasicAnalysis(event);
   }
 }
@@ -282,7 +352,7 @@ function generateBasicAnalysis(event: EconomicEvent): {
 }
 
 /**
- * تحليل استجابة AI
+ * تحليل استجابة AI وتقسيمها إلى أقسام
  */
 function parseAIResponse(aiResponse: string): {
   mainAnalysis: string;
@@ -290,14 +360,59 @@ function parseAIResponse(aiResponse: string): {
   marketExpectation: string;
   tradingRecommendation: string;
 } {
-  // محاولة استخراج الأقسام من الاستجابة
-  const sections = aiResponse.split('\n\n');
+  console.log('🔍 Parsing AI response...');
+  
+  // محاولة استخراج الأقسام بناءً على العناوين
+  let mainAnalysis = '';
+  let impact = '';
+  let marketExpectation = '';
+  let tradingRecommendation = '';
+  
+  // البحث عن الأقسام بالعناوين
+  const sections = aiResponse.split(/═+/);
+  
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i].trim();
+    
+    if (section.includes('التحليل الرئيسي') || section.includes('القسم الأول')) {
+      mainAnalysis = sections[i + 1]?.trim() || '';
+    } else if (section.includes('التأثير المتوقع') || section.includes('القسم الثاني')) {
+      impact = sections[i + 1]?.trim() || '';
+    } else if (section.includes('توقعات السوق') || section.includes('القسم الثالث')) {
+      marketExpectation = sections[i + 1]?.trim() || '';
+    } else if (section.includes('توصيات التداول') || section.includes('القسم الرابع')) {
+      tradingRecommendation = sections[i + 1]?.trim() || '';
+    }
+  }
+  
+  // إذا لم نجد الأقسام بالعناوين، نقسم بناءً على الفقرات
+  if (!mainAnalysis || !impact || !marketExpectation || !tradingRecommendation) {
+    console.log('⚠️ Could not find sections by headers, splitting by paragraphs');
+    
+    const paragraphs = aiResponse
+      .split(/\n\n+/)
+      .map(p => p.trim())
+      .filter(p => p.length > 50);
+    
+    mainAnalysis = mainAnalysis || paragraphs[0] || aiResponse;
+    impact = impact || paragraphs[1] || 'تأثير متوقع على الأسواق المالية';
+    marketExpectation = marketExpectation || paragraphs[2] || 'توقعات السوق';
+    tradingRecommendation = tradingRecommendation || paragraphs[3] || 'توصيات التداول';
+  }
+  
+  // تنظيف النصوص
+  mainAnalysis = mainAnalysis.replace(/^(التحليل الرئيسي|القسم الأول)[:\s]*/i, '').trim();
+  impact = impact.replace(/^(التأثير المتوقع|القسم الثاني)[:\s]*/i, '').trim();
+  marketExpectation = marketExpectation.replace(/^(توقعات السوق|القسم الثالث)[:\s]*/i, '').trim();
+  tradingRecommendation = tradingRecommendation.replace(/^(توصيات التداول|القسم الرابع)[:\s]*/i, '').trim();
+  
+  console.log(`✅ Parsed sections: Analysis(${mainAnalysis.length}), Impact(${impact.length}), Expectation(${marketExpectation.length}), Recommendation(${tradingRecommendation.length})`);
   
   return {
-    mainAnalysis: sections[0] || aiResponse,
-    impact: sections[1] || 'تأثير متوقع على الأسواق',
-    marketExpectation: sections[2] || 'توقعات السوق',
-    tradingRecommendation: sections[3] || 'توصيات التداول'
+    mainAnalysis: mainAnalysis || 'تحليل الحدث الاقتصادي',
+    impact: impact || 'تأثير متوقع على الأسواق',
+    marketExpectation: marketExpectation || 'توقعات السوق',
+    tradingRecommendation: tradingRecommendation || 'توصيات التداول'
   };
 }
 
