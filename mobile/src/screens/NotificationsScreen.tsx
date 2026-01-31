@@ -20,7 +20,7 @@ import * as SecureStore from 'expo-secure-store';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
-import { API_URL } from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 interface Notification {
   id: string;
@@ -47,7 +47,7 @@ const NotificationsScreen = () => {
       // جلب إشعارات النظام من API الجديد
       const token = await SecureStore.getItemAsync('token');
       
-      const response = await fetch(`${API_URL}/system-notifications?limit=50`, {
+      const response = await fetch(`${API_BASE_URL}/api/system-notifications?limit=50`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -62,7 +62,7 @@ const NotificationsScreen = () => {
           title: notif.title,
           message: notif.message,
           type: mapNotificationType(notif.type),
-          read: notif.read === 1,
+          read: notif.read === 1 || notif.read === true,
           createdAt: notif.created_at,
         }));
         
@@ -115,7 +115,7 @@ const NotificationsScreen = () => {
       // إرسال الطلب للخادم
       const token = await SecureStore.getItemAsync('token');
       
-      await fetch(`${API_URL}/system-notifications/${id}/read`, {
+      await fetch(`${API_BASE_URL}/api/system-notifications/${id}/read`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -136,7 +136,7 @@ const NotificationsScreen = () => {
       // إرسال الطلب للخادم
       const token = await SecureStore.getItemAsync('token');
       
-      await fetch(`${API_URL}/system-notifications/mark-all-read`, {
+      await fetch(`${API_BASE_URL}/api/system-notifications/mark-all-read`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -155,7 +155,7 @@ const NotificationsScreen = () => {
       // إرسال الطلب للخادم
       const token = await SecureStore.getItemAsync('token');
       
-      await fetch(`${API_URL}/system-notifications/${id}`, {
+      await fetch(`${API_BASE_URL}/api/system-notifications/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
