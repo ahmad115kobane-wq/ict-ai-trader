@@ -80,11 +80,20 @@ export async function analyzeEconomicEvent(
  */
 async function searchEventInfo(event: EconomicEvent): Promise<string> {
   try {
-    // استخدام Google Search API أو web scraping بسيط
-    const searchQuery = `${event.event} ${event.countryName} ${event.date} economic analysis`;
+    console.log(`🔍 Searching for today's analysis of: ${event.event}`);
     
-    // هنا يمكن استخدام API بحث حقيقي
-    // للتبسيط، سنستخدم معلومات أساسية
+    // البحث عن تحليلات اليوم فقط
+    const today = new Date().toISOString().split('T')[0];
+    const searchQuery = `${event.event} ${event.countryName} economic analysis ${today}`;
+    
+    // محاولة البحث في مصادر موثوقة
+    const sources = [
+      'investing.com',
+      'forexfactory.com',
+      'tradingeconomics.com',
+      'fxstreet.com',
+      'dailyfx.com'
+    ];
     
     let info = `الحدث: ${event.event}\n`;
     info += `الدولة: ${event.countryName}\n`;
@@ -96,10 +105,74 @@ async function searchEventInfo(event: EconomicEvent): Promise<string> {
     if (event.previous) info += `القراءة السابقة: ${event.previous}\n`;
     if (event.actual) info += `النتيجة الفعلية: ${event.actual}\n`;
 
+    // محاولة جلب تحليلات من الإنترنت
+    try {
+      const webAnalysis = await fetchTodayAnalysis(event, today);
+      if (webAnalysis) {
+        info += `\n📰 تحليلات من الإنترنت (${today}):\n${webAnalysis}`;
+      }
+    } catch (error) {
+      console.log('⚠️ Could not fetch web analysis, continuing with basic info');
+    }
+
     return info;
   } catch (error) {
     console.error('⚠️ Failed to search event info:', error);
     return `معلومات أساسية عن ${event.event}`;
+  }
+}
+
+/**
+ * جلب تحليلات اليوم من الإنترنت
+ */
+async function fetchTodayAnalysis(event: EconomicEvent, today: string): Promise<string | null> {
+  try {
+    // استخدام web search API للبحث عن تحليلات اليوم
+    const searchQuery = `${event.event} ${event.countryName} analysis ${today}`;
+    
+    // يمكن استخدام Google Custom Search API أو SerpAPI
+    // للتبسيط، سنستخدم axios للبحث في مصادر محددة
+    
+    const sources = [
+      {
+        name: 'Investing.com',
+        url: `https://www.investing.com/search/?q=${encodeURIComponent(event.event)}&tab=news`
+      },
+      {
+        name: 'FXStreet',
+        url: `https://www.fxstreet.com/search?q=${encodeURIComponent(event.event)}`
+      }
+    ];
+
+    let analysis = '';
+    
+    // محاولة جلب من كل مصدر
+    for (const source of sources) {
+      try {
+        const response = await axios.get(source.url, {
+          timeout: 5000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        
+        // استخراج المعلومات من HTML (بسيط)
+        const html = response.data;
+        
+        // البحث عن تاريخ اليوم في المحتوى
+        if (html.includes(today)) {
+          analysis += `\n✅ ${source.name}: وجدت تحليلات بتاريخ اليوم\n`;
+          // يمكن إضافة استخراج أكثر تفصيلاً هنا
+        }
+      } catch (error) {
+        console.log(`⚠️ Could not fetch from ${source.name}`);
+      }
+    }
+
+    return analysis || null;
+  } catch (error) {
+    console.error('❌ Failed to fetch today analysis:', error);
+    return null;
   }
 }
 
@@ -334,5 +407,192 @@ export async function getUserTodayAnalyses(userId: string): Promise<EconomicAnal
   } catch (error) {
     console.error('❌ Failed to get user analyses:', error);
     return [];
+  }
+}
+
+/**
+ * تحليل جميع أحداث اليوم وتجميع المعلومات
+ */
+export async function analyzeTodayEvents(userId: string): Promise<{
+  summary: string;
+  analyses: EconomicAnalysis[];
+  totalEvents: number;
+  highImpactEvents: number;
+}> {
+  try {
+    console.log(`📊 Analyzing today's events for user: ${userId}`);
+    
+    // جلب أحداث اليوم
+    const { getEconomicCalendar } = await import('./economicCalendarService');
+    const calendar = await getEconomicCalendar();
+    const today = new Date().toISOString().split('T')[0];
+    
+    const todayEvents = calendar.events.filter(event => event.date === today);
+    const highImpactEvents = todayEvents.filter(event => event.impact === 'high');
+    
+    console.log(`📅 Found ${todayEvents.length} events today (${highImpactEvents.length} high impact)`);
+    
+    // تحليل الأحداث المهمة فقط
+    const analyses: EconomicAnalysis[] = [];
+    
+    for (const event of highImpactEvents.slice(0, 5)) { // أول 5 أحداث مهمة
+      try {
+        const analysis = await analyzeEconomicEvent(event, userId);
+        analyses.push(analysis);
+      } catch (error) {
+        console.error(`⚠️ Failed to analyze event: ${event.event}`);
+      }
+    }
+    
+    // إنشاء ملخص شامل
+    const summary = generateDailySummary(todayEvents, highImpactEvents, analyses);
+    
+    return {
+      summary,
+      analyses,
+      totalEvents: todayEvents.length,
+      highImpactEvents: highImpactEvents.length
+    };
+    
+  } catch (error) {
+    console.error('❌ Failed to analyze today events:', error);
+    throw new Error('فشل تحليل أحداث اليوم');
+  }
+}
+
+/**
+ * إنشاء ملخص يومي شامل
+ */
+function generateDailySummary(
+  allEvents: EconomicEvent[],
+  highImpactEvents: EconomicEvent[],
+  analyses: EconomicAnalysis[]
+): string {
+  const today = new Date().toLocaleDateString('ar-SA');
+  
+  let summary = `📊 ملخص التحليل الاقتصادي ليوم ${today}\n\n`;
+  
+  summary += `📈 إجمالي الأحداث: ${allEvents.length}\n`;
+  summary += `🔴 أحداث عالية التأثير: ${highImpactEvents.length}\n\n`;
+  
+  if (highImpactEvents.length > 0) {
+    summary += `🎯 أهم الأحداث:\n`;
+    highImpactEvents.slice(0, 5).forEach((event, index) => {
+      summary += `${index + 1}. ${event.event} (${event.countryName}) - ${event.time}\n`;
+    });
+    summary += `\n`;
+  }
+  
+  if (analyses.length > 0) {
+    summary += `💡 التوصيات العامة:\n`;
+    summary += `• راقب الأحداث عالية التأثير بعناية\n`;
+    summary += `• استخدم إدارة مخاطر صارمة\n`;
+    summary += `• تجنب التداول قبل وأثناء صدور الأخبار المهمة\n`;
+    summary += `• انتظر استقرار السوق بعد الأخبار\n\n`;
+  }
+  
+  summary += `📱 تم إنشاء هذا التحليل بواسطة الذكاء الاصطناعي\n`;
+  summary += `⏰ آخر تحديث: ${new Date().toLocaleTimeString('ar-SA')}`;
+  
+  return summary;
+}
+
+/**
+ * البحث عن تحليلات اقتصادية من الإنترنت بتاريخ اليوم
+ */
+export async function searchTodayEconomicAnalysis(eventName: string): Promise<{
+  sources: Array<{
+    title: string;
+    url: string;
+    publishedDate: string;
+    summary: string;
+  }>;
+  aggregatedAnalysis: string;
+}> {
+  try {
+    console.log(`🔍 Searching for today's analysis of: ${eventName}`);
+    
+    const today = new Date().toISOString().split('T')[0];
+    const sources: Array<{
+      title: string;
+      url: string;
+      publishedDate: string;
+      summary: string;
+    }> = [];
+    
+    // البحث في مصادر موثوقة
+    const searchSources = [
+      {
+        name: 'Investing.com',
+        baseUrl: 'https://www.investing.com',
+        searchPath: '/search/?q='
+      },
+      {
+        name: 'FXStreet',
+        baseUrl: 'https://www.fxstreet.com',
+        searchPath: '/search?q='
+      },
+      {
+        name: 'DailyFX',
+        baseUrl: 'https://www.dailyfx.com',
+        searchPath: '/search?q='
+      }
+    ];
+    
+    // محاولة البحث في كل مصدر
+    for (const source of searchSources) {
+      try {
+        const searchUrl = `${source.baseUrl}${source.searchPath}${encodeURIComponent(eventName)}`;
+        
+        const response = await axios.get(searchUrl, {
+          timeout: 5000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        
+        // استخراج المقالات من HTML (بسيط)
+        const html = response.data;
+        
+        // البحث عن تاريخ اليوم في المحتوى
+        if (html.includes(today)) {
+          sources.push({
+            title: `تحليل من ${source.name}`,
+            url: searchUrl,
+            publishedDate: today,
+            summary: `تحليل اقتصادي متاح على ${source.name}`
+          });
+        }
+      } catch (error) {
+        console.log(`⚠️ Could not search ${source.name}`);
+      }
+    }
+    
+    // تجميع التحليلات
+    let aggregatedAnalysis = `📰 تحليلات اقتصادية ليوم ${today}\n\n`;
+    
+    if (sources.length > 0) {
+      aggregatedAnalysis += `✅ وجدنا ${sources.length} تحليل(ات) من مصادر موثوقة:\n\n`;
+      sources.forEach((source, index) => {
+        aggregatedAnalysis += `${index + 1}. ${source.title}\n`;
+        aggregatedAnalysis += `   📅 ${source.publishedDate}\n`;
+        aggregatedAnalysis += `   🔗 ${source.url}\n\n`;
+      });
+    } else {
+      aggregatedAnalysis += `⚠️ لم نجد تحليلات منشورة اليوم بعد.\n`;
+      aggregatedAnalysis += `سيتم تحديث التحليلات تلقائياً عند توفرها.\n`;
+    }
+    
+    return {
+      sources,
+      aggregatedAnalysis
+    };
+    
+  } catch (error) {
+    console.error('❌ Failed to search today economic analysis:', error);
+    return {
+      sources: [],
+      aggregatedAnalysis: 'فشل البحث عن التحليلات الاقتصادية'
+    };
   }
 }

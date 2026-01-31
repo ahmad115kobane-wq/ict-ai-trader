@@ -30,6 +30,7 @@ import analysisRoutes from './routes/analysis';
 import subscriptionRoutes from './routes/subscription';
 import telegramRoutes from './routes/telegram';
 import manualTradeRoutes from './routes/manualTrade';
+import economicAnalysisRoutes from './routes/economicAnalysis';
 
 import {
   initializeDefaultPackages,
@@ -70,6 +71,7 @@ app.use('/api/analysis', analysisRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api', manualTradeRoutes);
+app.use('/api/economic-analysis', economicAnalysisRoutes);
 
 // صفحات HTML
 app.get('/setup-telegram', (req, res) => {
