@@ -57,10 +57,22 @@ const SubscriptionScreen = () => {
     setRefreshing(false);
   }, []);
 
-  const handlePurchase = async (packageId: string) => {
+  const handlePurchase = async (packageId: string, coinPrice: number) => {
+    const userCoins = user?.coins || 0;
+    
+    // التحقق من الرصيد قبل الشراء
+    if (userCoins < coinPrice) {
+      Alert.alert(
+        'رصيد غير كافٍ',
+        `تحتاج إلى ${coinPrice} عملة لشراء هذه الباقة.\nرصيدك الحالي: ${userCoins} عملة\nينقصك: ${coinPrice - userCoins} عملة`,
+        [{ text: 'حسناً' }]
+      );
+      return;
+    }
+    
     Alert.alert(
       'تأكيد الشراء',
-      'هل تريد شراء هذه الباقة؟',
+      `هل تريد شراء هذه الباقة مقابل ${coinPrice} عملة؟\n\nرصيدك الحالي: ${userCoins} عملة\nرصيدك بعد الشراء: ${userCoins - coinPrice} عملة`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -177,59 +189,69 @@ const SubscriptionScreen = () => {
         </View>
 
         {/* Packages */}
-        {packages.map((pkg, index) => (
-          <View key={pkg.id} style={[styles.packageCard, index === 0 && styles.packageCardFeatured]}>
-            {index === 0 && (
-              <View style={styles.featuredBadge}>
-                <Ionicons name="star" size={12} color="#fff" />
-                <Text style={styles.featuredBadgeText}>الأكثر شعبية</Text>
-              </View>
-            )}
-            
-            <View style={styles.packageHeader}>
-              <View style={styles.packageIconContainer}>
-                <Ionicons name="diamond" size={24} color={index === 0 ? colors.gold : colors.primary} />
-              </View>
-              <View style={styles.packageInfo}>
-                <Text style={styles.packageName}>{pkg.nameAr}</Text>
-                <Text style={styles.packageDuration}>
-                  {pkg.durationDays === 7 ? 'أسبوع واحد' : pkg.durationDays === 30 ? 'شهر واحد' : `${pkg.durationDays} يوم`}
-                </Text>
-              </View>
-              <Text style={styles.packagePrice}>${pkg.price}</Text>
-            </View>
-            
-            <View style={styles.packageFeatures}>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={styles.featureText}>{pkg.coinsIncluded} عملة إضافية</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={styles.featureText}>تحليلات متقدمة</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={styles.featureText}>دعم فني على مدار الساعة</Text>
-              </View>
-            </View>
-            
-            <TouchableOpacity
-              style={[styles.purchaseButton, index === 0 && styles.purchaseButtonFeatured]}
-              onPress={() => handlePurchase(pkg.id)}
-              disabled={purchasingPackage === pkg.id}
-            >
-              {purchasingPackage === pkg.id ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.purchaseButtonText}>اشترك الآن</Text>
-                  <Ionicons name="arrow-back" size={18} color="#fff" />
-                </>
+        {packages.map((pkg, index) => {
+          const coinPrice = Math.round(pkg.price * 100); // 1 دولار = 100 عملة
+          
+          return (
+            <View key={pkg.id} style={[styles.packageCard, index === 0 && styles.packageCardFeatured]}>
+              {index === 0 && (
+                <View style={styles.featuredBadge}>
+                  <Ionicons name="star" size={12} color="#fff" />
+                  <Text style={styles.featuredBadgeText}>الأكثر شعبية</Text>
+                </View>
               )}
-            </TouchableOpacity>
-          </View>
-        ))}
+              
+              <View style={styles.packageHeader}>
+                <View style={styles.packageIconContainer}>
+                  <Ionicons name="diamond" size={24} color={index === 0 ? colors.gold : colors.primary} />
+                </View>
+                <View style={styles.packageInfo}>
+                  <Text style={styles.packageName}>{pkg.nameAr}</Text>
+                  <Text style={styles.packageDuration}>
+                    {pkg.durationDays === 7 ? 'أسبوع واحد' : pkg.durationDays === 30 ? 'شهر واحد' : `${pkg.durationDays} يوم`}
+                  </Text>
+                </View>
+                <View style={styles.priceContainer}>
+                  <View style={styles.coinPriceRow}>
+                    <Ionicons name="diamond" size={16} color={colors.gold} />
+                    <Text style={styles.packagePrice}>{coinPrice}</Text>
+                  </View>
+                  <Text style={styles.dollarPrice}>(${pkg.price})</Text>
+                </View>
+              </View>
+              
+              <View style={styles.packageFeatures}>
+                <View style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                  <Text style={styles.featureText}>{pkg.coinsIncluded} عملة إضافية</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                  <Text style={styles.featureText}>تحليلات متقدمة</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                  <Text style={styles.featureText}>دعم فني على مدار الساعة</Text>
+                </View>
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.purchaseButton, index === 0 && styles.purchaseButtonFeatured]}
+                onPress={() => handlePurchase(pkg.id, coinPrice)}
+                disabled={purchasingPackage === pkg.id}
+              >
+                {purchasingPackage === pkg.id ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.purchaseButtonText}>اشترك الآن</Text>
+                    <Ionicons name="arrow-back" size={18} color="#fff" />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          );
+        })}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -396,10 +418,23 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     textAlign: 'right',
   },
+  priceContainer: {
+    alignItems: 'flex-start',
+  },
+  coinPriceRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+  },
   packagePrice: {
     color: colors.primary,
     fontSize: fontSizes.xxl,
     fontWeight: 'bold',
+  },
+  dollarPrice: {
+    color: colors.textMuted,
+    fontSize: fontSizes.sm,
+    marginTop: 2,
   },
   packageFeatures: {
     marginBottom: spacing.md,

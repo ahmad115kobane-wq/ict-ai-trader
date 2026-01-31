@@ -1,5 +1,5 @@
 // routes/subscription.ts
-// مسارات إدارة الاشتراكات والباقات
+// مسارات إدارة الاشتراكات والباقات - نظام الدفع بالعملات
 
 import { Router, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
@@ -34,6 +34,7 @@ router.get('/packages', async (req, res) => {
         durationType: pkg.durationType,
         durationDays: pkg.durationDays,
         price: pkg.price,
+        coinPrice: Math.round(pkg.price * 100), // 1 دولار = 100 عملة
         coinsIncluded: pkg.coinsIncluded,
         analysisLimit: pkg.analysisLimit,
         features: pkg.features,
@@ -75,6 +76,7 @@ router.get('/packages/:packageId', async (req, res) => {
         durationType: packageDetails.durationType,
         durationDays: packageDetails.durationDays,
         price: packageDetails.price,
+        coinPrice: Math.round(packageDetails.price * 100), // 1 دولار = 100 عملة
         coinsIncluded: packageDetails.coinsIncluded,
         analysisLimit: packageDetails.analysisLimit,
         features: packageDetails.features,
@@ -93,11 +95,12 @@ router.get('/packages/:packageId', async (req, res) => {
 
 // ===================== Protected Routes (تحتاج تسجيل دخول) =====================
 
-// شراء اشتراك جديد
+// شراء اشتراك جديد (بالعملات)
 router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { packageId, paymentMethod, autoRenew = false } = req.body;
+    const { packageId } = req.body;
     const userId = req.userId!;
+    const user = req.user;
 
     if (!packageId) {
       return res.status(400).json({
@@ -115,19 +118,48 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
       });
     }
 
-    // محاكاة عملية الدفع (في التطبيق الحقيقي، يجب التكامل مع بوابة دفع)
-    console.log(`💳 Processing payment for package ${packageId} by user ${userId}`);
-    console.log(`💰 Amount: $${packageDetails.price}, Method: ${paymentMethod || 'default'}`);
+    // حساب سعر الباقة بالعملات (1 دولار = 100 عملة)
+    const coinPrice = Math.round(packageDetails.price * 100);
+    
+    console.log(`💰 User ${userId} attempting to purchase package ${packageId}`);
+    console.log(`💵 Package price: $${packageDetails.price} = ${coinPrice} coins`);
+    console.log(`🪙 User current balance: ${user?.coins || 0} coins`);
+
+    // التحقق من رصيد المستخدم
+    if (!user || (user.coins || 0) < coinPrice) {
+      return res.status(400).json({
+        success: false,
+        error: `رصيدك غير كافٍ. تحتاج إلى ${coinPrice} عملة، ولديك ${user?.coins || 0} عملة فقط.`,
+        required: coinPrice,
+        current: user?.coins || 0,
+        shortage: coinPrice - (user?.coins || 0)
+      });
+    }
+
+    // خصم العملات من المستخدم
+    const newBalance = (user.coins || 0) - coinPrice;
+    const deductSuccess = addCoinsToUser(userId, -coinPrice, `شراء باقة ${packageDetails.nameAr}`);
+    
+    if (!deductSuccess) {
+      return res.status(500).json({
+        success: false,
+        error: 'فشل في خصم العملات'
+      });
+    }
+
+    console.log(`✅ Deducted ${coinPrice} coins. New balance: ${newBalance}`);
 
     // شراء الاشتراك
     const result = await purchaseSubscription({
       packageId,
       userId,
-      paymentMethod,
-      autoRenew
+      paymentMethod: 'coins',
+      autoRenew: false
     });
 
     if (!result.success) {
+      // إرجاع العملات في حالة الفشل
+      addCoinsToUser(userId, coinPrice, `إرجاع عملات - فشل شراء باقة ${packageDetails.nameAr}`);
       return res.status(400).json({
         success: false,
         error: result.message
@@ -139,7 +171,7 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
 
     res.json({
       success: true,
-      message: result.message,
+      message: `تم شراء باقة ${packageDetails.nameAr} بنجاح! تم خصم ${coinPrice} عملة من رصيدك.`,
       subscription: {
         id: result.subscriptionId,
         packageName: packageDetails.nameAr,
@@ -147,6 +179,12 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
         coinsAdded: packageDetails.coinsIncluded,
         analysisLimit: packageDetails.analysisLimit,
         isUnlimited: packageDetails.analysisLimit === -1
+      },
+      payment: {
+        method: 'coins',
+        amount: coinPrice,
+        previousBalance: user.coins,
+        newBalance: newBalance
       },
       subscriptionStatus
     });
@@ -233,144 +271,6 @@ router.get('/history', authMiddleware, async (req: AuthRequest, res: Response) =
     res.status(500).json({
       success: false,
       error: 'خطأ في جلب سجل الاشتراكات'
-    });
-  }
-});
-
-// شراء عملات إضافية
-router.post('/buy-coins', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { amount, paymentMethod } = req.body;
-    const userId = req.userId!;
-
-    if (!amount || amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'كمية العملات يجب أن تكون أكبر من صفر'
-      });
-    }
-
-    // حساب السعر (مثال: 1 دولار = 100 عملة)
-    const pricePerCoin = 0.01; // 1 سنت لكل عملة
-    const totalPrice = amount * pricePerCoin;
-
-    // محاكاة عملية الدفع
-    console.log(`💳 Processing coins purchase: ${amount} coins for $${totalPrice.toFixed(2)} by user ${userId}`);
-
-    // إضافة العملات
-    const success = addCoinsToUser(userId, amount, `شراء ${amount} عملة`);
-    
-    if (!success) {
-      return res.status(500).json({
-        success: false,
-        error: 'فشل في إضافة العملات'
-      });
-    }
-
-    // الحصول على الرصيد الجديد
-    const subscriptionStatus = await getUserSubscriptionStatus(userId);
-
-    res.json({
-      success: true,
-      message: `تم شراء ${amount} عملة بنجاح`,
-      purchase: {
-        amount,
-        price: totalPrice,
-        paymentMethod: paymentMethod || 'default'
-      },
-      newBalance: req.user?.coins + amount
-    });
-
-  } catch (error) {
-    console.error('Buy coins error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'خطأ في شراء العملات'
-    });
-  }
-});
-
-// ===================== VIP Routes (تحتاج اشتراك نشط) =====================
-
-// إحصائيات الاشتراك (للمشتركين فقط)
-router.get('/stats', authMiddleware, activeSubscriptionMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.userId!;
-    const subscriptionStatus = await getUserSubscriptionStatus(userId);
-    
-    // إحصائيات مخصصة للمستخدم المشترك
-    const stats = {
-      subscription: subscriptionStatus.subscription,
-      analysisUsage: {
-        dailyLimit: subscriptionStatus.subscription?.analysis_limit || 0,
-        dailyUsed: 0, // يمكن حسابها من قاعدة البيانات
-        remainingToday: subscriptionStatus.analysisInfo.remainingAnalyses || 0
-      },
-      features: subscriptionStatus.subscription?.features || [],
-      expiryInfo: {
-        expiresAt: subscriptionStatus.subscription?.expires_at,
-        daysRemaining: subscriptionStatus.subscription?.expires_at ? 
-          Math.ceil((new Date(subscriptionStatus.subscription.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0
-      }
-    };
-
-    res.json({
-      success: true,
-      stats
-    });
-
-  } catch (error) {
-    console.error('Get subscription stats error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'خطأ في جلب إحصائيات الاشتراك'
-    });
-  }
-});
-
-// تجديد الاشتراك تلقائياً
-router.post('/renew', authMiddleware, activeSubscriptionMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.userId!;
-    const { autoRenew } = req.body;
-
-    // هنا يمكن تحديث إعدادات التجديد التلقائي
-    // للبساطة، سنرجع رسالة نجاح
-    
-    res.json({
-      success: true,
-      message: `تم ${autoRenew ? 'تفعيل' : 'إلغاء'} التجديد التلقائي`,
-      autoRenew: autoRenew
-    });
-
-  } catch (error) {
-    console.error('Renew subscription error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'خطأ في تجديد الاشتراك'
-    });
-  }
-});
-
-// إلغاء الاشتراك
-router.post('/cancel', authMiddleware, activeSubscriptionMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.userId!;
-    
-    // هنا يمكن تنفيذ منطق إلغاء الاشتراك
-    // للبساطة، سنرجع رسالة تأكيد
-    
-    res.json({
-      success: true,
-      message: 'تم طلب إلغاء الاشتراك. سيتم إلغاؤه عند انتهاء الفترة الحالية.',
-      note: 'يمكنك الاستمرار في استخدام الخدمة حتى تاريخ انتهاء الاشتراك'
-    });
-
-  } catch (error) {
-    console.error('Cancel subscription error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'خطأ في إلغاء الاشتراك'
     });
   }
 });
