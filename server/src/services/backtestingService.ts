@@ -51,6 +51,7 @@ export interface BacktestResult {
         winRate: number;
         avgProfit: number;
         totalProfit: number;
+        profitFactor: number;
         avgDuration: number;
         outcomes: {
             TP1: number;
