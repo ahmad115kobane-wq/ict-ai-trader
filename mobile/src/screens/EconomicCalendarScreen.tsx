@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Modal,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +21,7 @@ import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { API_BASE_URL } from '../config/api';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
+import CustomModal from '../components/CustomModal';
 
 interface EconomicEvent {
   id: string;
@@ -586,68 +586,44 @@ const EconomicCalendarScreen = () => {
       </ScrollView>
 
       {/* Modal التحليل */}
-      <Modal
+      <CustomModal
         visible={showAnalysisModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAnalysisModal(false)}
+        onClose={() => setShowAnalysisModal(false)}
+        title="📊 تحليل الخبر"
+        size="large"
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {/* Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📊 تحليل الخبر</Text>
-              <TouchableOpacity onPress={() => setShowAnalysisModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
+        {selectedEventAnalysis && (
+          <>
+            <View style={styles.analysisSection}>
+              <Text style={styles.analysisSectionTitle}>📊 التحليل</Text>
+              <Text style={styles.analysisText}>
+                {selectedEventAnalysis.analysis}
+              </Text>
             </View>
 
-            {/* Scroll Indicator */}
-            <View style={styles.scrollIndicator}>
-              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-              <Text style={styles.scrollIndicatorText}>مرر للأسفل لمتابعة القراءة</Text>
+            <View style={styles.analysisSection}>
+              <Text style={styles.analysisSectionTitle}>🎯 التأثير المتوقع</Text>
+              <Text style={styles.analysisText}>
+                {selectedEventAnalysis.impact}
+              </Text>
             </View>
 
-            {/* Content */}
-            <ScrollView style={styles.modalBody}>
-              {selectedEventAnalysis && (
-                <>
-                  <View style={styles.analysisSection}>
-                    <Text style={styles.analysisSectionTitle}>📊 التحليل</Text>
-                    <Text style={styles.analysisText}>
-                      {selectedEventAnalysis.analysis}
-                    </Text>
-                  </View>
-
-                  <View style={styles.analysisSection}>
-                    <Text style={styles.analysisSectionTitle}>🎯 التأثير المتوقع</Text>
-                    <Text style={styles.analysisText}>
-                      {selectedEventAnalysis.impact}
-                    </Text>
-                  </View>
-
-                  <View style={styles.analysisSection}>
-                    <Text style={styles.analysisSectionTitle}>� توقعات السوق</Text>
-                    <Text style={styles.analysisText}>
-                      {selectedEventAnalysis.marketExpectation}
-                    </Text>
-                  </View>
-                </>
-              )}
-            </ScrollView>
-
-            {/* Footer */}
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalButton}
-                onPress={() => setShowAnalysisModal(false)}
-              >
-                <Text style={styles.modalButtonText}>إغلاق</Text>
-              </TouchableOpacity>
+            <View style={styles.analysisSection}>
+              <Text style={styles.analysisSectionTitle}>📈 توقعات السوق</Text>
+              <Text style={styles.analysisText}>
+                {selectedEventAnalysis.marketExpectation}
+              </Text>
             </View>
-          </View>
-        </View>
-      </Modal>
+
+            <TouchableOpacity
+              style={styles.closeModalButton}
+              onPress={() => setShowAnalysisModal(false)}
+            >
+              <Text style={styles.closeModalButtonText}>إغلاق</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </CustomModal>
     </SafeAreaView>
   );
 };
@@ -887,45 +863,6 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 100,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    color: colors.text,
-    fontSize: fontSizes.lg,
-    fontWeight: '700',
-  },
-  scrollIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xs,
-    gap: spacing.xs,
-    backgroundColor: colors.primary + '10',
-  },
-  scrollIndicatorText: {
-    color: colors.textMuted,
-    fontSize: fontSizes.xs,
-  },
-  modalBody: {
-    padding: spacing.md,
-  },
   analysisSection: {
     marginBottom: spacing.md,
   },
@@ -940,18 +877,14 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     lineHeight: 20,
   },
-  modalFooter: {
-    padding: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  modalButton: {
+  closeModalButton: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
     alignItems: 'center',
+    marginTop: spacing.lg,
   },
-  modalButtonText: {
+  closeModalButtonText: {
     color: '#FFFFFF',
     fontSize: fontSizes.md,
     fontWeight: '600',

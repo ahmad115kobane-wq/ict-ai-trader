@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -20,12 +19,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { AuthStackParamList } from '../navigation/AppNavigator';
+import { useCustomAlert } from '../hooks/useCustomAlert';
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 
 const RegisterScreen = () => {
   const navigation = useNavigation<RegisterScreenNavigationProp>();
   const { register, isLoading } = useAuth();
+  const { showAlert, showError, AlertComponent } = useCustomAlert();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,24 +35,24 @@ const RegisterScreen = () => {
 
   const handleRegister = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('تنبيه', 'يرجى إدخال جميع البيانات المطلوبة');
+      showAlert('تنبيه', 'يرجى إدخال جميع البيانات المطلوبة');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('تنبيه', 'كلمات المرور غير متطابقة');
+      showAlert('تنبيه', 'كلمات المرور غير متطابقة');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('تنبيه', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      showAlert('تنبيه', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
 
     try {
       await register(email.trim(), password);
     } catch (error: any) {
-      Alert.alert(
+      showError(
         'خطأ في إنشاء الحساب',
         error.response?.data?.error || 'حدث خطأ، يرجى المحاولة مرة أخرى'
       );
@@ -166,6 +167,8 @@ const RegisterScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AlertComponent />
     </View>
   );
 };

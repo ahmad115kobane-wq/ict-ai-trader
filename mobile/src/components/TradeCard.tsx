@@ -2,11 +2,12 @@
 // مكون بطاقة الصفقة
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { SuggestedTrade } from '../types';
+import { useCustomAlert } from '../hooks/useCustomAlert';
 
 interface TradeCardProps {
   symbol: string;
@@ -28,10 +29,11 @@ const TradeCard: React.FC<TradeCardProps> = ({
   onFollow,
 }) => {
   const isBuy = trade.type.includes('BUY');
+  const { showSuccess, showAlert } = useCustomAlert();
 
   const copyToClipboard = async (value: string) => {
     await Clipboard.setStringAsync(value);
-    Alert.alert('تم النسخ', 'تم نسخ القيمة');
+    showSuccess('تم النسخ', 'تم نسخ القيمة');
   };
 
   const copyAllTrade = async () => {
@@ -44,7 +46,7 @@ TP2: ${trade.tp2}
 TP3: ${trade.tp3}
     `.trim();
     await Clipboard.setStringAsync(text);
-    Alert.alert('تم النسخ', 'تم نسخ تفاصيل الصفقة');
+    showSuccess('تم النسخ', 'تم نسخ تفاصيل الصفقة');
   };
 
   const calculateRR = () => {
@@ -147,19 +149,21 @@ TP3: ${trade.tp3}
           <Text style={styles.actionText}>نسخ الكل</Text>
         </TouchableOpacity>
 
-        {onChat && (
-          <TouchableOpacity style={[styles.actionBtn, styles.chatBtn]} onPress={onChat}>
-            <Ionicons name="chatbubble-outline" size={18} color={colors.text} />
-            <Text style={styles.actionText}>دردشة</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity 
+          style={[styles.actionBtn, styles.chatBtn]} 
+          onPress={() => showAlert('قريباً', 'ميزة الدردشة ستكون متاحة قريباً')}
+        >
+          <Ionicons name="chatbubble-outline" size={18} color={colors.text} />
+          <Text style={styles.actionText}>دردشة</Text>
+        </TouchableOpacity>
 
-        {onFollow && (
-          <TouchableOpacity style={[styles.actionBtn, styles.followBtn]} onPress={onFollow}>
-            <Ionicons name="eye-outline" size={18} color={colors.text} />
-            <Text style={styles.actionText}>متابعة</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity 
+          style={[styles.actionBtn, styles.followBtn]} 
+          onPress={() => showAlert('قريباً', 'ميزة المتابعة ستكون متاحة قريباً')}
+        >
+          <Ionicons name="eye-outline" size={18} color={colors.text} />
+          <Text style={styles.actionText}>متابعة</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

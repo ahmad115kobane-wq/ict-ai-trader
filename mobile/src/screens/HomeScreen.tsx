@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   Switch,
   RefreshControl,
-  Alert,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,12 +26,14 @@ import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { Analysis } from '../types';
 import { API_BASE_URL } from '../config/api';
 import Header from '../components/Header';
+import { useCustomAlert } from '../hooks/useCustomAlert';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, refreshUser, logout } = useAuth();
+  const { showAlert, showError, showConfirm, AlertComponent } = useCustomAlert();
   const chartWebViewRef = useRef<WebView>(null);
   const [currentPrice, setCurrentPrice] = useState<number>(0);
   const [latestAnalysis, setLatestAnalysis] = useState<Analysis | null>(null);
@@ -130,10 +131,9 @@ const HomeScreen = () => {
 
   const handleToggleAutoAnalysis = async (value: boolean) => {
     if (value && !user?.subscriptionStatus?.hasActiveSubscription) {
-      Alert.alert(
+      showAlert(
         'اشتراك مطلوب',
-        'يجب أن يكون لديك اشتراك نشط لتفعيل التحليل التلقائي',
-        [{ text: 'حسناً' }]
+        'يجب أن يكون لديك اشتراك نشط لتفعيل التحليل التلقائي'
       );
       return;
     }
@@ -146,7 +146,7 @@ const HomeScreen = () => {
         await refreshUser();
       }
     } catch (error: any) {
-      Alert.alert('خطأ', error.response?.data?.message || 'حدث خطأ');
+      showError('خطأ', error.response?.data?.message || 'حدث خطأ');
     } finally {
       setIsLoading(false);
     }
@@ -582,13 +582,10 @@ const HomeScreen = () => {
         coins={user?.coins || 0}
         unreadCount={unreadNotifications}
         onLogout={() => {
-          Alert.alert(
+          showConfirm(
             'تسجيل الخروج',
             'هل أنت متأكد من تسجيل الخروج؟',
-            [
-              { text: 'إلغاء', style: 'cancel' },
-              { text: 'تسجيل الخروج', onPress: logout, style: 'destructive' }
-            ]
+            logout
           );
         }}
       />
@@ -758,6 +755,8 @@ const HomeScreen = () => {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      <AlertComponent />
     </SafeAreaView>
   );
 };

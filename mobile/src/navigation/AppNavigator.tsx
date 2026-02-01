@@ -2,7 +2,7 @@
 // نظام التنقل الرئيسي للتطبيق
 
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +44,19 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
+
+// تخصيص سمة التنقل الداكنة لمنع الوميض الأبيض
+const NavigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.background,
+    card: colors.card,
+    text: colors.text,
+    border: colors.border,
+    notification: colors.primary,
+  },
+};
 
 // شاشة التحميل
 const LoadingScreen = () => (
@@ -189,21 +202,27 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <NavigationContainer theme={NavigationTheme}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          animation: 'fade_from_bottom',
+        }}
+      >
         {isAuthenticated ? (
           <>
             <Stack.Screen name="Main" component={MainTabNavigator} />
-            <Stack.Screen 
-              name="FullChart" 
+            <Stack.Screen
+              name="FullChart"
               component={FullChartScreen}
               options={{
                 animation: 'slide_from_bottom',
                 presentation: 'fullScreenModal',
               }}
             />
-            <Stack.Screen 
-              name="Notifications" 
+            <Stack.Screen
+              name="Notifications"
               component={NotificationsScreen}
               options={{
                 animation: 'slide_from_right',

@@ -9,7 +9,6 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   ActivityIndicator,
   I18nManager,
 } from 'react-native';
@@ -22,9 +21,11 @@ import { subscriptionService } from '../services/apiService';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { Package } from '../types';
 import Header from '../components/Header';
+import { useCustomAlert } from '../hooks/useCustomAlert';
 
 const SubscriptionScreen = () => {
   const { user, logout, refreshUser } = useAuth();
+  const { showAlert, showSuccess, showError, showConfirm, AlertComponent } = useCustomAlert();
   const [packages, setPackages] = useState<Package[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,37 +63,30 @@ const SubscriptionScreen = () => {
     
     // التحقق من الرصيد قبل الشراء
     if (userCoins < coinPrice) {
-      Alert.alert(
+      showError(
         'رصيد غير كافٍ',
-        `تحتاج إلى ${coinPrice} عملة لشراء هذه الباقة.\nرصيدك الحالي: ${userCoins} عملة\nينقصك: ${coinPrice - userCoins} عملة`,
-        [{ text: 'حسناً' }]
+        `تحتاج إلى ${coinPrice} عملة لشراء هذه الباقة.\nرصيدك الحالي: ${userCoins} عملة\nينقصك: ${coinPrice - userCoins} عملة`
       );
       return;
     }
     
-    Alert.alert(
+    showConfirm(
       'تأكيد الشراء',
       `هل تريد شراء هذه الباقة مقابل ${coinPrice} عملة؟\n\nرصيدك الحالي: ${userCoins} عملة\nرصيدك بعد الشراء: ${userCoins - coinPrice} عملة`,
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'شراء',
-          onPress: async () => {
-            setPurchasingPackage(packageId);
-            try {
-              const result = await subscriptionService.purchase(packageId);
-              if (result.success) {
-                Alert.alert('نجاح', result.message || 'تم شراء الباقة بنجاح');
-                await refreshUser();
-              }
-            } catch (error: any) {
-              Alert.alert('خطأ', error.response?.data?.error || 'فشل في شراء الباقة');
-            } finally {
-              setPurchasingPackage(null);
-            }
-          },
-        },
-      ]
+      async () => {
+        setPurchasingPackage(packageId);
+        try {
+          const result = await subscriptionService.purchase(packageId);
+          if (result.success) {
+            showSuccess('نجاح', result.message || 'تم شراء الباقة بنجاح');
+            await refreshUser();
+          }
+        } catch (error: any) {
+          showError('خطأ', error.response?.data?.error || 'فشل في شراء الباقة');
+        } finally {
+          setPurchasingPackage(null);
+        }
+      }
     );
   };
 
@@ -139,13 +133,12 @@ const SubscriptionScreen = () => {
           Alert.alert(
             'تسجيل الخروج',
             'هل أنت متأكد من تسجيل الخروج؟',
-            [
-              { text: 'إلغاء', style: 'cancel' },
-              { text: 'تسجيل الخروج', onPress: logout, style: 'destructive' }
-            ]
+            logout
           );
         }}
       />
+
+      <AlertComponent />
 
       <ScrollView
         style={styles.content}

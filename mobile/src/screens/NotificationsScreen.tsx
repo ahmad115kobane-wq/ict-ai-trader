@@ -269,7 +269,6 @@ const NotificationsScreen = () => {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
-        <Header coins={user?.coins || 0} onLogout={logout} showLogout={true} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>جاري تحميل الإشعارات...</Text>
@@ -281,9 +280,6 @@ const NotificationsScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-
-      {/* Header */}
-      <Header coins={user?.coins || 0} onLogout={logout} showLogout={true} />
 
       {/* Page Title */}
       <View style={styles.titleContainer}>

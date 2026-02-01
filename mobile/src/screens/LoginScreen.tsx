@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -20,12 +19,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { AuthStackParamList } from '../navigation/AppNavigator';
+import { useCustomAlert } from '../hooks/useCustomAlert';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const { login, isLoading } = useAuth();
+  const { showAlert, showError, AlertComponent } = useCustomAlert();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,14 +34,14 @@ const LoginScreen = () => {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('تنبيه', 'يرجى إدخال البريد الإلكتروني وكلمة المرور');
+      showAlert('تنبيه', 'يرجى إدخال البريد الإلكتروني وكلمة المرور');
       return;
     }
 
     try {
       await login(email.trim(), password);
     } catch (error: any) {
-      Alert.alert(
+      showError(
         'خطأ في تسجيل الدخول',
         error.response?.data?.error || 'تأكد من صحة البيانات وحاول مرة أخرى'
       );
@@ -136,6 +137,8 @@ const LoginScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AlertComponent />
     </View>
   );
 };

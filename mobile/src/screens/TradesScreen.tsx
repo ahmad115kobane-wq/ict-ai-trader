@@ -9,7 +9,6 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +20,7 @@ import { analysisService } from '../services/apiService';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { TradeHistory, SuggestedTrade } from '../types';
 import Header from '../components/Header';
+import { useCustomAlert } from '../hooks/useCustomAlert';
 
 interface TradeItem {
   id: string;
@@ -36,6 +36,7 @@ interface TradeItem {
 
 const TradesScreen = () => {
   const { user } = useAuth();
+  const { showSuccess, AlertComponent } = useCustomAlert();
   const [trades, setTrades] = useState<TradeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,7 +66,7 @@ const TradesScreen = () => {
 
   const copyToClipboard = async (text: string) => {
     await Clipboard.setStringAsync(text);
-    Alert.alert('تم النسخ', 'تم نسخ القيمة إلى الحافظة');
+    showSuccess('تم النسخ', 'تم نسخ القيمة إلى الحافظة');
   };
 
   const copyAllTrade = async (trade: SuggestedTrade) => {
@@ -79,7 +80,7 @@ const TradesScreen = () => {
 نسبة المخاطرة: ${trade.rrRatio || 'غير محدد'}
     `.trim();
     await Clipboard.setStringAsync(text);
-    Alert.alert('تم النسخ', 'تم نسخ تفاصيل الصفقة كاملة');
+    showSuccess('تم النسخ', 'تم نسخ تفاصيل الصفقة كاملة');
   };
 
   const formatDate = (dateString: string) => {
@@ -270,6 +271,8 @@ const TradesScreen = () => {
         ListEmptyComponent={renderEmptyList}
         showsVerticalScrollIndicator={false}
       />
+
+      <AlertComponent />
     </SafeAreaView>
   );
 };

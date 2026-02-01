@@ -163,10 +163,18 @@ const NotificationHandler = () => {
 
     return () => {
       if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
+        try {
+          notificationListener.current.remove();
+        } catch (error) {
+          console.log('⚠️ Could not remove notification listener');
+        }
       }
       if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+        try {
+          responseListener.current.remove();
+        } catch (error) {
+          console.log('⚠️ Could not remove response listener');
+        }
       }
     };
   }, [isAuthenticated]);
@@ -177,8 +185,8 @@ const NotificationHandler = () => {
 // التطبيق الرئيسي
 export default function App() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0d1117' }}>
+      <SafeAreaProvider style={{ backgroundColor: '#0d1117' }}>
         <AuthProvider>
           <NotificationHandler />
           <AppNavigator />
