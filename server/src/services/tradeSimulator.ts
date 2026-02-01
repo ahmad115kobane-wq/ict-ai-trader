@@ -147,35 +147,70 @@ export function simulateSingleTrade(
         }
 
         if (isBuy) {
-            // تحقق من SL أولاً
-            if (candle.low <= trade.sl) {
+            // ✅ إصلاح: تحقق من كلا المستويين ثم اختر الأقرب
+            const slHitInCandle = candle.low <= trade.sl;
+            const tp1HitInCandle = candle.high >= trade.tp1;
+            const tp2HitInCandle = candle.high >= trade.tp2;
+            const tp3HitInCandle = candle.high >= trade.tp3;
+
+            // إذا الشمعة تلمس كلا من SL و أي TP، نحدد أيهما أقرب
+            if (slHitInCandle && (tp1HitInCandle || tp2HitInCandle || tp3HitInCandle)) {
+                // شمعة صاعدة (open < close) → غالباً ضربت TP أولاً
+                // شمعة هابطة (open > close) → غالباً ضربت SL أولاً
+                const isBullishCandle = candle.close > candle.open;
+
+                if (isBullishCandle) {
+                    // الشمعة صاعدة - نفترض TP ضُرب أولاً
+                    if (tp3HitInCandle) {
+                        tp1Hit = true; tp2Hit = true; tp3Hit = true;
+                        exitCandle = candle;
+                        exitIndex = i;
+                        console.log(`   🎯 ضرب TP3 عند شمعة #${executionIndex + i + 1} (شمعة صاعدة)`);
+                        break;
+                    } else if (tp2HitInCandle) {
+                        tp1Hit = true; tp2Hit = true;
+                        console.log(`   ✅ ضرب TP2 عند شمعة #${executionIndex + i + 1} (شمعة صاعدة)`);
+                    } else if (tp1HitInCandle) {
+                        tp1Hit = true;
+                        console.log(`   ✅ ضرب TP1 عند شمعة #${executionIndex + i + 1} (شمعة صاعدة)`);
+                    }
+                } else {
+                    // الشمعة هابطة - نفترض SL ضُرب أولاً
+                    slHit = true;
+                    exitCandle = candle;
+                    exitIndex = i;
+                    console.log(`   ❌ ضرب SL عند شمعة #${executionIndex + i + 1} (شمعة هابطة)`);
+                    break;
+                }
+            } else if (slHitInCandle) {
+                // فقط SL ضُرب
                 slHit = true;
                 exitCandle = candle;
                 exitIndex = i;
                 console.log(`   ❌ ضرب SL عند شمعة #${executionIndex + i + 1}`);
                 break;
+            } else {
+                // تحقق من TPs فقط
+                if (!tp1Hit && tp1HitInCandle) {
+                    tp1Hit = true;
+                    console.log(`   ✅ ضرب TP1 عند شمعة #${executionIndex + i + 1}`);
+                }
+
+                if (!tp2Hit && tp2HitInCandle) {
+                    tp2Hit = true;
+                    console.log(`   ✅ ضرب TP2 عند شمعة #${executionIndex + i + 1}`);
+                }
+
+                if (!tp3Hit && tp3HitInCandle) {
+                    tp3Hit = true;
+                    exitCandle = candle;
+                    exitIndex = i;
+                    console.log(`   🎯 ضرب TP3 عند شمعة #${executionIndex + i + 1}`);
+                    break;
+                }
             }
 
-            // تحقق من TPs
-            if (!tp1Hit && candle.high >= trade.tp1) {
-                tp1Hit = true;
-                console.log(`   ✅ ضرب TP1 عند شمعة #${executionIndex + i + 1}`);
-            }
-
-            if (!tp2Hit && candle.high >= trade.tp2) {
-                tp2Hit = true;
-                console.log(`   ✅ ضرب TP2 عند شمعة #${executionIndex + i + 1}`);
-            }
-
-            if (!tp3Hit && candle.high >= trade.tp3) {
-                tp3Hit = true;
-                exitCandle = candle;
-                exitIndex = i;
-                console.log(`   🎯 ضرب TP3 عند شمعة #${executionIndex + i + 1}`);
-                break;
-            }
-
-            // إذا وصل TP1 أو TP2 ولم يصل للتالي، نعتبره خروج
+            // إذا وصل TP2 ولم يصل TP3، نخرج بعد فترة
             if (tp2Hit && !tp3Hit && i > 10) {
                 exitCandle = candle;
                 exitIndex = i;
@@ -192,32 +227,70 @@ export function simulateSingleTrade(
 
         } else {
             // SELL - نفس المنطق معكوس
-            if (candle.high >= trade.sl) {
+            // ✅ إصلاح: تحقق من كلا المستويين ثم اختر الأقرب
+            const slHitInCandle = candle.high >= trade.sl;
+            const tp1HitInCandle = candle.low <= trade.tp1;
+            const tp2HitInCandle = candle.low <= trade.tp2;
+            const tp3HitInCandle = candle.low <= trade.tp3;
+
+            // إذا الشمعة تلمس كلا من SL و أي TP، نحدد أيهما أقرب
+            if (slHitInCandle && (tp1HitInCandle || tp2HitInCandle || tp3HitInCandle)) {
+                // شمعة هابطة (open > close) → غالباً ضربت TP أولاً (للبيع)
+                // شمعة صاعدة (open < close) → غالباً ضربت SL أولاً (للبيع)
+                const isBearishCandle = candle.close < candle.open;
+
+                if (isBearishCandle) {
+                    // الشمعة هابطة - نفترض TP ضُرب أولاً (للبيع)
+                    if (tp3HitInCandle) {
+                        tp1Hit = true; tp2Hit = true; tp3Hit = true;
+                        exitCandle = candle;
+                        exitIndex = i;
+                        console.log(`   🎯 ضرب TP3 عند شمعة #${executionIndex + i + 1} (شمعة هابطة)`);
+                        break;
+                    } else if (tp2HitInCandle) {
+                        tp1Hit = true; tp2Hit = true;
+                        console.log(`   ✅ ضرب TP2 عند شمعة #${executionIndex + i + 1} (شمعة هابطة)`);
+                    } else if (tp1HitInCandle) {
+                        tp1Hit = true;
+                        console.log(`   ✅ ضرب TP1 عند شمعة #${executionIndex + i + 1} (شمعة هابطة)`);
+                    }
+                } else {
+                    // الشمعة صاعدة - نفترض SL ضُرب أولاً (للبيع)
+                    slHit = true;
+                    exitCandle = candle;
+                    exitIndex = i;
+                    console.log(`   ❌ ضرب SL عند شمعة #${executionIndex + i + 1} (شمعة صاعدة)`);
+                    break;
+                }
+            } else if (slHitInCandle) {
+                // فقط SL ضُرب
                 slHit = true;
                 exitCandle = candle;
                 exitIndex = i;
                 console.log(`   ❌ ضرب SL عند شمعة #${executionIndex + i + 1}`);
                 break;
+            } else {
+                // تحقق من TPs فقط
+                if (!tp1Hit && tp1HitInCandle) {
+                    tp1Hit = true;
+                    console.log(`   ✅ ضرب TP1 عند شمعة #${executionIndex + i + 1}`);
+                }
+
+                if (!tp2Hit && tp2HitInCandle) {
+                    tp2Hit = true;
+                    console.log(`   ✅ ضرب TP2 عند شمعة #${executionIndex + i + 1}`);
+                }
+
+                if (!tp3Hit && tp3HitInCandle) {
+                    tp3Hit = true;
+                    exitCandle = candle;
+                    exitIndex = i;
+                    console.log(`   🎯 ضرب TP3 عند شمعة #${executionIndex + i + 1}`);
+                    break;
+                }
             }
 
-            if (!tp1Hit && candle.low <= trade.tp1) {
-                tp1Hit = true;
-                console.log(`   ✅ ضرب TP1 عند شمعة #${executionIndex + i + 1}`);
-            }
-
-            if (!tp2Hit && candle.low <= trade.tp2) {
-                tp2Hit = true;
-                console.log(`   ✅ ضرب TP2 عند شمعة #${executionIndex + i + 1}`);
-            }
-
-            if (!tp3Hit && candle.low <= trade.tp3) {
-                tp3Hit = true;
-                exitCandle = candle;
-                exitIndex = i;
-                console.log(`   🎯 ضرب TP3 عند شمعة #${executionIndex + i + 1}`);
-                break;
-            }
-
+            // إذا وصل TP2 ولم يصل TP3، نخرج بعد فترة
             if (tp2Hit && !tp3Hit && i > 10) {
                 exitCandle = candle;
                 exitIndex = i;

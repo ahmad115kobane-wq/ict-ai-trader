@@ -54,7 +54,7 @@ export const getCurrentPrice = async (symbol: string): Promise<number> => {
     if (!response.ok) {
       throw new Error(`OANDA Error: ${response.status}`);
     }
-    
+
     const data = await response.json() as any;
     const candle = data.candles?.[0];
     return parseFloat(candle?.mid?.c || '0');
@@ -73,7 +73,7 @@ export const getCandles = async (
   try {
     const instrument = convertSymbol(symbol);
     const granularity = convertTimeframe(timeframe);
-    
+
     const response = await fetch(
       `${BASE_URL}/v3/instruments/${instrument}/candles?count=${count}&granularity=${granularity}`,
       {
@@ -83,15 +83,15 @@ export const getCandles = async (
         },
       }
     );
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OANDA API Error:', response.status, errorText);
       throw new Error(`OANDA Error: ${response.status}`);
     }
-    
+
     const data = await response.json() as any;
-    
+
     // إرجاع جميع الشموع بما فيها الشمعة الحالية (غير المكتملة)
     return (data.candles || [])
       .map((c: any) => ({
@@ -105,6 +105,59 @@ export const getCandles = async (
       }));
   } catch (error) {
     console.error('OANDA getCandles error:', error);
+    return [];
+  }
+};
+
+// جلب الشموع التاريخية بنطاق زمني محدد (للـ Backtesting)
+export const getCandlesByDateRange = async (
+  symbol: string,
+  timeframe: string,
+  startDate: Date,
+  endDate: Date
+): Promise<Candle[]> => {
+  try {
+    const instrument = convertSymbol(symbol);
+    const granularity = convertTimeframe(timeframe);
+
+    const fromTime = startDate.toISOString();
+    const toTime = endDate.toISOString();
+
+    console.log(`📊 جلب شموع ${symbol} (${timeframe}) من ${fromTime} إلى ${toTime}`);
+
+    const response = await fetch(
+      `${BASE_URL}/v3/instruments/${instrument}/candles?granularity=${granularity}&from=${fromTime}&to=${toTime}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OANDA API Error:', response.status, errorText);
+      throw new Error(`OANDA Error: ${response.status}`);
+    }
+
+    const data = await response.json() as any;
+    const candles = (data.candles || [])
+      .filter((c: any) => c.complete) // فقط الشموع المكتملة للـ Backtesting
+      .map((c: any) => ({
+        time: c.time,
+        open: parseFloat(c.mid.o),
+        high: parseFloat(c.mid.h),
+        low: parseFloat(c.mid.l),
+        close: parseFloat(c.mid.c),
+        volume: c.volume,
+        complete: c.complete
+      }));
+
+    console.log(`   ✅ تم جلب ${candles.length} شمعة`);
+    return candles;
+  } catch (error) {
+    console.error('OANDA getCandlesByDateRange error:', error);
     return [];
   }
 };
@@ -126,16 +179,16 @@ export const getPrices = async (symbols: string[]): Promise<Record<string, numbe
     if (!response.ok) {
       throw new Error(`OANDA Error: ${response.status}`);
     }
-    
+
     const data = await response.json() as any;
     const prices: Record<string, number> = {};
-    
+
     for (const price of data.prices || []) {
       const symbol = price.instrument.replace('_', '');
       const mid = (parseFloat(price.bids?.[0]?.price || '0') + parseFloat(price.asks?.[0]?.price || '0')) / 2;
       prices[symbol] = mid;
     }
-    
+
     return prices;
   } catch (error) {
     console.error('OANDA getPrices error:', error);

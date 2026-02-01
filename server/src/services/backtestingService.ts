@@ -1,7 +1,7 @@
 // services/backtesting Service.ts
 // المحرك الرئيسي لاختبار أداء AI على البيانات التاريخية
 
-import { getCandles } from './oandaService';
+import { getCandles, getCandlesByDateRange } from './oandaService';
 import { renderDualCharts } from './chartService';
 import { analyzeMultiTimeframe } from './aiService';
 import {
@@ -220,36 +220,10 @@ async function getHistoricalCandles(
     startDate: Date,
     endDate: Date
 ): Promise<Candle[]> {
-    // حساب عدد الشموع المطلوبة
-    const diffMs = endDate.getTime() - startDate.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
+    // ✅ إصلاح: استخدام getCandlesByDateRange للحصول على البيانات من التاريخ الصحيح
+    console.log(`📥 جلب شموع ${symbol} (${timeframe}) من ${startDate.toISOString()} إلى ${endDate.toISOString()}`);
 
-    let candleCount: number;
-    if (timeframe === 'H1') {
-        candleCount = Math.ceil(diffHours);
-    } else if (timeframe === 'M5') {
-        candleCount = Math.ceil(diffHours * 12); // 12 شمعة M5 في الساعة
-    } else {
-        throw new Error(`Unsupported timeframe: ${timeframe}`);
-    }
-
-    // OANDA يحد من 5000 شمعة في طلب واحد
-    const maxCount = 5000;
-    if (candleCount > maxCount) {
-        // نحتاج لعدة طلبات
-        const batches = Math.ceil(candleCount / maxCount);
-        const allCandles: Candle[] = [];
-
-        for (let i = 0; i < batches; i++) {
-            const count = Math.min(maxCount, candleCount - (i * maxCount));
-            const candles = await getCandles(symbol, timeframe, count);
-            allCandles.push(...candles);
-        }
-
-        return allCandles;
-    }
-
-    return await getCandles(symbol, timeframe, candleCount);
+    return await getCandlesByDateRange(symbol, timeframe, startDate, endDate);
 }
 
 /**
