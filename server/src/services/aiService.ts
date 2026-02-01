@@ -21,6 +21,209 @@ const MIN_SL_DISTANCE = 8;   // $8 minimum SL للذهب
 const MAX_SL_DISTANCE = 20;  // $20 maximum SL
 const MIN_RR_RATIO = 1.5;    // Minimum Risk:Reward
 
+// ===================== AI Memory System =====================
+interface MarketEvent {
+  time: Date;
+  type: 'SWEEP_HIGH' | 'SWEEP_LOW' | 'MSS_BULLISH' | 'MSS_BEARISH' | 'FVG_BULLISH' | 'FVG_BEARISH' | 'REJECTION' | 'BOS';
+  price: number;
+  description: string;
+}
+
+interface AnalysisMemory {
+  timestamp: Date;
+  price: number;
+  decision: string;
+  bias: string;
+  score: number;
+  events: MarketEvent[];
+  h1Trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+}
+
+// ذاكرة آخر 12 تحليل (ساعة كاملة)
+const analysisHistory: AnalysisMemory[] = [];
+const MAX_MEMORY_SIZE = 12;
+
+// تخزين الأحداث المكتشفة
+const detectedEvents: MarketEvent[] = [];
+const MAX_EVENTS = 20;
+
+// إضافة تحليل للذاكرة
+function addToMemory(analysis: AnalysisMemory): void {
+  analysisHistory.unshift(analysis);
+  if (analysisHistory.length > MAX_MEMORY_SIZE) {
+    analysisHistory.pop();
+  }
+  console.log(`🧠 Memory: ${analysisHistory.length}/${MAX_MEMORY_SIZE} analyses stored`);
+}
+
+// إضافة حدث للذاكرة
+function addEvent(event: MarketEvent): void {
+  detectedEvents.unshift(event);
+  if (detectedEvents.length > MAX_EVENTS) {
+    detectedEvents.pop();
+  }
+  console.log(`📌 Event Added: ${event.type} @ ${event.price}`);
+}
+
+// الحصول على ملخص الذاكرة
+function getMemorySummary(): string {
+  if (analysisHistory.length === 0) {
+    return "لا توجد بيانات سابقة - هذا أول تحليل";
+  }
+
+  const recentAnalyses = analysisHistory.slice(0, 6);
+  const recentEvents = detectedEvents.slice(0, 10);
+
+  // تحديد الاتجاه السائد
+  const bullishCount = recentAnalyses.filter(a => a.h1Trend === 'BULLISH').length;
+  const bearishCount = recentAnalyses.filter(a => a.h1Trend === 'BEARISH').length;
+  const dominantTrend = bullishCount > bearishCount ? 'BULLISH' : bearishCount > bullishCount ? 'BEARISH' : 'NEUTRAL';
+
+  // تحديد آخر أحداث مهمة
+  const sweeps = recentEvents.filter(e => e.type.includes('SWEEP'));
+  const mss = recentEvents.filter(e => e.type.includes('MSS'));
+  const fvgs = recentEvents.filter(e => e.type.includes('FVG'));
+
+  let summary = `
+══════════════════════════════════════
+📊 ذاكرة آخر ${recentAnalyses.length} تحليلات (${recentAnalyses.length * 5} دقيقة)
+══════════════════════════════════════
+
+🎯 الاتجاه السائد: ${dominantTrend}
+📈 صعودي: ${bullishCount} | 📉 هبوطي: ${bearishCount}
+
+`;
+
+  // آخر 3 تحليلات
+  summary += `📋 آخر التحليلات:\n`;
+  recentAnalyses.slice(0, 3).forEach((a, i) => {
+    const timeAgo = Math.round((Date.now() - a.timestamp.getTime()) / 60000);
+    summary += `   ${i + 1}. [${timeAgo}m ago] ${a.decision} | ${a.h1Trend} | Price: ${a.price}\n`;
+  });
+
+  // الأحداث المهمة
+  if (sweeps.length > 0) {
+    summary += `\n🔄 سحب السيولة (Sweeps):\n`;
+    sweeps.slice(0, 3).forEach(s => {
+      const timeAgo = Math.round((Date.now() - s.time.getTime()) / 60000);
+      summary += `   • ${s.type} @ ${s.price} [${timeAgo}m ago]\n`;
+    });
+  }
+
+  if (mss.length > 0) {
+    summary += `\n📐 كسر الهيكل (MSS):\n`;
+    mss.slice(0, 2).forEach(m => {
+      const timeAgo = Math.round((Date.now() - m.time.getTime()) / 60000);
+      summary += `   • ${m.type} @ ${m.price} [${timeAgo}m ago]\n`;
+    });
+  }
+
+  if (fvgs.length > 0) {
+    summary += `\n📊 الفجوات (FVG):\n`;
+    fvgs.slice(0, 2).forEach(f => {
+      const timeAgo = Math.round((Date.now() - f.time.getTime()) / 60000);
+      summary += `   • ${f.type} @ ${f.price} [${timeAgo}m ago]\n`;
+    });
+  }
+
+  return summary;
+}
+
+// اكتشاف الأحداث من الشموع
+function detectEventsFromCandles(h1Candles: any[], m5Candles: any[], currentPrice: number): MarketEvent[] {
+  const events: MarketEvent[] = [];
+
+  if (!m5Candles || m5Candles.length < 20) return events;
+
+  const recent20 = m5Candles.slice(-20);
+  const recent50 = m5Candles.slice(-50);
+
+  // البحث عن سحب السيولة (Sweep)
+  const highestHigh = Math.max(...recent50.map(c => c.high));
+  const lowestLow = Math.min(...recent50.map(c => c.low));
+
+  // آخر 5 شموع
+  const last5 = recent20.slice(-5);
+
+  for (const candle of last5) {
+    // Sweep High - السعر تجاوز القمة ثم عاد
+    if (candle.high >= highestHigh && candle.close < highestHigh) {
+      events.push({
+        time: new Date(candle.time),
+        type: 'SWEEP_HIGH',
+        price: candle.high,
+        description: `سحب سيولة القمة @ ${candle.high}`
+      });
+    }
+
+    // Sweep Low - السعر تجاوز القاع ثم عاد
+    if (candle.low <= lowestLow && candle.close > lowestLow) {
+      events.push({
+        time: new Date(candle.time),
+        type: 'SWEEP_LOW',
+        price: candle.low,
+        description: `سحب سيولة القاع @ ${candle.low}`
+      });
+    }
+
+    // Rejection - ذيل طويل (30%+ من حجم الشمعة)
+    const bodySize = Math.abs(candle.close - candle.open);
+    const totalSize = candle.high - candle.low;
+    const upperWick = candle.high - Math.max(candle.open, candle.close);
+    const lowerWick = Math.min(candle.open, candle.close) - candle.low;
+
+    if (totalSize > 0 && upperWick / totalSize > 0.3) {
+      events.push({
+        time: new Date(candle.time),
+        type: 'REJECTION',
+        price: candle.high,
+        description: `رفض سعري عند ${candle.high}`
+      });
+    }
+
+    if (totalSize > 0 && lowerWick / totalSize > 0.3) {
+      events.push({
+        time: new Date(candle.time),
+        type: 'REJECTION',
+        price: candle.low,
+        description: `رفض سعري عند ${candle.low}`
+      });
+    }
+  }
+
+  // البحث عن FVG
+  for (let i = 2; i < recent20.length; i++) {
+    const c1 = recent20[i - 2];
+    const c2 = recent20[i - 1];
+    const c3 = recent20[i];
+
+    // Bullish FVG
+    if (c1.high < c3.low) {
+      events.push({
+        time: new Date(c2.time),
+        type: 'FVG_BULLISH',
+        price: (c1.high + c3.low) / 2,
+        description: `FVG صعودي ${c1.high} - ${c3.low}`
+      });
+    }
+
+    // Bearish FVG
+    if (c1.low > c3.high) {
+      events.push({
+        time: new Date(c2.time),
+        type: 'FVG_BEARISH',
+        price: (c1.low + c3.high) / 2,
+        description: `FVG هبوطي ${c3.high} - ${c1.low}`
+      });
+    }
+  }
+
+  // إضافة الأحداث الجديدة للذاكرة
+  events.forEach(e => addEvent(e));
+
+  return events;
+}
+
 // ===================== Helpers =====================
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -88,80 +291,104 @@ function getCurrentKillzone(): KillzoneInfo {
   };
 }
 
-// ===================== ICT Pro System Prompt =====================
-export const systemInstruction = `
-أنت محلل ICT محترف لتداول XAUUSD.
-النظام يعمل بدون ذاكرة ويحلل السوق كل 5 دقائق.
-مهمتك: اتخاذ قرار فوري اعتمادًا على الحالة الحالية فقط.
+// ===================== ICT Pro System Prompt v7.0 =====================
+// البرومبت الديناميكي - يتم بناؤه مع سياق الذاكرة
+function buildSystemPrompt(memorySummary: string, killzoneInfo: KillzoneInfo): string {
+  return `أنت محلل ICT خبير لـ XAUUSD مع ذاكرة للأحداث السابقة.
 
-════════════════════
-القواعد العامة
-════════════════════
-- التحليل لحظي Snapshot
-- افحص آخر 100 شمعة
-- لا انتظار ولا مراقبة
-- عدم اكتمال الشروط = NO_TRADE
+═══════════════════════════════════════════════════════════════
+🧠 نظام ذكي مع ذاكرة - ICT Pro v7.0
+═══════════════════════════════════════════════════════════════
 
-════════════════════
-1️⃣ الاتجاه – H1
-════════════════════
-- صاعد → شراء فقط
-- هابط → بيع فقط
-- غير واضح → NO_TRADE
+${memorySummary}
 
-════════════════════
-2️⃣ شرط الدخول الموحد (الأهم)
-════════════════════
+═══════════════════════════════════════════════════════════════
+⏰ الجلسة الحالية: ${killzoneInfo.session} (${killzoneInfo.quality})
+═══════════════════════════════════════════════════════════════
 
-اعتبر الصفقة صالحة إذا تحقق أحد التالي قرب السعر الحالي:
+═══════════════════════════════════════
+📋 منهجية التحليل ICT
+═══════════════════════════════════════
 
-✔ Sweep واضح لقمم/قيعان (H1 أو M5)
-✔ مع رفض سعري (ذيل طويل أو ابتلاع)
-✔ داخل أو قريب من FVG أو Order Block
+1️⃣ تحديد الاتجاه H1 (إلزامي)
+   • صاعد: Higher Highs + Higher Lows → شراء
+   • هابط: Lower Highs + Lower Lows → بيع
+   • عرضي: لا تتداول حتى يتضح الاتجاه
 
-⚠️ هذا الشرط يُغني عن BOS أو تأكيد إضافي
+2️⃣ البحث عن Liquidity Sweep (مهم جداً)
+   • سحب قمة/قاع سابق على M5 أو H1
+   • إغلاق الشمعة داخل النطاق بعد الاختراق
+   ⚠️ إذا وجدت Sweep في الذاكرة خلال آخر 30 دقيقة → فرصة جيدة!
 
-❌ إذا لم يتوفر هذا الثلاثي → NO_TRADE
+3️⃣ تأكيد واحد على الأقل (اختر الأوضح)
+   ✔ رفض سعري (ذيل طويل 30%+ من الشمعة)
+   ✔ شمعة ابتلاعية (Engulfing)
+   ✔ FVG أو Order Block قريب من السعر
+   ✔ BOS/MSS مع اتجاه H1
 
-════════════════════
-3️⃣ الدخول
-════════════════════
-- BUY_LIMIT أو SELL_LIMIT
-- من نفس منطقة الرفض
-- ستوب خلف القمة / القاع المسحوب
+4️⃣ منطقة الدخول (Entry Zone)
+   • من FVG أو Order Block أو منطقة الرفض
+   • المسافة من السعر: 0.1% - 0.5%
+   • استخدم LIMIT ORDERS فقط
 
-════════════════════
-4️⃣ الأهداف
-════════════════════
-- أقرب سيولة ظاهرة
-- بعدها فجوة أو سيولة خارجية
+═══════════════════════════════════════
+💡 قواعد ذكية لزيادة الصفقات
+═══════════════════════════════════════
 
-════════════════════
-قرار التداول
-════════════════════
-✔ اتجاه واضح
-✔ سحب + رفض سعري قرب POI
+✅ اقبل الصفقة إذا:
+   • الاتجاه واضح + تأكيد واحد على الأقل
+   • RR جيد (1:1.5 أو أفضل)
+   • لا تنتظر المثالية
 
-→ PLACE_PENDING
-غير ذلك → NO_TRADE
+❌ ارفض إذا:
+   • الاتجاه غير واضح أو متناقض
+   • Entry بعيد (أكثر من 0.8% من السعر)
+   • RR ضعيف (أقل من 1:1.5)
 
-════════════════════
-الإخراج (JSON فقط)
-════════════════════
+⚖️ توازن:
+   • لا تكن متساهلاً جداً → صفقات خاسرة
+   • لا تكن صارماً جداً → تفويت فرص
+
+═══════════════════════════════════════
+🎯 نظام الأهداف (TPs)
+═══════════════════════════════════════
+
+• TP1: أقرب سيولة (قمة/قاع قريب) - 1:1.5 RR
+• TP2: السيولة التالية أو FVG - 1:2.5 RR
+• TP3: سيولة خارجية رئيسية - 1:4+ RR
+
+• SL: خلف القمة/القاع المسحوب + buffer 5-10$
+• حجم SL: بين 8$ و 20$
+
+═══════════════════════════════════════
+📊 JSON الإخراج
+═══════════════════════════════════════
+
 {
-  "decision": "PLACE_PENDING" | "NO_TRADE",
+  "decision": "PLACE_PENDING" أو "NO_TRADE",
+  "score": 0-10,
   "confidence": 0-100,
-  "bias": "اتجاه H1",
-  "reasoning": "سبب القرار",
+  "sentiment": "BULLISH" أو "BEARISH" أو "NEUTRAL",
+  "bias": "وصف اتجاه H1 باختصار",
+  "reasoning": "لماذا هذا القرار؟ اذكر السبب الرئيسي",
+  "h1Trend": "BULLISH" أو "BEARISH" أو "NEUTRAL",
   "suggestedTrade": {
-    "type": "BUY_LIMIT" | "SELL_LIMIT",
-    "entry": number,
-    "sl": number,
-    "tp1": number,
-    "tp2": number
+    "type": "BUY_LIMIT" أو "SELL_LIMIT",
+    "entry": رقم,
+    "sl": رقم,
+    "tp1": رقم,
+    "tp2": رقم,
+    "tp3": رقم
   }
 }
+
+⚠️ أعط JSON فقط - بدون أي نص إضافي!
 `;
+}
+
+// للتوافق مع الكود القديم
+export const systemInstruction = `ICT Pro v7.0 - Dynamic Prompt`;
+
 
 // ===================== Result Builder =====================
 function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis {
@@ -219,12 +446,12 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // ═══════════════════════════════════════════════════════════
   // التحقق من نوع الأمر المعلق
   // ═══════════════════════════════════════════════════════════
-  
+
   if (tradeType === "BUY_LIMIT" && entry >= currentPrice) {
     // BUY_LIMIT يجب أن يكون أسفل السعر الحالي
     const maxDistance = currentPrice * 0.005; // 0.5%
     const correctedEntry = currentPrice - (maxDistance * 0.5);
-    
+
     if (correctedEntry > sl + MIN_SL_DISTANCE) {
       entry = round2(correctedEntry);
       console.log(`   🔧 تصحيح Entry إلى: ${entry}`);
@@ -238,7 +465,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
     // SELL_LIMIT يجب أن يكون أعلى السعر الحالي
     const maxDistance = currentPrice * 0.005; // 0.5%
     const correctedEntry = currentPrice + (maxDistance * 0.5);
-    
+
     if (correctedEntry < sl - MIN_SL_DISTANCE) {
       entry = round2(correctedEntry);
       console.log(`   🔧 تصحيح Entry إلى: ${entry}`);
@@ -251,10 +478,10 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // ═══════════════════════════════════════════════════════════
   // التحقق من مسافة Entry من السعر الحالي
   // ═══════════════════════════════════════════════════════════
-  
+
   const entryDistance = Math.abs(entry - currentPrice);
   const maxEntryDistance = currentPrice * 0.008; // 0.8%
-  
+
   if (entryDistance > maxEntryDistance) {
     console.log(`   ❌ Entry بعيد جداً: ${entryDistance.toFixed(2)}$ (max: ${maxEntryDistance.toFixed(2)}$)`);
     return createNoTradeResult([`Entry بعيد: ${entryDistance.toFixed(1)}$ من السعر`], r);
@@ -263,7 +490,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // ═══════════════════════════════════════════════════════════
   // التحقق من SL وتصحيحه
   // ═══════════════════════════════════════════════════════════
-  
+
   let slDistance = Math.abs(entry - sl);
   console.log(`   📏 مسافة SL: ${slDistance.toFixed(2)}$`);
 
@@ -284,7 +511,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // ═══════════════════════════════════════════════════════════
   // التحقق من ترتيب المستويات
   // ═══════════════════════════════════════════════════════════
-  
+
   if (isBuy) {
     // للشراء: SL < Entry < TP1 < TP2 < TP3
     if (!(sl < entry && entry < tp1 && tp1 < tp2 && tp2 < tp3)) {
@@ -304,12 +531,12 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // ═══════════════════════════════════════════════════════════
   // حساب RR والتحقق منه
   // ═══════════════════════════════════════════════════════════
-  
+
   const risk = Math.abs(entry - sl);
   const reward1 = Math.abs(tp1 - entry);
   const reward2 = Math.abs(tp2 - entry);
   const reward3 = Math.abs(tp3 - entry);
-  
+
   const rr1 = reward1 / risk;
   const rr2 = reward2 / risk;
   const rr3 = reward3 / risk;
@@ -325,7 +552,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // ═══════════════════════════════════════════════════════════
   // تحديث الصفقة بالقيم المصححة
   // ═══════════════════════════════════════════════════════════
-  
+
   t.entry = round2(entry);
   t.sl = round2(sl);
   t.tp1 = round2(tp1);
@@ -370,7 +597,7 @@ async function callAIChat(payload: any): Promise<{ content: string }> {
   };
 }
 
-// ===================== Multi-Timeframe Analysis =====================
+// ===================== Multi-Timeframe Analysis with Memory =====================
 export const analyzeMultiTimeframe = async (
   h1Image: string,
   m5Image: string,
@@ -381,34 +608,51 @@ export const analyzeMultiTimeframe = async (
   const killzoneInfo = getCurrentKillzone();
 
   console.log("\n═══════════════════════════════════════════════════════════════");
-  console.log("🔍 ICT Pro Analysis v6.0");
+  console.log("🧠 ICT Pro Analysis v7.0 - With Memory");
   console.log(`💰 السعر الحالي: ${currentPrice}`);
   console.log(`⏰ الجلسة: ${killzoneInfo.session} (${killzoneInfo.quality})`);
+  console.log(`🧠 الذاكرة: ${analysisHistory.length} تحليلات سابقة`);
   console.log("═══════════════════════════════════════════════════════════════\n");
+
+  // 1. اكتشاف الأحداث من الشموع
+  if (h1Candles && m5Candles) {
+    const newEvents = detectEventsFromCandles(h1Candles, m5Candles, currentPrice);
+    if (newEvents.length > 0) {
+      console.log(`📌 أحداث جديدة مكتشفة: ${newEvents.length}`);
+    }
+  }
+
+  // 2. الحصول على ملخص الذاكرة
+  const memorySummary = getMemorySummary();
+  console.log("📊 ملخص الذاكرة:");
+  console.log(memorySummary);
+
+  // 3. بناء البرومبت الديناميكي
+  const dynamicPrompt = buildSystemPrompt(memorySummary, killzoneInfo);
 
   const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
   const cleanM5 = m5Image.replace(/^data:image\/\w+;base64,/, "");
 
   // تحضير بيانات الشموع
   let candleDataText = '';
-  
+
   if (h1Candles && h1Candles.length > 0) {
-    const recentH1 = h1Candles.slice(-50);
-    candleDataText += '\n\n📊 بيانات H1 (آخر 50 شمعة):\n';
+    const recentH1 = h1Candles.slice(-30);
+    candleDataText += '\n\n📊 بيانات H1 (آخر 30 شمعة):\n';
     candleDataText += recentH1.map((c, i) =>
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
   }
 
   if (m5Candles && m5Candles.length > 0) {
-    const recentM5 = m5Candles.slice(-100);
-    candleDataText += '\n\n📊 بيانات M5 (آخر 100 شمعة):\n';
+    const recentM5 = m5Candles.slice(-60);
+    candleDataText += '\n\n📊 بيانات M5 (آخر 60 شمعة):\n';
     candleDataText += recentM5.map((c, i) =>
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
   }
 
-  const userPrompt = `${systemInstruction}
+  const userPrompt = `${dynamicPrompt}
 
 ═══════════════════════════════════════
 📈 بيانات السوق الحالية
@@ -443,7 +687,7 @@ ${candleDataText}
           { type: "image_url", image_url: { url: `data:image/png;base64,${cleanM5}` } }
         ]
       }],
-      temperature: 0.1,
+      temperature: 0.15, // زيادة قليلة للتنوع
       max_tokens: 2500
     });
 
@@ -452,6 +696,18 @@ ${candleDataText}
 
     const validated = validateAndFix(parsed, currentPrice);
     validated.killzoneInfo = killzoneInfo;
+
+    // 4. حفظ التحليل في الذاكرة
+    const h1Trend = (parsed.h1Trend || parsed.sentiment || 'NEUTRAL') as 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    addToMemory({
+      timestamp: new Date(),
+      price: currentPrice,
+      decision: validated.decision,
+      bias: validated.bias || '',
+      score: validated.score || 0,
+      events: detectedEvents.slice(0, 5),
+      h1Trend: h1Trend
+    });
 
     console.log(`\n🎯 النتيجة النهائية: ${validated.decision}`);
     if (validated.suggestedTrade) {
