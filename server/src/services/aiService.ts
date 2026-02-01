@@ -54,14 +54,14 @@ function getCurrentKillzone(): KillzoneInfo {
   const utcHour = now.getUTCHours();
   const utcMinute = now.getUTCMinutes();
   const totalMinutes = utcHour * 60 + utcMinute;
-  
+
   const sessions = {
     ASIA: { start: 0, end: 180, quality: 'MEDIUM' as const },
     LONDON: { start: 420, end: 600, quality: 'HIGH' as const },
     NY_AM: { start: 720, end: 900, quality: 'HIGH' as const },
     NY_PM: { start: 900, end: 1080, quality: 'MEDIUM' as const }
   };
-  
+
   for (const [sessionName, session] of Object.entries(sessions)) {
     if (totalMinutes >= session.start && totalMinutes < session.end) {
       return {
@@ -73,7 +73,7 @@ function getCurrentKillzone(): KillzoneInfo {
       };
     }
   }
-  
+
   return {
     isActive: false,
     session: 'OFF_HOURS',
@@ -84,75 +84,91 @@ function getCurrentKillzone(): KillzoneInfo {
 }
 
 export const systemInstruction = `
-أنت محلل ICT لـ XAUUSD. مهمتك: البحث عن صفقة معلقة مناسبة الآن.
+أنت محلل ICT محترف (Smart Money Concepts) متخصص في الذهب (XAUUSD).
+مهمتك: البحث عن أفضل فرصة دخول ممكنة *الآن*.
 
 ════════════════════
-قواعد أساسية
+🎯 الهدف الاستراتيجي
 ════════════════════
-
-- ابحث عن صفقات قليلة لكن واضحة
-- الامتناع عن التداول قرار صحيح
-- لا ترفض الصفقة بسبب المثالية الزائدة
-
-════════════════════
-منهج التحليل
-════════════════════
-
-1️⃣ اتجاه H1 (شرط إلزامي)
-- صاعد → شراء فقط
-- هابط → بيع فقط
-
-2️⃣ سحب السيولة – M5 (شرط إلزامي)
-- Liquidity Sweep خارجي أو داخلي
-- Sweep جزئي مقبول إذا كان الرفض واضح
-
-❌ لا Sweep → NO_TRADE
-
-3️⃣ التأكيد – M5 (اختر واحد فقط)
-✔️ BOS مع اتجاه H1
-✔️ OR FVG / Order Block صالح
-
-4️⃣ منطقة الدخول
-- من FVG أو OB
-- المسافة من السعر الحالي ≤ 1.5%
-- إذا كانت أبعد من 1.5% → NO_TRADE
+- ابحث عن "الصفقات ذات الاحتمالية العالية" (High Probability).
+- لا تكتفِ بالبحث عن الانعكاس (Reversal) فقط.
+- ابحث أيضاً عن "استمرار الاتجاه" (Continuation) إذا كان الزخم قوياً.
+- الدخول مع "السيولة" (Smart Money Footprint) هو الأساس.
 
 ════════════════════
-الأهداف
+🔍 نماذج الدخول المقبولة (Entry Models)
 ════════════════════
 
-- TP1: أقرب سيولة
-- TP2: فجوة أو سيولة متوسطة
-- TP3: سيولة خارجية منطقية
+1️⃣ نموذج الانعكاس (Reversal Model) - ⭐️ المفضل
+- الشرط: سحب سيولة (Liquidity Sweep) لقمة/قاع سابق.
+- التأكيد: كسر هيكل (MSS/BOS) + فجوة (FVG).
+- الدخول: عند الارتداد إلى FVG أو Order Block.
+
+2️⃣ نموذج الاستمرار (Continuation Model) - 🚀 لزيادة الصفقات
+- الشرط: اتجاه H1 قوي وواضح (بدون Sweep).
+- التأكيد: احترام مناطق PD Array (مثل Breaker Block أو Mitigation Block).
+- الدخول: بعد تصحيح بسيط (Retracement) إلى منطقة خصم/علاوة (Discount/Premium).
+
+3️⃣ نموذج النطاق (Range Model) - ↔️ للأسواق العرضية
+- الشرط: السوق يتحرك في نطاق واضح على H1.
+- الاستراتيجية: الشراء من القاع (Discount) والبيع من القمة (Premium).
+- التأكيد: رفض واضح (Wick Rejection) عند حدود النطاق.
 
 ════════════════════
-قاعدة القرار
+✅ شروط الدخول (Checklist)
 ════════════════════
 
--+ H1 5m Bias + Sweep إلزامي
-- +
-- +   تأكيد واحد فقط
-- +  منطقة دخول قريبة
+يجب توفر 3 شروط على الأقل للموافقة:
 
-→ أعطِ صفقة معلقة
+1.  **اتجاه H1:** هل الصفقة مع الاتجاه العام؟ (إلزامي لنموذج الاستمرار)
+2.  **المنطقة (POI):** السعر الآن عند منطقة اهتمام (FVG, OB, BB, Breaker) ؟
+3.  **الوقت (Time):** هل نحن في فترة Killzone (لندن/نيويورك)؟ (+1 درجة)
+4.  **التأكيد (Confirmation):** هل يوجد شمعة ابتلاعية (Engulfing) أو ذيل طويل (Rejection on M5)؟
 
-غير ذلك → NO_TRADE
+⚠️ إذا كان السعر في "منطقة ميتة" (Dead Zone) أو حركة عشوائية -> NO_TRADE.
 
 ════════════════════
-صيغة الرد (JSON فقط)
+💰 إدارة الصفقة (Risk Management)
 ════════════════════
+
+- **نقطة الدخول (Entry):**
+  - إذا كان السعر *قريباً جداً* (أقل من 10 نقاط)، اقترح دخول مباشر (MARKET).
+  - إذا كان بعيداً، ضع أمر معلق (LIMIT) عند أقرب FVG/OB.
+
+- **وقف الخسارة (SL):**
+  - تحت/فوق آخر قاع/قمة (Swing Point) بـ 10-20 نقطة.
+  - لا تجعل الستوب ضيقاً جداً (تجنب Hunt).
+
+- **الأهداف (TPs):**
+  - TP1: أقرب سيولة داخلية (Internal Liquidity).
+  - TP2: قمة/قاع ضعيف سابق.
+  - TP3: سيولة خارجية (External Liquidity) أو منطقة عرض/طلب رئيسية.
+
+════════════════════
+📊 نظام التقييم (Score 0-10)
+════════════════════
+
+- **9-10:** فرصة مع (Sweep + Trend + Killzone). "دخول قوي".
+- **7-8:** فرصة جيدة (Trend Continuation أو Reversal بدون Killzone).
+- **5-6:** مخاطرة متوسطة (Scalping سريع).
+- **0-4:** لا تتداول (NO_TRADE).
+
+════════════════════
+📝 صيغة الرد (JSON فقط)
+════════════════════
+
+يجب أن يكون الرد JSON صالحاً تماماً (بدون Markdown):
 
 {
   "decision": "PLACE_PENDING" | "NO_TRADE",
   "score": 0-10,
   "confidence": 0-100,
   "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "bias": "اتجاه H1",
-  "reasoning": "سبب القرار باختصار",
-  "confluences": [],
-  "reasons": [],
+  "bias": "شرح اتجاه H1 باختصار",
+  "reasoning": "لماذا اخترت هذه الصفقة؟ اشرح النموذج (Reversal/Continuation) والمنطقة.",
+  "killzoneInfo": { "session": "London/NewYork/Asian/None", "isActive": boolean },
   "suggestedTrade": {
-    "type": "BUY_LIMIT" | "SELL_LIMIT",
+    "type": "BUY_LIMIT" | "SELL_LIMIT" | "BUY_MARKET" | "SELL_MARKET",
     "entry": number,
     "sl": number,
     "tp1": number,
@@ -183,36 +199,36 @@ function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis
 // ===================== Validator =====================
 function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   console.log("\n🔍 التحقق من البيانات...");
-  
+
   r = r || {};
   r.reasons = Array.isArray(r.reasons) ? r.reasons : [];
   r.confluences = Array.isArray(r.confluences) ? r.confluences : [];
   r.score = Number(r.score) || 0;
   r.confidence = Number(r.confidence) || 0;
-  
+
   if (r.decision !== "PLACE_PENDING" || !r.suggestedTrade) {
     console.log("   ℹ️ NO_TRADE");
     return createNoTradeResult(r.reasons.length > 0 ? r.reasons : ["لا توجد فرصة"], r);
   }
-  
+
   const t = r.suggestedTrade;
   const isBuy = String(t.type || "").includes("BUY");
-  
+
   console.log(`   ℹ️ ${t.type} @ ${t.entry}`);
-  
+
   const entry = toNumber(t.entry);
   const sl = toNumber(t.sl);
   const tp1 = toNumber(t.tp1);
   const tp2 = toNumber(t.tp2);
   const tp3 = toNumber(t.tp3);
-  
+
   if ([entry, sl, tp1, tp2, tp3].some(isNaN)) {
     console.log("   ❌ أرقام غير صالحة");
     return createNoTradeResult(["أرقام غير صالحة"], r);
   }
-  
+
   const tradeType = String(t.type);
-  
+
   if (tradeType === "BUY_LIMIT" && entry >= currentPrice) {
     const correctedEntry = currentPrice * 0.998;
     if (correctedEntry > sl) {
@@ -221,7 +237,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
       return createNoTradeResult([`BUY_LIMIT يجب أن يكون أسفل السعر`], r);
     }
   }
-  
+
   if (tradeType === "SELL_LIMIT" && entry <= currentPrice) {
     const correctedEntry = currentPrice * 1.002;
     if (correctedEntry < sl) {
@@ -230,7 +246,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
       return createNoTradeResult([`SELL_LIMIT يجب أن يكون أعلى السعر`], r);
     }
   }
-  
+
   if (isBuy) {
     if (!(sl < t.entry && t.entry < tp1 && tp1 < tp2 && tp2 < tp3)) {
       return createNoTradeResult(["ترتيب مستويات الشراء خاطئ"], r);
@@ -240,28 +256,28 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
       return createNoTradeResult(["ترتيب مستويات البيع خاطئ"], r);
     }
   }
-  
+
   t.entry = round2(toNumber(t.entry));
   t.sl = round2(toNumber(t.sl));
   t.tp1 = round2(toNumber(t.tp1));
   t.tp2 = round2(toNumber(t.tp2));
   t.tp3 = round2(toNumber(t.tp3));
-  
+
   const risk = Math.abs(t.entry - t.sl);
   const rr1 = Math.abs(t.tp1 - t.entry) / risk;
   const rr2 = Math.abs(t.tp2 - t.entry) / risk;
   const rr3 = Math.abs(t.tp3 - t.entry) / risk;
   t.rrRatio = `TP1: 1:${rr1.toFixed(1)} | TP2: 1:${rr2.toFixed(1)} | TP3: 1:${rr3.toFixed(1)}`;
-  
+
   console.log(`   ✅ صفقة صالحة`);
-  
+
   return r as ICTAnalysis;
 }
 
 // ===================== API Call =====================
 async function callAIChat(payload: any): Promise<{ content: string }> {
   console.log("🔌 Connecting to AI...");
-  
+
   const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
     method: "POST",
     headers: {
@@ -298,13 +314,13 @@ export const analyzeMultiTimeframe = async (
   m5Candles?: any[]
 ): Promise<ICTAnalysis> => {
   const killzoneInfo = getCurrentKillzone();
-  
+
   console.log("\n═══════════════════════════════════════════════════════════════");
   console.log("🔍 بدء التحليل - v5.0");
   console.log(`💰 السعر: ${currentPrice}`);
   console.log(`⏰ الجلسة: ${killzoneInfo.session}`);
   console.log("═══════════════════════════════════════════════════════════════\n");
-  
+
   const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
   const cleanM5 = m5Image.replace(/^data:image\/\w+;base64,/, "");
 
@@ -312,15 +328,15 @@ export const analyzeMultiTimeframe = async (
   if (h1Candles && h1Candles.length > 0) {
     const recentH1 = h1Candles.slice(-100);
     candleDataText += '\n\nبيانات H1 (آخر 100):\n';
-    candleDataText += recentH1.map((c, i) => 
+    candleDataText += recentH1.map((c, i) =>
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
   }
-  
+
   if (m5Candles && m5Candles.length > 0) {
     const recentM5 = m5Candles.slice(-220);
     candleDataText += '\n\nبيانات M5 (آخر 220):\n';
-    candleDataText += recentM5.map((c, i) => 
+    candleDataText += recentM5.map((c, i) =>
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
   }
@@ -354,13 +370,13 @@ JSON فقط
 
     const parsed = safeParseJson(data.content);
     console.log(`   القرار: ${parsed.decision || 'غير محدد'}`);
-    
+
     const validated = validateAndFix(parsed, currentPrice);
     validated.killzoneInfo = killzoneInfo;
-    
+
     console.log(`   النتيجة: ${validated.decision}`);
     console.log("═══════════════════════════════════════════════════════════════\n");
-    
+
     return validated;
   } catch (error) {
     console.error("\n❌ خطأ:", error);
