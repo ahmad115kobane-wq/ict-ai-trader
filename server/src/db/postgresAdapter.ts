@@ -261,25 +261,34 @@ const createTables = async (client: PoolClient): Promise<void> => {
     // جداول نظام Backtesting (جديد)
     // ==========================================
 
-    // جدول نتائج الاختبار
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS backtest_results (
-        id UUID PRIMARY KEY,
-        user_id TEXT, -- يمكن ربطه بجدول users إذا أردنا
-        symbol VARCHAR(20) NOT NULL,
-        start_date TIMESTAMP NOT NULL,
-        end_date TIMESTAMP NOT NULL,
-        analysis_interval INTEGER,
-        total_analyses INTEGER,
-        trades_generated INTEGER,
-        trades_executed INTEGER,
-        win_rate DECIMAL(5,2),
-        profit_factor DECIMAL(8,2),
-        total_profit_pips DECIMAL(10,2),
-        metrics JSONB, -- تخزين كامل الإحصائيات
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // جدول نتائج الاختبار - مع معالجة خطأ النوع المكرر
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS backtest_results (
+          id UUID PRIMARY KEY,
+          user_id TEXT, -- يمكن ربطه بجدول users إذا أردنا
+          symbol VARCHAR(20) NOT NULL,
+          start_date TIMESTAMP NOT NULL,
+          end_date TIMESTAMP NOT NULL,
+          analysis_interval INTEGER,
+          total_analyses INTEGER,
+          trades_generated INTEGER,
+          trades_executed INTEGER,
+          win_rate DECIMAL(5,2),
+          profit_factor DECIMAL(8,2),
+          total_profit_pips DECIMAL(10,2),
+          metrics JSONB, -- تخزين كامل الإحصائيات
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+    } catch (error: any) {
+      // تجاهل خطأ النوع المكرر الذي قد يحدث أحياناً رغم existence check
+      if (error.code === '23505' && error.constraint === 'pg_type_typname_nsp_index') {
+        console.log('⚠️ Notice: backtest_results table likely exists (handled type conflict).');
+      } else {
+        throw error;
+      }
+    }
 
     // جدول صفقات الاختبار
     await client.query(`
