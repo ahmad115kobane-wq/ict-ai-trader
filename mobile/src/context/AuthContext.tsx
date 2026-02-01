@@ -45,9 +45,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const userData = await authService.getMe();
         setUser(userData);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log('Auth check failed:', error);
+
+      // إذا كانت الجلسة منتهية أو غير صالحة، مسح التوكن وتسجيل الخروج
+      if (error?.response?.data?.code === 'SESSION_INVALID' || error?.response?.status === 401) {
+        console.log('Session invalid or expired, logging out...');
+      }
+
       await removeToken();
+      setUser(null);
     } finally {
       setIsLoading(false);
     }

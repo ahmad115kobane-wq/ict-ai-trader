@@ -63,7 +63,7 @@ export interface SubscriptionPurchase {
 // إنشاء الباقات الافتراضية
 export const initializeDefaultPackages = async (): Promise<void> => {
   console.log('🎁 Initializing default VIP packages...');
-  
+
   try {
     const existingPackages = await getAllVipPackages();
     if (existingPackages.length > 0) {
@@ -148,7 +148,7 @@ export const getAvailablePackages = async (): Promise<VipPackage[]> => {
 export const getPackageDetails = async (packageId: string): Promise<VipPackage | null> => {
   const pkg = await getVipPackageById(packageId);
   if (!pkg) return null;
-  
+
   return {
     id: pkg.id,
     name: pkg.name,
@@ -182,7 +182,7 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
     // التحقق من وجود الباقة
     const vipPackage = await getVipPackageById(packageId);
     console.log(`📦 VIP Package found:`, vipPackage ? 'Yes' : 'No');
-    
+
     if (!vipPackage) {
       return {
         success: false,
@@ -193,7 +193,7 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
     // التحقق من وجود المستخدم
     const user = await getUserById(userId);
     console.log(`👤 User found:`, user ? 'Yes' : 'No');
-    
+
     if (!user) {
       return {
         success: false,
@@ -204,9 +204,9 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
     // التحقق من رصيد المستخدم
     const packagePrice = vipPackage.price || 0;
     const userCoins = user.coins || 0;
-    
+
     console.log(`💰 User coins: ${userCoins}, Package price: ${packagePrice}`);
-    
+
     if (userCoins < packagePrice) {
       return {
         success: false,
@@ -217,7 +217,7 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
     // خصم النقاط من رصيد المستخدم
     const { deductCoins } = await import('../db/index');
     const deductSuccess = await deductCoins(userId, packagePrice);
-    
+
     if (!deductSuccess) {
       return {
         success: false,
@@ -231,10 +231,10 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
     const now = new Date();
     const durationDays = vipPackage.duration_days || 30;
     console.log(`📅 Duration days: ${durationDays}`);
-    
+
     const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
     const expiresAtString = expiresAt.toISOString();
-    
+
     console.log(`⏰ Expires at: ${expiresAtString}`);
 
     // إنشاء الاشتراك
@@ -300,7 +300,7 @@ export const getUserSubscriptions = (userId: string, limit: number = 10) => {
 // التحقق من إمكانية التحليل وخصم التكلفة
 export const processAnalysisRequest = async (userId: string): Promise<AnalysisPermissionResult> => {
   const analysisCheck = await canUserAnalyze(userId);
-  
+
   if (!analysisCheck.canAnalyze) {
     return {
       allowed: false,
@@ -315,12 +315,12 @@ export const processAnalysisRequest = async (userId: string): Promise<AnalysisPe
   }
 
   const activeSubscription = await getUserActiveSubscription(userId);
-  
+
   if (!activeSubscription) {
     // مستخدم مجاني - خصم العملات
     const user = await getUserById(userId);
     const costDeducted = 50;
-    
+
     return {
       allowed: true,
       costDeducted,
@@ -352,29 +352,35 @@ export const checkAndExpireSubscriptions = async (): Promise<{
   expiredUsers: string[];
 }> => {
   console.log('🕐 Checking for expired subscriptions...');
-  
+
   try {
     const expiredSubscriptions = await getExpiredSubscriptions();
-    
+
     if (expiredSubscriptions.length === 0) {
       console.log('✅ No expired subscriptions found');
       return { expiredCount: 0, expiredUsers: [] };
     }
 
     const expiredUsers: string[] = [];
-    
-    expiredSubscriptions.forEach(subscription => {
+    const { setUserAutoAnalysis } = await import('../db/index');
+
+    for (const subscription of expiredSubscriptions) {
       try {
+        // إنهاء الاشتراك
         expireUserSubscription(subscription.user_id);
+
+        // إيقاف التحليل التلقائي لمنع استلام الإشعارات
+        await setUserAutoAnalysis(subscription.user_id, false);
+
         expiredUsers.push(subscription.user_id);
-        console.log(`⏰ Expired subscription: ${subscription.plan_name} for user ${subscription.user_id}`);
+        console.log(`⏰ Expired subscription: ${subscription.plan_name} for user ${subscription.user_id} (auto-analysis disabled)`);
       } catch (error) {
         console.error(`❌ Failed to expire subscription for user ${subscription.user_id}:`, error);
       }
-    });
+    }
 
-    console.log(`✅ Processed ${expiredUsers.length} expired subscriptions`);
-    
+    console.log(`✅ Processed ${expiredUsers.length} expired subscriptions (auto-analysis disabled for all)`);
+
     return {
       expiredCount: expiredUsers.length,
       expiredUsers
@@ -412,7 +418,7 @@ export const getSubscriptionStats = async (): Promise<{
 }> => {
   // هذه دالة مبسطة - يمكن توسيعها لاحقاً
   const packages = await getAllVipPackages();
-  
+
   return {
     totalActiveSubscriptions: 0, // يحتاج استعلام قاعدة بيانات
     packageBreakdown: {},

@@ -5,8 +5,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Alert, AppState, AppStateStatus, Platform } from 'react-native';
+import { Alert, AppState, AppStateStatus, Platform, I18nManager } from 'react-native';
 import * as Notifications from 'expo-notifications';
+
+// تفعيل دعم RTL للغة العربية
+if (!I18nManager.isRTL) {
+  I18nManager.allowRTL(true);
+  I18nManager.forceRTL(true);
+}
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -38,7 +44,7 @@ const NotificationHandler = () => {
 
     try {
       console.log('🔔 Setting up push notifications...');
-      
+
       // طلب أذونات الإشعارات بشكل صريح على Android 13+
       if (Platform.OS === 'android' && Platform.Version >= 33) {
         console.log('📱 Android 13+ detected - requesting explicit notification permission');
@@ -54,9 +60,9 @@ const NotificationHandler = () => {
         }
         console.log('✅ Notification permission granted');
       }
-      
+
       const token = await registerForPushNotificationsAsync();
-      
+
       if (token) {
         console.log('📱 Push Token obtained:', token.substring(0, 30) + '...');
         const success = await registerPushTokenWithServer(token);
@@ -84,15 +90,15 @@ const NotificationHandler = () => {
   const handleNotificationReceived = (notification: Notifications.Notification) => {
     console.log('📬 Notification received:', JSON.stringify(notification.request.content, null, 2));
     setLastNotification(notification);
-    
+
     const data = notification.request.content.data;
-    
+
     // إظهار تنبيه داخل التطبيق للإشعارات المهمة
     if (data?.type === 'trade_opportunity') {
       const trade = data;
       const emoji = trade.tradeType?.includes('BUY') ? '🟢' : '🔴';
       const direction = trade.tradeType?.includes('BUY') ? 'شراء' : 'بيع';
-      
+
       Alert.alert(
         `${emoji} فرصة تداول جديدة!`,
         `${direction} على الذهب\n💰 الدخول: ${trade.entry}\n🛑 وقف الخسارة: ${trade.sl}\n✅ الهدف الأول: ${trade.tp1}\n⭐ التقييم: ${trade.score}/10`,
@@ -107,9 +113,9 @@ const NotificationHandler = () => {
   // معالجة النقر على الإشعار
   const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
     console.log('👆 Notification tapped:', JSON.stringify(response.notification.request.content.data, null, 2));
-    
+
     const data = response.notification.request.content.data;
-    
+
     if (data?.type === 'trade_opportunity') {
       // التنقل لصفحة الصفقات
       console.log('Navigate to trades screen with data:', data);

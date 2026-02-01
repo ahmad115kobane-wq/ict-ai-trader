@@ -655,6 +655,13 @@ export const canUserAnalyze = async (userId: string): Promise<{ canAnalyze: bool
 // ===================== Session Management =====================
 export const createSession = async (userId: string, token: string, deviceInfo?: string, ipAddress?: string): Promise<string> => {
   try {
+    // إزالة push token من الجهاز القديم لمنع استلام الإشعارات
+    await query(
+      'UPDATE users SET push_token = NULL, push_token_updated_at = NULL WHERE id = $1',
+      [userId]
+    );
+    console.log(`📱 Push token removed for user ${userId} (new session starting)`);
+
     // إنهاء جميع الجلسات النشطة القديمة
     await query(
       'UPDATE sessions SET is_active = FALSE WHERE user_id = $1 AND is_active = TRUE',
@@ -672,7 +679,7 @@ export const createSession = async (userId: string, token: string, deviceInfo?: 
       [sessionId, userId, token, deviceInfo || null, ipAddress || null, expiresAt.toISOString()]
     );
 
-    console.log(`✅ New session created for user ${userId}, old sessions terminated`);
+    console.log(`✅ New session created for user ${userId}, old sessions terminated, push token cleared`);
     return sessionId;
   } catch (error) {
     console.error('Error creating session:', error);

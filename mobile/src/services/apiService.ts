@@ -37,17 +37,17 @@ const apiRequest = async (
   options: RequestInit = {}
 ): Promise<any> => {
   const token = await getToken();
-  
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -131,6 +131,16 @@ export const authService = {
   // تسجيل الخروج
   logout: async () => {
     try {
+      // إيقاف التحليل التلقائي أولاً
+      await apiRequest(ENDPOINTS.analysis.toggleAuto, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: false }),
+      });
+    } catch (e) {
+      console.log('Failed to disable auto analysis:', e);
+    }
+
+    try {
       // حذف Push Token من السيرفر قبل تسجيل الخروج
       await apiRequest(ENDPOINTS.auth.removePushToken, {
         method: 'POST',
@@ -138,13 +148,13 @@ export const authService = {
     } catch (e) {
       console.log('Failed to remove push token:', e);
     }
-    
+
     try {
       await apiRequest(ENDPOINTS.auth.logout, { method: 'POST' });
     } catch (e) {
       // تجاهل الخطأ
     }
-    
+
     await removeToken();
   },
 };

@@ -78,20 +78,20 @@ const EconomicCalendarScreen = () => {
     const now = new Date();
     const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
     const todayStr = today.toISOString().split('T')[0];
-    
+
     // غداً
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    
+
     // الأسبوع القادم: من (اليوم + 1) إلى (اليوم + 7)
     const nextWeekEnd = new Date(today);
     nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
     const nextWeekEndStr = nextWeekEnd.toISOString().split('T')[0];
-    
+
     // فقط الأحداث التي لديها بيانات
     const eventsWithData = events.filter(e => e.forecast || e.previous || e.actual);
-    
+
     setFilterCounts({
       today: eventsWithData.filter(e => e.date === todayStr).length,
       tomorrow: eventsWithData.filter(e => e.date === tomorrowStr).length,
@@ -128,10 +128,10 @@ const EconomicCalendarScreen = () => {
   const analyzeEvent = async (event: EconomicEvent) => {
     try {
       setAnalyzingEventId(event.id);
-      
+
       const { getToken } = await import('../services/apiService');
       const token = await getToken();
-      
+
       if (!token) {
         Alert.alert('خطأ', 'يجب تسجيل الدخول أولاً');
         setAnalyzingEventId(null);
@@ -145,7 +145,7 @@ const EconomicCalendarScreen = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         }
       );
-      
+
       // التحقق من نوع المحتوى
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
@@ -154,9 +154,9 @@ const EconomicCalendarScreen = () => {
         setAnalyzingEventId(null);
         return;
       }
-      
+
       let data = await response.json();
-      
+
       if (data.success && data.analysis) {
         // يوجد تحليل - عرضه مباشرة
         setSelectedEventAnalysis(data.analysis);
@@ -175,7 +175,7 @@ const EconomicCalendarScreen = () => {
               onPress: async () => {
                 try {
                   setAnalyzingEventId(event.id);
-                  
+
                   response = await fetch(
                     `${API_BASE_URL}/api/economic-analysis/event/${event.id}`,
                     {
@@ -186,7 +186,7 @@ const EconomicCalendarScreen = () => {
                       }
                     }
                   );
-                  
+
                   // التحقق من نوع المحتوى
                   const contentType = response.headers.get('content-type');
                   if (!contentType || !contentType.includes('application/json')) {
@@ -195,9 +195,9 @@ const EconomicCalendarScreen = () => {
                     setAnalyzingEventId(null);
                     return;
                   }
-                  
+
                   data = await response.json();
-                  
+
                   if (data.success) {
                     setSelectedEventAnalysis(data.analysis);
                     setShowAnalysisModal(true);
@@ -228,13 +228,13 @@ const EconomicCalendarScreen = () => {
     const now = new Date();
     const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
     const todayStr = today.toISOString().split('T')[0];
-    
+
     console.log('🔍 Current filter:', filter);
     console.log('📅 Today date:', todayStr);
-    
+
     // تصفية الأحداث التي لديها بيانات فقط
     let filtered = events.filter(e => e.forecast || e.previous || e.actual);
-    
+
     console.log(`📊 Events with data: ${filtered.length} out of ${events.length}`);
 
     // تطبيق الفلتر حسب التاريخ
@@ -242,27 +242,27 @@ const EconomicCalendarScreen = () => {
       // اليوم فقط - تطابق تام
       filtered = filtered.filter(e => e.date === todayStr);
       console.log(`✅ Today events: ${filtered.length}`);
-      
+
     } else if (filter === 'tomorrow') {
       // غداً فقط - اليوم + 1
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      
+
       console.log('📅 Tomorrow date:', tomorrowStr);
       filtered = filtered.filter(e => e.date === tomorrowStr);
       console.log(`✅ Tomorrow events: ${filtered.length}`);
-      
+
     } else if (filter === 'nextWeek') {
       // الأسبوع القادم: من (اليوم + 1) إلى (اليوم + 7)
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      
+
       const nextWeekEnd = new Date(today);
       nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
       const nextWeekEndStr = nextWeekEnd.toISOString().split('T')[0];
-      
+
       console.log('📅 Next week range:', tomorrowStr, 'to', nextWeekEndStr);
       filtered = filtered.filter(e => e.date >= tomorrowStr && e.date <= nextWeekEndStr);
       console.log(`✅ Next week events: ${filtered.length}`);
@@ -313,7 +313,7 @@ const EconomicCalendarScreen = () => {
     const now = new Date();
     const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
     const todayStr = today.toISOString().split('T')[0];
-    
+
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
@@ -334,12 +334,12 @@ const EconomicCalendarScreen = () => {
 
   const renderEvent = (event: EconomicEvent) => {
     const impactColor = getImpactColor(event.impact);
-    
+
     // تسجيل قوة الخبر للتحقق
     if (!event.impact || (event.impact !== 'high' && event.impact !== 'medium' && event.impact !== 'low')) {
       console.warn('⚠️ Invalid impact for event:', event.event, 'Impact:', event.impact);
     }
-    
+
     // الحصول على الوقت الحالي بتوقيت مكة المكرمة (UTC+3)
     const now = new Date();
     const meccaTime = new Date(now.getTime() + (3 * 60 * 60 * 1000));
@@ -348,21 +348,21 @@ const EconomicCalendarScreen = () => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    
+
     // تحويل وقت الحدث إلى تاريخ كامل (UTC)
     const eventDateTime = new Date(`${event.date}T${event.time}:00Z`);
-    
+
     // تحديد حالة الحدث بدقة
     const hasReleased = event.actual !== undefined && event.actual !== null && event.actual !== '';
     const isPending = !hasReleased && eventDateTime > meccaTime;
-    
+
     // تحديد إذا كان الحدث اليوم أو غداً (لعرض زر التحليل)
     const isTodayOrTomorrow = event.date === todayStr || event.date === tomorrowStr;
-    
+
     // تحويل وقت الحدث إلى توقيت مكة المكرمة
     const eventMeccaTime = new Date(eventDateTime.getTime() + (3 * 60 * 60 * 1000));
-    const displayTime = eventMeccaTime.toLocaleTimeString('ar-SA', { 
-      hour: '2-digit', 
+    const displayTime = eventMeccaTime.toLocaleTimeString('ar-SA', {
+      hour: '2-digit',
       minute: '2-digit',
       hour12: false,
       timeZone: 'UTC'
@@ -379,7 +379,7 @@ const EconomicCalendarScreen = () => {
               <Text style={styles.countryText}>{event.countryName} • {event.currency}</Text>
             </View>
           </View>
-          
+
           <View style={styles.eventHeaderRight}>
             <Text style={styles.eventTime}>{displayTime}</Text>
             <Text style={styles.eventDate}>{formatDate(event.date)}</Text>
@@ -393,14 +393,14 @@ const EconomicCalendarScreen = () => {
               {getImpactText(event.impact)}
             </Text>
           </View>
-          
+
           {hasReleased && (
             <View style={styles.releasedBadge}>
               <Ionicons name="checkmark-circle" size={14} color={colors.success} />
               <Text style={styles.releasedText}>صدر</Text>
             </View>
           )}
-          
+
           {isPending && (
             <View style={styles.pendingBadge}>
               <Ionicons name="time-outline" size={14} color={colors.warning} />
@@ -483,7 +483,7 @@ const EconomicCalendarScreen = () => {
       <StatusBar style="light" />
 
       {/* Header */}
-      <Header 
+      <Header
         coins={user?.coins || 0}
         onLogout={logout}
         showLogout={true}
@@ -601,13 +601,13 @@ const EconomicCalendarScreen = () => {
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-            
+
             {/* Scroll Indicator */}
             <View style={styles.scrollIndicator}>
               <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
               <Text style={styles.scrollIndicatorText}>مرر للأسفل لمتابعة القراءة</Text>
             </View>
-            
+
             {/* Content */}
             <ScrollView style={styles.modalBody}>
               {selectedEventAnalysis && (
@@ -618,14 +618,14 @@ const EconomicCalendarScreen = () => {
                       {selectedEventAnalysis.analysis}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.analysisSection}>
                     <Text style={styles.analysisSectionTitle}>🎯 التأثير المتوقع</Text>
                     <Text style={styles.analysisText}>
                       {selectedEventAnalysis.impact}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.analysisSection}>
                     <Text style={styles.analysisSectionTitle}>� توقعات السوق</Text>
                     <Text style={styles.analysisText}>
@@ -635,7 +635,7 @@ const EconomicCalendarScreen = () => {
                 </>
               )}
             </ScrollView>
-            
+
             {/* Footer */}
             <View style={styles.modalFooter}>
               <TouchableOpacity
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderLeftWidth: 4,
+    borderRightWidth: 4, // Changed from borderLeftWidth for RTL
     padding: spacing.md,
     marginBottom: spacing.sm,
     shadowColor: '#000',
