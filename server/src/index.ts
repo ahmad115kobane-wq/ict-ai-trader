@@ -94,6 +94,10 @@ app.get('/economic-calendar', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'economic-calendar.html'));
 });
 
+app.get('/backtesting', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'public', 'backtest-dashboard.html'));
+});
+
 // ===== Startup Logic =====
 (async () => {
   try {

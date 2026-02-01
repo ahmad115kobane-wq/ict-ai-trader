@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ نظام اختبار التداول - Backtesting</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; margin-bottom: 20px; }
+        .card-header { background: linear-gradient(45deg, #0d6efd, #0dcaf0); color: white; border-radius: 15px 15px 0 0 !important; font-weight: bold; }
+        .btn-primary { background: linear-gradient(45deg, #0d6efd, #0a58ca); border: none; }
+        .stat-card { text-align: center; padding: 20px; background: white; border-radius: 10px; margin-bottom: 15px; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-value { font-size: 24px; font-weight: bold; color: #0d6efd; }
+        .stat-label { color: #6c757d; font-size: 14px; }
+        .win { color: #198754; }
+        .loss { color: #dc3545; }
+        #logs { max-height: 300px; overflow-y: auto; background: #212529; color: #00ff00; font-family: monospace; padding: 15px; border-radius: 10px; direction: ltr; }
+    </style>
+</head>
+<body>
+
+<div class="container py-5">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h1>🚀 نظام اختبار استراتيجيات AI</h1>
+            <p class="text-muted">قم بتشغيل واختبار الخوارزميات على البيانات التاريخية</p>
+        </div>
+    </div>
+
+    <!-- Login Section -->
+    <div id="loginSection" class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card p-4">
+                <h4 class="mb-3">تسجيل الدخول للنظام</h4>
+                <div class="mb-3">
+                    <label>البريد الإلكتروني</label>
+                    <input type="email" id="email" class="form-control" placeholder="admin@example.com">
+                </div>
+                <div class="mb-3">
+                    <label>كلمة المرور</label>
+                    <input type="password" id="password" class="form-control" placeholder="********">
+                </div>
+                <button onclick="login()" class="btn btn-primary w-100">دخول</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Section (Hidden by default) -->
+    <div id="dashboardSection" style="display: none;">
+        <div class="row">
+            <!-- Controls -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">⚙️ إعدادات الاختبار</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label>الزوج (Symbol)</label>
+                            <select id="symbol" class="form-select">
+                                <option value="XAUUSD">XAUUSD (الذهب)</option>
+                                <option value="EURUSD">EURUSD</option>
+                                <option value="GBPUSD">GBPUSD</option>
+                                <option value="BTCUSD">BTCUSD</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label>نوع الاختبار</label>
+                            <select id="testType" class="form-select" onchange="toggleDates()">
+                                <option value="quick">⚡ اختبار سريع (آخر 7 أيام)</option>
+                                <option value="custom">📅 فترة مخصصة</option>
+                                <option value="demo">🎮 تجريبي (بدون AI)</option>
+                            </select>
+                        </div>
+
+                        <div id="dateInputs" style="display: none;">
+                            <div class="mb-3">
+                                <label>من تاريخ</label>
+                                <input type="date" id="startDate" class="form-control">
+                            </div>
+                            <div class="mb-3">
+                                <label>إلى تاريخ</label>
+                                <input type="date" id="endDate" class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="useAI" checked>
+                            <label class="form-check-label">استخدام تحليل AI (أبطأ وأدق)</label>
+                        </div>
+
+                        <button onclick="runBacktest()" id="runBtn" class="btn btn-primary w-100 py-2">
+                            ▶️ بدء الاختبار
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">📜 سجل العمليات</div>
+                    <div class="card-body p-0">
+                        <div id="logs">
+                            > جاهز للعمل...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div class="col-md-8">
+                <!-- Summary Stats -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalTrades">-</div>
+                            <div class="stat-label">عدد الصفقات</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value win" id="winRate">-</div>
+                            <div class="stat-label">نسبة النجاح</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value" id="netProfit">-</div>
+                            <div class="stat-label">صافي الربح (Pips)</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value" id="profitFactor">-</div>
+                            <div class="stat-label">Profit Factor</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="card">
+                    <div class="card-header">📊 توزيع النتائج</div>
+                    <div class="card-body">
+                        <div style="height: 300px;">
+                            <canvas id="outcomesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Metrics -->
+                <div class="card">
+                    <div class="card-header">📋 تفاصيل الأداء</div>
+                    <div class="card-body" id="detailedMetrics">
+                        <p class="text-center text-muted">قم بتشغيل اختبار لعرض النتائج التفصيلية</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let token = localStorage.getItem('authToken');
+    let outcomesChart = null;
+
+    // Check login
+    if (token) {
+        showDashboard();
+    }
+
+    function showDashboard() {
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('dashboardSection').style.display = 'block';
+    }
+
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        
+        try {
+            log('جاري تسجيل الدخول...');
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            
+            if (data.token) {
+                token = data.token;
+                localStorage.setItem('authToken', token);
+                log('✅ تم تسجيل الدخول بنجاح');
+                showDashboard();
+            } else {
+                alert('فشل الدخول: ' + (data.error || 'Unknown error'));
+            }
+        } catch (e) {
+            alert('خطأ في الاتصال: ' + e.message);
+        }
+    }
+
+    function toggleDates() {
+        const type = document.getElementById('testType').value;
+        document.getElementById('dateInputs').style.display = type === 'custom' ? 'block' : 'none';
+    }
+
+    function log(msg) {
+        const logs = document.getElementById('logs');
+        const time = new Date().toLocaleTimeString('ar-SA');
+        logs.innerHTML += `<div><span class="text-muted">[${time}]</span> ${msg}</div>`;
+        logs.scrollTop = logs.scrollHeight;
+    }
+
+    async function runBacktest() {
+        const type = document.getElementById('testType').value;
+        const symbol = document.getElementById('symbol').value;
+        const useAI = document.getElementById('useAI').checked;
+        const btn = document.getElementById('runBtn');
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> جاري العمل...';
+        log('🚀 بدء الاختبار...');
+
+        let endpoint = '/api/backtesting/run';
+        let body = { symbol, useAI, saveToDatabase: true };
+
+        if (type === 'quick') {
+            endpoint = '/api/backtesting/quick-test';
+        } else if (type === 'demo') {
+            endpoint = '/api/backtesting/demo';
+        } else {
+            body.startDate = document.getElementById('startDate').value;
+            body.endDate = document.getElementById('endDate').value;
+            if (!body.startDate || !body.endDate) {
+                alert('الرجاء اختيار التواريخ');
+                btn.disabled = false;
+                btn.innerHTML = '▶️ بدء الاختبار';
+                return;
+            }
+        }
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(body)
+            });
+            
+            const data = await res.json();
+            
+            if (data.success) {
+                log('✅ اكتمل الاختبار بنجاح!');
+                displayResults(data.result);
+            } else {
+                log('❌ فشل الاختبار: ' + data.error);
+                if (data.details) log(data.details);
+            }
+        } catch (e) {
+            log('🔥 خطأ فادح: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '▶️ بدء الاختبار';
+        }
+    }
+
+    function displayResults(result) {
+        const stats = result.statistics;
+        const metrics = result.metrics || {}; // Fallback if metrics missing
+
+        // Update Top Cards
+        document.getElementById('totalTrades').innerText = stats.tradesExecuted;
+        document.getElementById('winRate').innerText = stats.winRate.toFixed(1) + '%';
+        document.getElementById('winRate').className = 'stat-value ' + (stats.winRate > 50 ? 'win' : 'loss');
+        document.getElementById('netProfit').innerText = stats.totalProfit.toFixed(1);
+        document.getElementById('netProfit').className = 'stat-value ' + (stats.totalProfit > 0 ? 'win' : 'loss');
+        document.getElementById('profitFactor').innerText = (stats.profitFactor || metrics.profitFactor || 0).toFixed(2);
+
+        // Update Chart
+        if (outcomesChart) outcomesChart.destroy();
+        const ctx = document.getElementById('outcomesChart').getContext('2d');
+        outcomesChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['TP1', 'TP2', 'TP3', 'SL', 'Expired'],
+                datasets: [{
+                    data: [
+                        stats.outcomes.TP1,
+                        stats.outcomes.TP2,
+                        stats.outcomes.TP3,
+                        stats.outcomes.SL,
+                        stats.outcomes.EXPIRED
+                    ],
+                    backgroundColor: ['#198754', '#20c997', '#0dcaf0', '#dc3545', '#6c757d']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // Detailed Metrics HTML
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <tbody>
+                        <tr><td>إجمالي التحليلات</td><td>${stats.totalAnalyses}</td></tr>
+                        <tr><td>صفقات مقترحة</td><td>${stats.tradesGenerated}</td></tr>
+                        <tr><td>متوسط الربح</td><td>${stats.avgProfit.toFixed(1)} Pips</td></tr>
+                        <tr><td>متوسط مدة الصفقة</td><td>${stats.avgDuration.toFixed(1)} ساعة</td></tr>
+                        <tr><td>أطول سلسلة ربح</td><td>${metrics.longestWinStreak || '-'}</td></tr>
+                        <tr><td>أطول سلسلة خسارة</td><td>${metrics.longestLossStreak || '-'}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <h6 class="mt-3">التوصيات:</h6>
+            <div class="alert alert-info">
+                ${(result.recommendations || 'نتائج جيدة! استمر في التحسين.').replace(/\n/g, '<br>')}
+            </div>
+        `;
+        document.getElementById('detailedMetrics').innerHTML = html;
+        log('تم تحديث البيانات 📊');
+    }
+</script>
+</body>
+</html>
