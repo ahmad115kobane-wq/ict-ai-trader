@@ -32,6 +32,7 @@ import telegramRoutes from './routes/telegram';
 import manualTradeRoutes from './routes/manualTrade';
 import economicAnalysisRoutes from './routes/economicAnalysis';
 import systemNotificationsRoutes from './routes/systemNotifications';
+import backtestingRoutes from './routes/backtesting';
 
 import {
   initializeDefaultPackages,
@@ -74,6 +75,7 @@ app.use('/api/telegram', telegramRoutes);
 app.use('/api', manualTradeRoutes);
 app.use('/api/economic-analysis', economicAnalysisRoutes);
 app.use('/api/system-notifications', systemNotificationsRoutes);
+app.use('/api/backtesting', backtestingRoutes);
 
 // صفحات HTML
 app.get('/setup-telegram', (req, res) => {
@@ -1972,10 +1974,10 @@ app.get('/api/economic-calendar/test-raw-data', async (req, res) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
     });
-    
+
     // عرض أول 5 أحداث فقط للاختبار
     const sample = Array.isArray(response.data) ? response.data.slice(0, 5) : [];
-    
+
     res.json({
       success: true,
       totalEvents: Array.isArray(response.data) ? response.data.length : 0,
@@ -2169,24 +2171,24 @@ cron.schedule('0 * * * *', async () => {
   try {
     const { getEconomicCalendar } = await import('./services/economicCalendarService');
     const { query } = await import('./db/postgresAdapter');
-    
+
     // جلب التقويم
     const calendar = await getEconomicCalendar();
-    
+
     // الأحداث التي صدرت (لديها actual)
     const releasedEventIds = calendar.events
       .filter(e => e.actual)
       .map(e => e.id);
-    
+
     if (releasedEventIds.length > 0) {
       // حذف التحليلات للأحداث التي صدرت
       const result = await query(
         'DELETE FROM economic_analyses WHERE event_id = ANY($1)',
         [releasedEventIds]
       );
-      
+
       const deletedCount = result.rowCount || 0;
-      
+
       if (deletedCount > 0) {
         console.log(`✅ Deleted ${deletedCount} analyses for ${releasedEventIds.length} released events`);
       } else {
@@ -2410,10 +2412,10 @@ const runAutoAnalysis = async (retryCount: number = 0) => {
     } else {
       // ✅ عرض الأسباب التفصيلية
       const mainReasons = analysis.reasons?.filter(r => r.startsWith("❌")).slice(0, 3) || [];
-      const reasonsText = mainReasons.length > 0 
-        ? mainReasons.join(' | ') 
+      const reasonsText = mainReasons.length > 0
+        ? mainReasons.join(' | ')
         : 'لا يوجد setup صالح';
-      
+
       console.log(`📋 Auto Analysis: No trade`);
       console.log(`   الأسباب: ${reasonsText}`);
 

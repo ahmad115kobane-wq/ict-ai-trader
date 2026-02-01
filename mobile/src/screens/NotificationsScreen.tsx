@@ -45,23 +45,23 @@ const NotificationsScreen = () => {
   const loadNotifications = async () => {
     try {
       // جلب إشعارات النظام من API الجديد
-      const token = await SecureStore.getItemAsync('token');
-      
+      const token = await SecureStore.getItemAsync('authToken');
+
       console.log('🔍 Loading notifications from:', `${API_BASE_URL}/api/system-notifications?limit=50`);
-      
+
       const response = await fetch(`${API_BASE_URL}/api/system-notifications?limit=50`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       const data = await response.json();
-      
+
       console.log('📥 API Response:', JSON.stringify(data, null, 2));
-      
+
       if (data.success) {
         console.log(`✅ Found ${data.notifications.length} notifications`);
-        
+
         // تحويل البيانات من الخادم إلى تنسيق الشاشة
         const formattedNotifications: Notification[] = data.notifications.map((notif: any) => ({
           id: notif.id,
@@ -71,9 +71,9 @@ const NotificationsScreen = () => {
           read: notif.read === 1 || notif.read === true,
           createdAt: notif.created_at,
         }));
-        
+
         console.log('📋 Formatted notifications:', formattedNotifications.length);
-        
+
         setNotifications(formattedNotifications);
       } else {
         console.log('❌ API returned success: false');
@@ -123,8 +123,8 @@ const NotificationsScreen = () => {
       );
 
       // إرسال الطلب للخادم
-      const token = await SecureStore.getItemAsync('token');
-      
+      const token = await SecureStore.getItemAsync('authToken');
+
       await fetch(`${API_BASE_URL}/api/system-notifications/${id}/read`, {
         method: 'PUT',
         headers: {
@@ -144,8 +144,8 @@ const NotificationsScreen = () => {
       );
 
       // إرسال الطلب للخادم
-      const token = await SecureStore.getItemAsync('token');
-      
+      const token = await SecureStore.getItemAsync('authToken');
+
       await fetch(`${API_BASE_URL}/api/system-notifications/mark-all-read`, {
         method: 'PUT',
         headers: {
@@ -163,8 +163,8 @@ const NotificationsScreen = () => {
       setNotifications(prev => prev.filter(notif => notif.id !== id));
 
       // إرسال الطلب للخادم
-      const token = await SecureStore.getItemAsync('token');
-      
+      const token = await SecureStore.getItemAsync('authToken');
+
       await fetch(`${API_BASE_URL}/api/system-notifications/${id}`, {
         method: 'DELETE',
         headers: {

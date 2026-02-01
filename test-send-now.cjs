@@ -1,25 +1,8 @@
-// إرسال إشعار يدوي لجميع المستخدمين
+// إرسال إشعار تجريبي مباشرة
 const SERVER_URL = 'https://ict-ai-trader-production.up.railway.app';
 
-// ========================================
-// ✏️ عدل هنا فقط:
-// ========================================
-
-const NOTIFICATION = {
-  title: '🎉 إشعار تجريبي',
-  message: 'مرحباً! هذا اختبار لنظام الإشعارات الجديد',
-  type: 'system_update',
-  priority: 'high'
-};
-
-// ========================================
-// لا تعدل شيء تحت هذا السطر
-// ========================================
-
 async function sendNotification() {
-  console.log('📨 إرسال إشعار...\n');
-  console.log(`📋 العنوان: ${NOTIFICATION.title}`);
-  console.log(`💬 الرسالة: ${NOTIFICATION.message}\n`);
+  console.log('📨 إرسال إشعار تجريبي...\n');
 
   try {
     const response = await fetch(`${SERVER_URL}/api/system-notifications/test-broadcast`, {
@@ -27,7 +10,12 @@ async function sendNotification() {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(NOTIFICATION)
+      body: JSON.stringify({
+        title: '🎉 إشعار تجريبي',
+        message: 'مرحباً! هذا اختبار لنظام الإشعارات الجديد. يعمل بنجاح ✅',
+        type: 'system_update',
+        priority: 'high'
+      })
     });
 
     const data = await response.json();

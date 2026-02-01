@@ -10,7 +10,7 @@ let pool: Pool | null = null;
 export const initPostgres = async (): Promise<void> => {
   try {
     console.log('🔄 Initializing PostgreSQL...');
-    
+
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? {
@@ -24,10 +24,10 @@ export const initPostgres = async (): Promise<void> => {
     // اختبار الاتصال
     const client = await pool.connect();
     console.log('✅ PostgreSQL connected successfully');
-    
+
     // إنشاء الجداول
     await createTables(client);
-    
+
     client.release();
     console.log('✅ PostgreSQL initialized successfully');
   } catch (error) {
@@ -39,7 +39,7 @@ export const initPostgres = async (): Promise<void> => {
 // إنشاء جميع الجداول
 const createTables = async (client: PoolClient): Promise<void> => {
   console.log('🔄 Creating PostgreSQL tables...');
-  
+
   try {
     await client.query('BEGIN');
 
@@ -60,7 +60,7 @@ const createTables = async (client: PoolClient): Promise<void> => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    
+
     // إضافة حقول push_token إذا لم تكن موجودة (للتوافق مع الجداول القديمة)
     await client.query(`
       DO $$ 
@@ -131,12 +131,12 @@ const createTables = async (client: PoolClient): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_user_date 
       ON enhanced_analysis_history(user_id, created_at DESC)
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_decision 
       ON enhanced_analysis_history(decision)
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_enhanced_analysis_type 
       ON enhanced_analysis_history(analysis_type)
@@ -193,7 +193,7 @@ const createTables = async (client: PoolClient): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_sessions_user_active 
       ON sessions(user_id, is_active)
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_sessions_token 
       ON sessions(token)
@@ -251,10 +251,64 @@ const createTables = async (client: PoolClient): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_economic_analyses_user_date 
       ON economic_analyses(user_id, event_date DESC)
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_economic_analyses_event 
       ON economic_analyses(event_id)
+    `);
+
+    // ==========================================
+    // جداول نظام Backtesting (جديد)
+    // ==========================================
+
+    // جدول نتائج الاختبار
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS backtest_results (
+        id UUID PRIMARY KEY,
+        user_id TEXT, -- يمكن ربطه بجدول users إذا أردنا
+        symbol VARCHAR(20) NOT NULL,
+        start_date TIMESTAMP NOT NULL,
+        end_date TIMESTAMP NOT NULL,
+        analysis_interval INTEGER,
+        total_analyses INTEGER,
+        trades_generated INTEGER,
+        trades_executed INTEGER,
+        win_rate DECIMAL(5,2),
+        profit_factor DECIMAL(8,2),
+        total_profit_pips DECIMAL(10,2),
+        metrics JSONB, -- تخزين كامل الإحصائيات
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // جدول صفقات الاختبار
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS backtest_trades (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        backtest_id UUID REFERENCES backtest_results(id) ON DELETE CASCADE,
+        entry_time TIMESTAMP,
+        trade_type VARCHAR(20),
+        entry_price DECIMAL(10,2),
+        sl DECIMAL(10,2),
+        tp1 DECIMAL(10,2),
+        tp2 DECIMAL(10,2),
+        tp3 DECIMAL(10,2),
+        outcome VARCHAR(20),
+        profit_pips DECIMAL(10,2),
+        duration_hours DECIMAL(10,2),
+        analysis_data JSONB
+      )
+    `);
+
+    // الفهارس
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_backtest_results_created_at 
+      ON backtest_results(created_at DESC)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_backtest_trades_backtest_id 
+      ON backtest_trades(backtest_id)
     `);
 
     await client.query('COMMIT');
@@ -269,7 +323,7 @@ const createTables = async (client: PoolClient): Promise<void> => {
 // تنفيذ استعلام
 export const query = async (text: string, params?: any[]): Promise<any> => {
   if (!pool) throw new Error('PostgreSQL not initialized');
-  
+
   try {
     const result = await pool.query(text, params);
     return result;

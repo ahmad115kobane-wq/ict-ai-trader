@@ -1,0 +1,58 @@
+// create-table-remote.js
+// إنشاء جدول system_notifications في قاعدة البيانات
+
+require('dotenv').config();
+const { Client } = require('pg');
+
+async function createTable() {
+  console.log('🔄 Connecting to database...\n');
+
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+
+  try {
+    await client.connect();
+    console.log('✅ Connected to PostgreSQL\n');
+
+    console.log('📝 Creating system_notifications table...');
+
+    const sql = `
+      CREATE TABLE IF NOT EXISTS system_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        priority VARCHAR(20) DEFAULT 'normal',
+        data JSONB,
+        read BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_system_notifications_user ON system_notifications(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_system_notifications_read ON system_notifications(user_id, read);
+      CREATE INDEX IF NOT EXISTS idx_system_notifications_type ON system_notifications(type);
+
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS subscription_expiry_notified BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS subscription_expiring_notified BOOLEAN DEFAULT false;
+    `;
+
+    await client.query(sql);
+
+    console.log('✅ Table created successfully!\n');
+    console.log('📊 System notifications table is ready');
+    console.log('📱 You can now send notifications');
+
+  } catch (error) {
+    console.error('❌ Error:', error.message);
+  } finally {
+    await client.end();
+  }
+}
+
+createTable();
