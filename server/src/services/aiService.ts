@@ -1,20 +1,25 @@
-// services/aiService.ts - Clean v5.0
+// services/aiService.ts - ICT Pro v6.0
 // ═══════════════════════════════════════════════════════════════════════════════
-// ✅ ICT AI Trader - Simple & Direct
+// ✅ ICT AI Trader - High Win Rate Edition (70%+ Target)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { ICTAnalysis, ManagementAdvice, KillzoneInfo } from "../types";
 
 declare const process: any;
 
-console.log("� aiService v5.0 loaded - Clean & Direct");
+console.log("🚀 aiService v6.0 loaded - ICT Pro Edition");
 
 // ===================== API Config =====================
 const API_KEY = process?.env?.OLLAMA_API_KEY || process?.env?.AI_API_KEY || "YOUR_API_KEY";
 const BASE_URL = process?.env?.OLLAMA_BASE_URL || process?.env?.AI_BASE_URL || "https://api.openai.com";
 const MODEL = process?.env?.OLLAMA_MODEL || process?.env?.AI_MODEL || "llama3.2-vision";
 
-console.log(`� API Config: ${BASE_URL} | Model: ${MODEL}`);
+console.log(`📡 API Config: ${BASE_URL} | Model: ${MODEL}`);
+
+// ===================== Constants =====================
+const MIN_SL_DISTANCE = 8;   // $8 minimum SL للذهب
+const MAX_SL_DISTANCE = 20;  // $20 maximum SL
+const MIN_RR_RATIO = 1.5;    // Minimum Risk:Reward
 
 // ===================== Helpers =====================
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -83,74 +88,90 @@ function getCurrentKillzone(): KillzoneInfo {
   };
 }
 
+// ===================== ICT Pro System Prompt =====================
 export const systemInstruction = `
-أنت محلل ICT لـ XAUUSD. مهمتك: البحث عن صفقة معلقة مناسبة الآن.
+أنت محلل ICT محترف لـ XAUUSD. هدفك: تقديم صفقات عالية الاحتمالية بنسبة ربح 70%+
 
-════════════════════
-قواعد أساسية
-════════════════════
+═══════════════════════════════════════════════════════════════
+📊 التحليل متعدد الأطر الزمنية (مهم جداً)
+═══════════════════════════════════════════════════════════════
 
-- ابحث عن صفقات قليلة لكن واضحة
-- الامتناع عن التداول قرار صحيح
-- لا ترفض الصفقة بسبب المثالية الزائدة
+1️⃣ H1 - تحديد الاتجاه الرئيسي:
+   • صاعد: قمم وقيعان أعلى → شراء فقط
+   • هابط: قمم وقيعان أدنى → بيع فقط
+   • عرضي: تجنب التداول
 
-════════════════════
-منهج التحليل
-════════════════════
+2️⃣ M5 - تحديد نقطة الدخول الدقيقة
 
-1️⃣ اتجاه H1 (شرط إلزامي)
-- صاعد → شراء فقط
-- هابط → بيع فقط
+═══════════════════════════════════════════════════════════════
+⚡ شروط الدخول (جميعها مطلوبة)
+═══════════════════════════════════════════════════════════════
 
-2️⃣ سحب السيولة – M5 (شرط إلزامي)
-- Liquidity Sweep خارجي أو داخلي
-- Sweep جزئي مقبول إذا كان الرفض واضح
+✅ الشرط 1: سحب السيولة (Liquidity Sweep)
+   - Sweep واضح لـ High أو Low سابق
+   - شمعة رفض قوية (ذيل طويل أو engulfing)
+   - يفضل sweep لسيولة خارجية (external)
 
-❌ لا Sweep → NO_TRADE
+✅ الشرط 2: كسر هيكلي (BOS أو CHoCH)
+   - BOS: كسر آخر قمة/قاع في اتجاه الصفقة
+   - CHoCH: تغيير واضح في الهيكل
+   - يجب أن يكون بعد الـ Sweep
 
-3️⃣ التأكيد – M5 (اختر واحد فقط)
-✔️ BOS مع اتجاه H1
-✔️ OR FVG / Order Block صالح
+✅ الشرط 3: منطقة دخول (FVG أو Order Block)
+   - FVG: فجوة سعرية واضحة لم تُملأ
+   - OB: آخر شمعة معاكسة قبل الحركة القوية
+   - Entry يجب أن يكون داخل هذه المنطقة
 
-4️⃣ منطقة الدخول
-- من FVG أو OB
-- المسافة من السعر الحالي ≤ 1.5%
-- إذا كانت أبعد من 1.5% → NO_TRADE
+✅ الشرط 4: المسافة من السعر الحالي
+   - Entry ≤ 0.5% من السعر الحالي (للذهب ~15$)
+   - إذا أبعد → انتظر أو NO_TRADE
 
-════════════════════
-الأهداف
-════════════════════
+═══════════════════════════════════════════════════════════════
+📏 قواعد SL و TP (إلزامية للذهب)
+═══════════════════════════════════════════════════════════════
 
-- TP1: أقرب سيولة
-- TP2: فجوة أو سيولة متوسطة
-- TP3: سيولة خارجية منطقية
+🛑 Stop Loss:
+   - الحد الأدنى: 8$ من Entry
+   - الحد الأقصى: 20$ من Entry  
+   - الموقع: خلف آخر Swing + 2$ buffer
+   - لا تضع SL على رقم دائري (مثل 2800.00)
 
-════════════════════
-قاعدة القرار
-════════════════════
+🎯 Take Profit:
+   - TP1: أول سيولة (RR 1:1.5 على الأقل)
+   - TP2: سيولة متوسطة أو FVG (RR 1:2.5)
+   - TP3: سيولة خارجية كبيرة (RR 1:4)
 
--+ H1 5m Bias + Sweep إلزامي
-- +
-- +   تأكيد واحد فقط
-- +  منطقة دخول قريبة
+═══════════════════════════════════════════════════════════════
+✅ أعطِ صفقة PLACE_PENDING إذا:
+═══════════════════════════════════════════════════════════════
+• H1 اتجاه واضح (ليس عرضي)
+• Sweep + BOS/CHoCH موجودين
+• FVG أو OB صالح للدخول
+• Entry قريب (≤ 0.5%)
+• RR ≥ 1:1.5
 
-→ أعطِ صفقة معلقة
+═══════════════════════════════════════════════════════════════
+❌ أعطِ NO_TRADE إذا:
+═══════════════════════════════════════════════════════════════
+• السوق عرضي أو متقلب بدون اتجاه
+• لا يوجد Sweep واضح
+• لا يوجد BOS/CHoCH
+• Entry بعيد جداً (> 0.5%)
+• RR < 1:1.5
 
-غير ذلك → NO_TRADE
-
-════════════════════
-صيغة الرد (JSON فقط)
-════════════════════
+═══════════════════════════════════════════════════════════════
+📤 صيغة الرد (JSON فقط - لا نص إضافي)
+═══════════════════════════════════════════════════════════════
 
 {
   "decision": "PLACE_PENDING" | "NO_TRADE",
   "score": 0-10,
   "confidence": 0-100,
   "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "bias": "اتجاه H1",
-  "reasoning": "سبب القرار باختصار",
-  "confluences": [],
-  "reasons": [],
+  "bias": "وصف اتجاه H1",
+  "reasoning": "Sweep: [وصف] + BOS: [وصف] + Entry: [FVG/OB]",
+  "confluences": ["نوع_sweep", "موقع_bos", "نوع_entry_zone"],
+  "reasons": ["سبب1", "سبب2"],
   "suggestedTrade": {
     "type": "BUY_LIMIT" | "SELL_LIMIT",
     "entry": number,
@@ -160,10 +181,12 @@ export const systemInstruction = `
     "tp3": number
   }
 }
+
+⚠️ ملاحظات مهمة:
+- SL يجب أن يكون بين 8$ و 20$ من Entry
+- TP1 يجب أن يحقق RR 1:1.5 على الأقل
+- أفضل أن ترفض صفقة ضعيفة من أن تعطي صفقة خاسرة
 `;
-
-
-
 
 // ===================== Result Builder =====================
 function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis {
@@ -180,9 +203,9 @@ function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis
   } as ICTAnalysis;
 }
 
-// ===================== Validator =====================
+// ===================== Enhanced Validator =====================
 function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
-  console.log("\n🔍 التحقق من البيانات...");
+  console.log("\n🔍 التحقق من الصفقة...");
 
   r = r || {};
   r.reasons = Array.isArray(r.reasons) ? r.reasons : [];
@@ -190,77 +213,160 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   r.score = Number(r.score) || 0;
   r.confidence = Number(r.confidence) || 0;
 
+  // إذا لم يكن هناك صفقة
   if (r.decision !== "PLACE_PENDING" || !r.suggestedTrade) {
-    console.log("   ℹ️ NO_TRADE");
-    return createNoTradeResult(r.reasons.length > 0 ? r.reasons : ["لا توجد فرصة"], r);
+    console.log("   ℹ️ NO_TRADE - لا توجد فرصة");
+    return createNoTradeResult(r.reasons.length > 0 ? r.reasons : ["لا توجد فرصة مناسبة"], r);
   }
 
   const t = r.suggestedTrade;
-  const isBuy = String(t.type || "").includes("BUY");
+  const tradeType = String(t.type || "");
+  const isBuy = tradeType.includes("BUY");
 
-  console.log(`   ℹ️ ${t.type} @ ${t.entry}`);
+  console.log(`   📊 نوع الصفقة: ${tradeType}`);
+  console.log(`   💰 السعر الحالي: ${currentPrice}`);
 
-  const entry = toNumber(t.entry);
-  const sl = toNumber(t.sl);
-  const tp1 = toNumber(t.tp1);
-  const tp2 = toNumber(t.tp2);
-  const tp3 = toNumber(t.tp3);
+  // تحويل الأرقام
+  let entry = toNumber(t.entry);
+  let sl = toNumber(t.sl);
+  let tp1 = toNumber(t.tp1);
+  let tp2 = toNumber(t.tp2);
+  let tp3 = toNumber(t.tp3);
 
+  // التحقق من صلاحية الأرقام
   if ([entry, sl, tp1, tp2, tp3].some(isNaN)) {
     console.log("   ❌ أرقام غير صالحة");
-    return createNoTradeResult(["أرقام غير صالحة"], r);
+    return createNoTradeResult(["أرقام غير صالحة في الصفقة"], r);
   }
 
-  const tradeType = String(t.type);
+  console.log(`   📍 Entry: ${entry} | SL: ${sl} | TP1: ${tp1}`);
 
+  // ═══════════════════════════════════════════════════════════
+  // التحقق من نوع الأمر المعلق
+  // ═══════════════════════════════════════════════════════════
+  
   if (tradeType === "BUY_LIMIT" && entry >= currentPrice) {
-    const correctedEntry = currentPrice * 0.998;
-    if (correctedEntry > sl) {
-      t.entry = round2(correctedEntry);
+    // BUY_LIMIT يجب أن يكون أسفل السعر الحالي
+    const maxDistance = currentPrice * 0.005; // 0.5%
+    const correctedEntry = currentPrice - (maxDistance * 0.5);
+    
+    if (correctedEntry > sl + MIN_SL_DISTANCE) {
+      entry = round2(correctedEntry);
+      console.log(`   🔧 تصحيح Entry إلى: ${entry}`);
     } else {
-      return createNoTradeResult([`BUY_LIMIT يجب أن يكون أسفل السعر`], r);
+      console.log("   ❌ BUY_LIMIT: لا يمكن تصحيح Entry");
+      return createNoTradeResult(["BUY_LIMIT يجب أن يكون أسفل السعر الحالي"], r);
     }
   }
 
   if (tradeType === "SELL_LIMIT" && entry <= currentPrice) {
-    const correctedEntry = currentPrice * 1.002;
-    if (correctedEntry < sl) {
-      t.entry = round2(correctedEntry);
+    // SELL_LIMIT يجب أن يكون أعلى السعر الحالي
+    const maxDistance = currentPrice * 0.005; // 0.5%
+    const correctedEntry = currentPrice + (maxDistance * 0.5);
+    
+    if (correctedEntry < sl - MIN_SL_DISTANCE) {
+      entry = round2(correctedEntry);
+      console.log(`   🔧 تصحيح Entry إلى: ${entry}`);
     } else {
-      return createNoTradeResult([`SELL_LIMIT يجب أن يكون أعلى السعر`], r);
+      console.log("   ❌ SELL_LIMIT: لا يمكن تصحيح Entry");
+      return createNoTradeResult(["SELL_LIMIT يجب أن يكون أعلى السعر الحالي"], r);
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // التحقق من مسافة Entry من السعر الحالي
+  // ═══════════════════════════════════════════════════════════
+  
+  const entryDistance = Math.abs(entry - currentPrice);
+  const maxEntryDistance = currentPrice * 0.008; // 0.8%
+  
+  if (entryDistance > maxEntryDistance) {
+    console.log(`   ❌ Entry بعيد جداً: ${entryDistance.toFixed(2)}$ (max: ${maxEntryDistance.toFixed(2)}$)`);
+    return createNoTradeResult([`Entry بعيد: ${entryDistance.toFixed(1)}$ من السعر`], r);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // التحقق من SL وتصحيحه
+  // ═══════════════════════════════════════════════════════════
+  
+  let slDistance = Math.abs(entry - sl);
+  console.log(`   📏 مسافة SL: ${slDistance.toFixed(2)}$`);
+
+  // تصحيح SL إذا كان قريب جداً
+  if (slDistance < MIN_SL_DISTANCE) {
+    const newSl = isBuy ? entry - 10 : entry + 10;
+    console.log(`   🔧 تصحيح SL من ${sl} إلى ${newSl} (كان قريب جداً)`);
+    sl = round2(newSl);
+    slDistance = MIN_SL_DISTANCE + 2;
+  }
+
+  // رفض إذا SL بعيد جداً
+  if (slDistance > MAX_SL_DISTANCE) {
+    console.log(`   ❌ SL بعيد جداً: ${slDistance.toFixed(2)}$`);
+    return createNoTradeResult([`SL بعيد جداً: ${slDistance.toFixed(1)}$`], r);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // التحقق من ترتيب المستويات
+  // ═══════════════════════════════════════════════════════════
+  
   if (isBuy) {
-    if (!(sl < t.entry && t.entry < tp1 && tp1 < tp2 && tp2 < tp3)) {
-      return createNoTradeResult(["ترتيب مستويات الشراء خاطئ"], r);
+    // للشراء: SL < Entry < TP1 < TP2 < TP3
+    if (!(sl < entry && entry < tp1 && tp1 < tp2 && tp2 < tp3)) {
+      console.log("   ❌ ترتيب مستويات الشراء خاطئ");
+      console.log(`      SL:${sl} < Entry:${entry} < TP1:${tp1} < TP2:${tp2} < TP3:${tp3}`);
+      return createNoTradeResult(["ترتيب مستويات الشراء غير صحيح"], r);
     }
   } else {
-    if (!(tp3 < tp2 && tp2 < tp1 && tp1 < t.entry && t.entry < sl)) {
-      return createNoTradeResult(["ترتيب مستويات البيع خاطئ"], r);
+    // للبيع: TP3 < TP2 < TP1 < Entry < SL
+    if (!(tp3 < tp2 && tp2 < tp1 && tp1 < entry && entry < sl)) {
+      console.log("   ❌ ترتيب مستويات البيع خاطئ");
+      console.log(`      TP3:${tp3} < TP2:${tp2} < TP1:${tp1} < Entry:${entry} < SL:${sl}`);
+      return createNoTradeResult(["ترتيب مستويات البيع غير صحيح"], r);
     }
   }
 
-  t.entry = round2(toNumber(t.entry));
-  t.sl = round2(toNumber(t.sl));
-  t.tp1 = round2(toNumber(t.tp1));
-  t.tp2 = round2(toNumber(t.tp2));
-  t.tp3 = round2(toNumber(t.tp3));
+  // ═══════════════════════════════════════════════════════════
+  // حساب RR والتحقق منه
+  // ═══════════════════════════════════════════════════════════
+  
+  const risk = Math.abs(entry - sl);
+  const reward1 = Math.abs(tp1 - entry);
+  const reward2 = Math.abs(tp2 - entry);
+  const reward3 = Math.abs(tp3 - entry);
+  
+  const rr1 = reward1 / risk;
+  const rr2 = reward2 / risk;
+  const rr3 = reward3 / risk;
 
-  const risk = Math.abs(t.entry - t.sl);
-  const rr1 = Math.abs(t.tp1 - t.entry) / risk;
-  const rr2 = Math.abs(t.tp2 - t.entry) / risk;
-  const rr3 = Math.abs(t.tp3 - t.entry) / risk;
+  console.log(`   📈 RR: TP1=1:${rr1.toFixed(1)} | TP2=1:${rr2.toFixed(1)} | TP3=1:${rr3.toFixed(1)}`);
+
+  // رفض RR ضعيف
+  if (rr1 < MIN_RR_RATIO) {
+    console.log(`   ❌ RR ضعيف: 1:${rr1.toFixed(1)} (minimum 1:${MIN_RR_RATIO})`);
+    return createNoTradeResult([`RR ضعيف: 1:${rr1.toFixed(1)}`], r);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // تحديث الصفقة بالقيم المصححة
+  // ═══════════════════════════════════════════════════════════
+  
+  t.entry = round2(entry);
+  t.sl = round2(sl);
+  t.tp1 = round2(tp1);
+  t.tp2 = round2(tp2);
+  t.tp3 = round2(tp3);
   t.rrRatio = `TP1: 1:${rr1.toFixed(1)} | TP2: 1:${rr2.toFixed(1)} | TP3: 1:${rr3.toFixed(1)}`;
+  t.riskAmount = `${risk.toFixed(2)}$`;
 
-  console.log(`   ✅ صفقة صالحة`);
+  console.log(`   ✅ صفقة صالحة - RR جيد`);
 
   return r as ICTAnalysis;
 }
 
 // ===================== API Call =====================
 async function callAIChat(payload: any): Promise<{ content: string }> {
-  console.log("🔌 Connecting to AI...");
+  console.log("🔌 الاتصال بالـ AI...");
 
   const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
     method: "POST",
@@ -271,8 +377,8 @@ async function callAIChat(payload: any): Promise<{ content: string }> {
     body: JSON.stringify({
       model: MODEL,
       messages: payload.messages,
-      max_tokens: payload.max_tokens || 2000,
-      temperature: payload.temperature || 0.2
+      max_tokens: payload.max_tokens || 2500,
+      temperature: payload.temperature || 0.1
     })
   });
 
@@ -283,7 +389,7 @@ async function callAIChat(payload: any): Promise<{ content: string }> {
   }
 
   const data = await response.json() as any;
-  console.log("✅ AI Response received");
+  console.log("✅ تم استلام رد AI");
   return {
     content: data.choices?.[0]?.message?.content || "{}"
   };
@@ -300,26 +406,28 @@ export const analyzeMultiTimeframe = async (
   const killzoneInfo = getCurrentKillzone();
 
   console.log("\n═══════════════════════════════════════════════════════════════");
-  console.log("🔍 بدء التحليل - v5.0");
-  console.log(`💰 السعر: ${currentPrice}`);
-  console.log(`⏰ الجلسة: ${killzoneInfo.session}`);
+  console.log("🔍 ICT Pro Analysis v6.0");
+  console.log(`💰 السعر الحالي: ${currentPrice}`);
+  console.log(`⏰ الجلسة: ${killzoneInfo.session} (${killzoneInfo.quality})`);
   console.log("═══════════════════════════════════════════════════════════════\n");
 
   const cleanH1 = h1Image.replace(/^data:image\/\w+;base64,/, "");
   const cleanM5 = m5Image.replace(/^data:image\/\w+;base64,/, "");
 
+  // تحضير بيانات الشموع
   let candleDataText = '';
+  
   if (h1Candles && h1Candles.length > 0) {
-    const recentH1 = h1Candles.slice(-100);
-    candleDataText += '\n\nبيانات H1 (آخر 100):\n';
+    const recentH1 = h1Candles.slice(-50);
+    candleDataText += '\n\n📊 بيانات H1 (آخر 50 شمعة):\n';
     candleDataText += recentH1.map((c, i) =>
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
   }
 
   if (m5Candles && m5Candles.length > 0) {
-    const recentM5 = m5Candles.slice(-220);
-    candleDataText += '\n\nبيانات M5 (آخر 220):\n';
+    const recentM5 = m5Candles.slice(-100);
+    candleDataText += '\n\n📊 بيانات M5 (آخر 100 شمعة):\n';
     candleDataText += recentM5.map((c, i) =>
       `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
     ).join('\n');
@@ -327,15 +435,27 @@ export const analyzeMultiTimeframe = async (
 
   const userPrompt = `${systemInstruction}
 
-XAUUSD
-السعر: ${currentPrice}
-الجلسة: ${killzoneInfo.session}
+═══════════════════════════════════════
+📈 بيانات السوق الحالية
+═══════════════════════════════════════
 
-الصورة 1: H1
-الصورة 2: M5
+الزوج: XAUUSD (الذهب)
+السعر الحالي: ${currentPrice}
+الجلسة: ${killzoneInfo.session}
+جودة الجلسة: ${killzoneInfo.quality}
+
+الصورة 1: شارت H1 (لتحديد الاتجاه)
+الصورة 2: شارت M5 (لتحديد الدخول)
 ${candleDataText}
 
-JSON فقط
+═══════════════════════════════════════
+⚠️ تذكير مهم
+═══════════════════════════════════════
+- SL: بين 8$ و 20$ من Entry
+- Entry: أقل من 0.5% من السعر الحالي (${(currentPrice * 0.005).toFixed(2)}$)
+- RR: minimum 1:1.5
+
+أعطني JSON فقط - بدون أي نص إضافي
 `;
 
   try {
@@ -348,23 +468,28 @@ JSON فقط
           { type: "image_url", image_url: { url: `data:image/png;base64,${cleanM5}` } }
         ]
       }],
-      temperature: 0.2,
-      max_tokens: 2000
+      temperature: 0.1,
+      max_tokens: 2500
     });
 
     const parsed = safeParseJson(data.content);
-    console.log(`   القرار: ${parsed.decision || 'غير محدد'}`);
+    console.log(`📋 قرار AI: ${parsed.decision || 'غير محدد'}`);
 
     const validated = validateAndFix(parsed, currentPrice);
     validated.killzoneInfo = killzoneInfo;
 
-    console.log(`   النتيجة: ${validated.decision}`);
+    console.log(`\n🎯 النتيجة النهائية: ${validated.decision}`);
+    if (validated.suggestedTrade) {
+      const t = validated.suggestedTrade;
+      console.log(`   ${t.type} @ ${t.entry}`);
+      console.log(`   SL: ${t.sl} | TP1: ${t.tp1} | TP2: ${t.tp2} | TP3: ${t.tp3}`);
+    }
     console.log("═══════════════════════════════════════════════════════════════\n");
 
     return validated;
   } catch (error) {
-    console.error("\n❌ خطأ:", error);
-    return createNoTradeResult(["خطأ في الاتصال"]);
+    console.error("\n❌ خطأ في التحليل:", error);
+    return createNoTradeResult(["خطأ في الاتصال بالـ AI"]);
   }
 };
 
@@ -375,28 +500,29 @@ export const chatWithAI = async (
   currentPrice: number
 ): Promise<string> => {
   const context = analysis
-    ? `القرار: ${analysis.decision} | ${analysis.sentiment}`
-    : "لا يوجد تحليل";
+    ? `القرار: ${analysis.decision} | الاتجاه: ${analysis.sentiment} | السبب: ${analysis.reasoning}`
+    : "لا يوجد تحليل حالي";
 
   try {
     const data = await callAIChat({
       messages: [{
         role: "user",
-        content: `مساعد ICT
-السعر: ${currentPrice}
+        content: `أنت مساعد ICT للتداول.
+
+السعر الحالي: ${currentPrice}
 ${context}
 
-سؤال: ${message}
+سؤال المتداول: ${message}
 
-أجب باختصار`
+أجب بوضوح واختصار.`
       }],
-      temperature: 0.45,
-      max_tokens: 400
+      temperature: 0.4,
+      max_tokens: 500
     });
 
-    return data.content || "عذراً";
+    return data.content || "عذراً، حدث خطأ";
   } catch {
-    return "خطأ";
+    return "خطأ في الاتصال";
   }
 };
 
@@ -421,6 +547,11 @@ export const followUpTrade = async (
     const entry = t?.entry || 0;
     const sl = t?.sl || 0;
     const tp1 = t?.tp1 || 0;
+    const tp2 = t?.tp2 || 0;
+
+    const isBuy = String(t?.type || "").includes("BUY");
+    const currentPnL = isBuy ? currentPrice - entry : entry - currentPrice;
+    const pnlPercent = ((currentPnL / Math.abs(entry - sl)) * 100).toFixed(1);
 
     const data = await callAIChat({
       messages: [{
@@ -428,38 +559,49 @@ export const followUpTrade = async (
         content: [
           {
             type: "text",
-            text: `راجع الصفقة:
-${minutesPassed} دقيقة
-السعر: ${currentPrice}
-Entry: ${entry} | SL: ${sl} | TP1: ${tp1}
+            text: `راجع الصفقة المفتوحة:
+
+⏱️ الوقت: ${minutesPassed} دقيقة
+💰 السعر الحالي: ${currentPrice}
+📊 P&L: ${currentPnL.toFixed(2)}$ (${pnlPercent}% من المخاطرة)
+
+الصفقة:
+- النوع: ${t?.type}
+- Entry: ${entry}
+- SL: ${sl}
+- TP1: ${tp1}
+- TP2: ${tp2}
+
+هل يجب الخروج أو الاستمرار؟
 
 JSON:
 {
   "shouldExit": true | false,
-  "reason": "شرح",
-  "advice": "نصيحة"
+  "reason": "شرح مختصر",
+  "advice": "نصيحة للمتداول",
+  "moveSL": "سعر جديد لـ SL أو null"
 }`
           },
           { type: "image_url", image_url: { url: `data:image/png;base64,${cleanH1}` } },
           { type: "image_url", image_url: { url: `data:image/png;base64,${cleanM5}` } }
         ]
       }],
-      temperature: 0.2,
-      max_tokens: 500
+      temperature: 0.15,
+      max_tokens: 600
     });
 
     const parsed = safeParseJson(data.content);
 
     return {
-      advice: parsed.advice || "استمر",
+      advice: parsed.advice || "استمر في الصفقة",
       shouldExit: parsed.shouldExit || false,
       reason: parsed.reason || ""
     };
   } catch (error) {
     return {
-      advice: 'خطأ',
+      advice: 'خطأ في المراجعة',
       shouldExit: false,
-      reason: 'خطأ'
+      reason: 'خطأ في الاتصال'
     };
   }
 };
@@ -479,20 +621,24 @@ export const monitorActiveTrade = async (
         content: [
           {
             type: "text",
-            text: `راقب: ${trade.symbol} | دخول: ${trade.entryPrice} | الحالي: ${currentPrice}
+            text: `راقب الصفقة:
+الزوج: ${trade.symbol}
+سعر الدخول: ${trade.entryPrice}
+السعر الحالي: ${currentPrice}
+الربح/الخسارة: ${(currentPrice - trade.entryPrice).toFixed(2)}$
 
 JSON:
 {
   "status": "HOLD" | "MOVE_TO_BE" | "PARTIAL_CLOSE" | "CLOSE_NOW",
   "reversalProbability": 0-100,
   "message": "شرح",
-  "actionRequired": "إجراء"
+  "actionRequired": "الإجراء المطلوب"
 }`
           },
           { type: "image_url", image_url: { url: `data:image/png;base64,${cleanBase64}` } }
         ]
       }],
-      temperature: 0.25,
+      temperature: 0.2,
       max_tokens: 700
     });
 
@@ -501,7 +647,7 @@ JSON:
     return {
       status: "HOLD",
       reversalProbability: 50,
-      message: "خطأ",
+      message: "خطأ في المراقبة",
       actionRequired: "أعد المحاولة"
     };
   }
