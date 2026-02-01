@@ -260,7 +260,9 @@ export function simulateSingleTrade(
         ? (exitPrice - executionPrice) * 100  // لـ XAUUSD (1 pip = 0.01)
         : (executionPrice - exitPrice) * 100;
 
-    const profitPercent = (profitPips / executionPrice) * 100;
+    // تصحيح: حساب النسبة المئوية بناءً على فرق السعر وليس النقاط
+    const profitPrice = isBuy ? (exitPrice - executionPrice) : (executionPrice - exitPrice);
+    const profitPercent = (profitPrice / executionPrice) * 100;
 
     // حساب المدة
     const exitTime = exitCandle ? new Date(exitCandle.time) : new Date(remainingCandles[remainingCandles.length - 1].time);

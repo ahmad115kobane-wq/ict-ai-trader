@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التقويم الاقتصادي والصفقات الحية | XAUUSD</title>
+    <!-- Bootstrap RTL -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bs-body-bg: #0f172a;
+            --bs-body-color: #e2e8f0;
+            --primary-color: #fbbf24;
+            --secondary-bg: #1e293b;
+            --card-bg: #1e293b;
+            --border-color: #334155;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+        }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bs-body-bg);
+            color: var(--bs-body-color);
+        }
+
+        .navbar {
+            background-color: var(--secondary-bg) !important;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+        }
+
+        .navbar-brand {
+            color: var(--primary-color) !important;
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            padding: 1rem 1.25rem;
+        }
+
+        .impact-high {
+            color: var(--danger-color);
+            background-color: rgba(239, 68, 68, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .impact-medium {
+            color: var(--warning-color);
+            background-color: rgba(245, 158, 11, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .impact-low {
+            color: var(--success-color);
+            background-color: rgba(16, 185, 129, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .trade-card {
+            border-right: 4px solid var(--primary-color);
+        }
+
+        .trade-buy {
+            border-right-color: var(--success-color);
+        }
+
+        .trade-sell {
+            border-right-color: var(--danger-color);
+        }
+
+        .price-badge {
+            background-color: var(--primary-color);
+            color: #000;
+            font-weight: bold;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            transform: rotate(180deg);
+        }
+
+        table {
+            color: var(--bs-body-color) !important;
+        }
+
+        td,
+        th {
+            border-color: var(--border-color) !important;
+            vertical-align: middle;
+        }
+
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fas fa-chart-line me-2"></i> ICT Trader - News & Analysis</a>
+            <div class="ms-auto d-flex align-items-center">
+                <span id="currentPrice" class="price-badge ms-3">XAUUSD: Loading...</span>
+                <button class="btn btn-sm btn-outline-warning ms-3" onclick="loadData()">
+                    <i class="fas fa-sync-alt" id="refreshIcon"></i> تحديث
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <!-- Left Column: Live Analysis & Trades -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-robot me-2"></i> آخر تحليل AI</span>
+                        <span class="badge bg-secondary" id="analysisTime">-</span>
+                    </div>
+                    <div class="card-body" id="analysisContainer">
+                        <div class="loading-spinner">
+                            <div class="spinner-border text-warning" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Economic Calendar -->
+            <div class="col-lg-8 mb-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-calendar-alt me-2"></i> التقويم الاقتصادي (اليوم)</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead style="background-color: rgba(0,0,0,0.2);">
+                                    <tr>
+                                        <th>الوقت</th>
+                                        <th>العملة</th>
+                                        <th>الحدث</th>
+                                        <th>التأثير</th>
+                                        <th>السابق</th>
+                                        <th>المتوقع</th>
+                                        <th>الحالي</th>
+                                        <th>تحليل AI</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="calendarBody">
+                                    <tr>
+                                        <td colspan="8" class="text-center py-5">
+                                            <div class="spinner-border text-warning" role="status"></div>
+                                            <p class="mt-2 text-muted">جاري تحميل الأخبار...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" data-bs-backdrop="static" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background-color: var(--secondary-bg);">
+                <div class="modal-body text-center p-5">
+                    <i class="fas fa-lock fa-3x text-warning mb-3"></i>
+                    <h4>تسجيل الدخول مطلوب</h4>
+                    <p class="text-muted">لعرض التحليلات المباشرة والأخبار، يرجى تسجيل الدخول.</p>
+                    <a href="/login.html" class="btn btn-warning w-100 mt-3">الذهاب لصفحة الدخول</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Check Auth
+        const token = localStorage.getItem('token');
+        if (!token) {
+            // Uncomment in production:
+            // new bootstrap.Modal(document.getElementById('loginModal')).show();
+            // For now, let's assume demo access or redirect
+            window.location.href = '/login.html';
+        }
+
+        const API_BASE = '/api';
+
+        async function loadData() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            refreshIcon.classList.add('fa-spin');
+
+            try {
+                await Promise.all([
+                    loadLatestAnalysis(),
+                    loadEconomicCalendar()
+                ]);
+            } catch (error) {
+                console.error('Error loading data:', error);
+            } finally {
+                refreshIcon.classList.remove('fa-spin');
+            }
+        }
+
+        // 1. Load Latest Analysis
+        async function loadLatestAnalysis() {
+            const container = document.getElementById('analysisContainer');
+            try {
+                const response = await fetch(`${API_BASE}/analysis/latest-auto`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (!data.success || !data.analysis) {
+                    container.innerHTML = `<div class="text-center py-5 text-muted">Thinking... <br> (لا يوجد تحليل حالي)</div>`;
+                    document.getElementById('currentPrice').textContent = data.price ? `XAUUSD: ${data.price}` : 'XAUUSD: --';
+                    return;
+                }
+
+                const ans = data.analysis;
+                const trade = ans.suggestedTrade;
+                const isBuy = trade && trade.type.includes('BUY');
+                const tradeClass = isBuy ? 'trade-buy' : (trade ? 'trade-sell' : '');
+                const tradeColor = isBuy ? 'text-success' : 'text-danger';
+
+                // Update Price
+                document.getElementById('currentPrice').textContent = `XAUUSD: ${data.price}`;
+
+                // Update Time
+                document.getElementById('analysisTime').textContent = new Date(data.timestamp).toLocaleTimeString();
+
+                let tradeHtml = '';
+                if (ans.decision === 'PLACE_PENDING' && trade) {
+                    tradeHtml = `
+                        <div class="card p-3 mb-3 trade-card ${tradeClass}" style="background: rgba(255,255,255,0.03);">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-bold ${tradeColor}">${trade.type.replace('_', ' ')}</span>
+                                <span class="badge bg-warning text-dark">Score: ${ans.score}/10</span>
+                            </div>
+                            <div class="row g-2 text-center" style="font-size: 0.9em;">
+                                <div class="col-6"><div class="p-2 border border-secondary rounded">Entry: <br><strong class="text-white">${trade.entry}</strong></div></div>
+                                <div class="col-6"><div class="p-2 border border-secondary rounded">SL: <br><strong class="text-danger">${trade.sl}</strong></div></div>
+                                <div class="col-4"><div class="p-1 border border-secondary rounded mt-1">TP1<br><span class="text-success">${trade.tp1}</span></div></div>
+                                <div class="col-4"><div class="p-1 border border-secondary rounded mt-1">TP2<br><span class="text-success">${trade.tp2}</span></div></div>
+                                <div class="col-4"><div class="p-1 border border-secondary rounded mt-1">TP3<br><span class="text-success">${trade.tp3}</span></div></div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    tradeHtml = `
+                        <div class="alert alert-secondary text-center">
+                            <i class="fas fa-pause-circle mb-2"></i><br>
+                            <strong>NO_TRADE</strong><br>
+                            <small>${ans.reasoning || "السوق غير واضح حالياً"}</small>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = `
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Bias:</span>
+                            <span class="${ans.decision === 'PLACE_PENDING' ? tradeColor : 'text-white'} fw-bold">${ans.decision}</span>
+                        </div>
+                    </div>
+                    ${tradeHtml}
+                    ${ans.reasoning && ans.decision === 'PLACE_PENDING' ? `<p class="small text-muted mt-2"><i class="fas fa-info-circle"></i> ${ans.reasoning}</p>` : ''}
+                `;
+
+            } catch (e) {
+                container.innerHTML = `<p class="text-danger text-center">فشل تحميل التحليل</p>`;
+            }
+        }
+
+        // 2. Load Economic Calendar
+        async function loadEconomicCalendar() {
+            const tbody = document.getElementById('calendarBody');
+            try {
+                const response = await fetch(`${API_BASE}/economic-analysis/calendar-with-analysis`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (!data.success) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">فشل تحميل الأخبار</td></tr>`;
+                    return;
+                }
+
+                if (data.events.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4">لا توجد أحداث اقتصادية اليوم</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = data.events.map(ev => {
+                    const impactClass = ev.impact === 'High' ? 'impact-high' : (ev.impact === 'Medium' ? 'impact-medium' : 'impact-low');
+                    const aiBtn = ev.hasAnalysis
+                        ? `<button class="btn btn-xs btn-success" onclick="showEventAnalysis('${ev.id}')"><i class="fas fa-check"></i> تم التحليل</button>`
+                        : (ev.actual ? `<span class="text-muted">-</span>` : `<button class="btn btn-xs btn-outline-primary" onclick="analyzeEvent('${ev.id}')">🤖 تحليل AI</button>`);
+
+                    return `
+                        <tr>
+                            <td>${ev.time}</td>
+                            <td><span class="fw-bold">${ev.currency}</span></td>
+                            <td>${ev.title}</td>
+                            <td><span class="${impactClass}">${ev.impact}</span></td>
+                            <td>${ev.previous || '-'}</td>
+                            <td>${ev.forecast || '-'}</td>
+                            <td class="${ev.actual ? 'text-white fw-bold' : ''}">${ev.actual || '-'}</td>
+                            <td>${aiBtn}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">خطأ في الاتصال</td></tr>`;
+            }
+        }
+
+        // Trigger manual analysis for an event
+        async function analyzeEvent(eventId) {
+            if (!confirm('هل تريد طلب تحليل AI لهذا الخبر؟')) return;
+            // Logic to call API endpoint for analysis (if supported)
+            alert('سيتم إضافة هذه الميزة قريباً!');
+        }
+
+        function showEventAnalysis(eventId) {
+            // Logic to show modal with analysis
+            window.location.href = `/api/economic-analysis/event/${eventId}`; // Temporary open JSON
+        }
+
+        // Initial Load
+        loadData();
+
+        // Auto Refresh every 60s
+        setInterval(loadData, 60000);
+
+    </script>
+</body>
+
+</html>

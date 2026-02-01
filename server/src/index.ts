@@ -2270,6 +2270,14 @@ const scheduleNextAnalysis = () => {
 const runAutoAnalysis = async (retryCount: number = 0) => {
   console.log('🔄 Auto Analysis: Starting at M5 candle close...');
 
+  // التحقق من عطلة نهاية الأسبوع (السبت والأحد)
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+  if (day === 0 || day === 6) {
+    console.log('Weekend Holiday: Skipping auto analysis (Market Closed)');
+    return;
+  }
+
   try {
     const symbol = 'XAUUSD';
 
