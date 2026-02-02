@@ -565,8 +565,8 @@
         }
 
         function updateStats(users) {
-            const appUsers = users.filter(u => u.email && !u.telegram_id).length;
-            const telegramUsers = users.filter(u => u.telegram_id).length;
+            const appUsers = users.filter(u => !u.is_telegram && !u.email.includes('telegram_')).length;
+            const telegramUsers = users.filter(u => u.is_telegram || u.email.includes('telegram_')).length;
             const activeSubscriptions = users.filter(u => {
                 if (!u.subscription_expiry) return false;
                 return new Date(u.subscription_expiry) > new Date();
@@ -584,15 +584,18 @@
             const filterSubscription = document.getElementById('filterSubscription').value;
 
             let filtered = allUsers.filter(user => {
+                const isTelegram = user.is_telegram || user.email.includes('telegram_');
+                const userDisplay = isTelegram 
+                    ? (user.telegram_id || user.email.replace('telegram_', '').replace('@ict-trader.local', ''))
+                    : user.email;
+
                 // Search filter
-                const matchesSearch = !searchTerm || 
-                    (user.email && user.email.toLowerCase().includes(searchTerm)) ||
-                    (user.telegram_username && user.telegram_username.toLowerCase().includes(searchTerm));
+                const matchesSearch = !searchTerm || userDisplay.toLowerCase().includes(searchTerm);
 
                 // Type filter
                 const matchesType = filterType === 'all' ||
-                    (filterType === 'app' && user.email && !user.telegram_id) ||
-                    (filterType === 'telegram' && user.telegram_id);
+                    (filterType === 'app' && !isTelegram) ||
+                    (filterType === 'telegram' && isTelegram);
 
                 // Subscription filter
                 let matchesSubscription = true;
@@ -623,13 +626,13 @@
             }
 
             tbody.innerHTML = users.map(user => {
-                const isApp = user.email && !user.telegram_id;
-                const isTelegram = user.telegram_id;
+                const isTelegram = user.is_telegram || user.email.includes('telegram_');
+                const isApp = !isTelegram;
                 const hasActiveSubscription = user.subscription_expiry && new Date(user.subscription_expiry) > new Date();
                 
-                const userDisplay = isApp 
-                    ? user.email 
-                    : (user.telegram_username || user.telegram_id || 'غير معروف');
+                const userDisplay = isTelegram 
+                    ? (user.telegram_id || user.email.replace('telegram_', '').replace('@ict-trader.local', ''))
+                    : user.email;
 
                 const packageName = user.subscription_package 
                     ? (user.subscription_package === 'weekly' ? 'أسبوعية' : 
@@ -679,8 +682,13 @@
         }
 
         function editUser(user) {
+            const isTelegram = user.is_telegram || user.email.includes('telegram_');
+            const userDisplay = isTelegram 
+                ? (user.telegram_id || user.email.replace('telegram_', '').replace('@ict-trader.local', ''))
+                : user.email;
+
             document.getElementById('editUserId').value = user.id;
-            document.getElementById('editEmail').value = user.email || user.telegram_username || user.telegram_id;
+            document.getElementById('editEmail').value = userDisplay;
             document.getElementById('editCoins').value = user.coins || 0;
             document.getElementById('editPackage').value = user.subscription_package || '';
             

@@ -13,14 +13,21 @@ router.get('/users', async (req, res) => {
       SELECT 
         id,
         email,
-        telegram_id,
-        telegram_username,
         coins,
         subscription_package,
         subscription_expiry,
         subscription_status,
         created_at,
-        last_login
+        last_login,
+        CASE 
+          WHEN email LIKE 'telegram_%@ict-trader.local' THEN 
+            SUBSTRING(email FROM 'telegram_(.*)@ict-trader.local')
+          ELSE NULL 
+        END as telegram_id,
+        CASE 
+          WHEN email LIKE 'telegram_%@ict-trader.local' THEN true
+          ELSE false 
+        END as is_telegram
       FROM users
       ORDER BY created_at DESC
     `;
@@ -50,15 +57,22 @@ router.get('/users/:id', async (req, res) => {
       SELECT 
         id,
         email,
-        telegram_id,
-        telegram_username,
         coins,
         subscription_package,
         subscription_expiry,
         subscription_status,
         auto_analysis_enabled,
         created_at,
-        last_login
+        last_login,
+        CASE 
+          WHEN email LIKE 'telegram_%@ict-trader.local' THEN 
+            SUBSTRING(email FROM 'telegram_(.*)@ict-trader.local')
+          ELSE NULL 
+        END as telegram_id,
+        CASE 
+          WHEN email LIKE 'telegram_%@ict-trader.local' THEN true
+          ELSE false 
+        END as is_telegram
       FROM users
       WHERE id = $1
     `;
@@ -141,12 +155,15 @@ router.put('/users/:id', async (req, res) => {
       RETURNING 
         id,
         email,
-        telegram_id,
-        telegram_username,
         coins,
         subscription_package,
         subscription_expiry,
-        subscription_status
+        subscription_status,
+        CASE 
+          WHEN email LIKE 'telegram_%@ict-trader.local' THEN 
+            SUBSTRING(email FROM 'telegram_(.*)@ict-trader.local')
+          ELSE NULL 
+        END as telegram_id
     `;
 
     const result = await dbQuery(queryText, values);
@@ -189,7 +206,12 @@ router.post('/users/:id/add-coins', async (req, res) => {
       UPDATE users
       SET coins = coins + $1
       WHERE id = $2
-      RETURNING id, email, telegram_username, coins
+      RETURNING id, email, coins,
+        CASE 
+          WHEN email LIKE 'telegram_%@ict-trader.local' THEN 
+            SUBSTRING(email FROM 'telegram_(.*)@ict-trader.local')
+          ELSE NULL 
+        END as telegram_id
     `;
 
     const result = await dbQuery(queryText, [amount, id]);
@@ -220,12 +242,12 @@ router.get('/stats', async (req, res) => {
   try {
     const queries = {
       totalUsers: 'SELECT COUNT(*) as count FROM users',
-      appUsers: 'SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL AND telegram_id IS NULL',
-      telegramUsers: 'SELECT COUNT(*) as count FROM users WHERE telegram_id IS NOT NULL',
+      appUsers: `SELECT COUNT(*) as count FROM users WHERE email NOT LIKE 'telegram_%@ict-trader.local'`,
+      telegramUsers: `SELECT COUNT(*) as count FROM users WHERE email LIKE 'telegram_%@ict-trader.local'`,
       activeSubscriptions: `
         SELECT COUNT(*) as count FROM users 
         WHERE subscription_expiry IS NOT NULL 
-        AND subscription_expiry > NOW()
+        AND subscription_expiry::timestamp > NOW()
       `,
       totalCoins: 'SELECT SUM(coins) as total FROM users',
       recentUsers: `
