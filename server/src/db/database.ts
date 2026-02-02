@@ -228,7 +228,7 @@ export const initDatabase = async (): Promise<void> => {
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
-      coins INTEGER DEFAULT 100,
+      coins INTEGER DEFAULT 0,
       subscription TEXT DEFAULT 'free',
       subscription_expiry TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -320,7 +320,7 @@ const saveDatabase = () => {
 export const createUser = (id: string, email: string, hashedPassword: string) => {
   if (!db) throw new Error('Database not initialized');
   db.run(
-    'INSERT INTO users (id, email, password, coins, subscription) VALUES (?, ?, ?, 100, ?)',
+    'INSERT INTO users (id, email, password, coins, subscription) VALUES (?, ?, ?, 0, ?)',
     [id, email, hashedPassword, 'free']
   );
   saveDatabase();

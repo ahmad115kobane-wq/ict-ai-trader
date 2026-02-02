@@ -12,7 +12,7 @@ export const initDatabase = async (): Promise<void> => {
 // ===================== User Operations =====================
 export const createUser = async (id: string, email: string, hashedPassword: string): Promise<void> => {
   await query(
-    'INSERT INTO users (id, email, password, coins, subscription) VALUES ($1, $2, $3, 100, $4)',
+    'INSERT INTO users (id, email, password, coins, subscription) VALUES ($1, $2, $3, 0, $4)',
     [id, email, hashedPassword, 'free']
   );
 };

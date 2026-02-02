@@ -49,7 +49,7 @@ const createTables = async (client: PoolClient): Promise<void> => {
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        coins INTEGER DEFAULT 100,
+        coins INTEGER DEFAULT 0,
         subscription TEXT DEFAULT 'free',
         subscription_expiry TEXT,
         auto_analysis_enabled BOOLEAN DEFAULT FALSE,

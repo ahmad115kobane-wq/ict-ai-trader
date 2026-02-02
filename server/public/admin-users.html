@@ -502,15 +502,20 @@
                     <label>الباقة</label>
                     <select id="editPackage">
                         <option value="free">مجاني</option>
-                        <option value="weekly">الباقة الأسبوعية</option>
-                        <option value="monthly">الباقة الشهرية</option>
-                        <option value="yearly">الباقة السنوية</option>
+                        <option value="weekly">الباقة الأسبوعية (7 أيام)</option>
+                        <option value="monthly">الباقة الشهرية (30 يوم)</option>
+                        <option value="yearly">الباقة السنوية (365 يوم)</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label>تاريخ انتهاء الاشتراك</label>
                     <input type="datetime-local" id="editExpiry">
+                    <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-secondary" style="flex: 1; min-width: 100px;" onclick="setExpiryDays(7)">+7 أيام</button>
+                        <button type="button" class="btn btn-secondary" style="flex: 1; min-width: 100px;" onclick="setExpiryDays(30)">+30 يوم</button>
+                        <button type="button" class="btn btn-secondary" style="flex: 1; min-width: 100px;" onclick="setExpiryDays(365)">+365 يوم</button>
+                    </div>
                 </div>
 
                 <div class="form-actions">
