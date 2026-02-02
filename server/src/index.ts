@@ -33,6 +33,7 @@ import manualTradeRoutes from './routes/manualTrade';
 import economicAnalysisRoutes from './routes/economicAnalysis';
 import systemNotificationsRoutes from './routes/systemNotifications';
 import backtestingRoutes from './routes/backtesting';
+import adminRoutes from './routes/admin';
 
 import {
   initializeDefaultPackages,
@@ -77,6 +78,7 @@ app.use('/api', manualTradeRoutes);
 app.use('/api/economic-analysis', economicAnalysisRoutes);
 app.use('/api/system-notifications', systemNotificationsRoutes);
 app.use('/api/backtesting', backtestingRoutes);
+app.use('/api/admin', adminRoutes);
 
 // صفحات HTML
 app.get('/setup-telegram', (req, res) => {

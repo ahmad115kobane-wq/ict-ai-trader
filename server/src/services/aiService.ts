@@ -119,10 +119,10 @@ function detectTrendChange(recentAnalyses: AnalysisMemory[]): TrendChange {
       evidence.push('كل التحاليل الأخيرة متفقة');
     }
 
-    // يوجد MSS حديث؟
+    // يوجد MSS حديث؟ (صالح لـ 45 دقيقة للتداول اليومي)
     const recentMSS = detectedEvents.filter(e =>
       e.type.includes('MSS') &&
-      Date.now() - e.time.getTime() < 15 * 60 * 1000
+      Date.now() - e.time.getTime() < 45 * 60 * 1000
     );
     if (recentMSS.length > 0) {
       strength += 2;
@@ -154,12 +154,12 @@ function getMemorySummary(): string {
     return "لا توجد بيانات سابقة - هذا أول تحليل";
   }
 
-  // ✅ استخدام آخر 6 تحاليل (30 دقيقة)
-  const recentAnalyses = analysisHistory.slice(0, 6);
+  // ✅ استخدام آخر 12 تحليل (ساعة كاملة)
+  const recentAnalyses = analysisHistory.slice(0, 12);
 
-  // ✅ تصفية الأحداث - فقط الأحدث من 30 دقيقة
-  const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
-  const recentEvents = detectedEvents.filter(e => e.time.getTime() > thirtyMinutesAgo).slice(0, 5);
+  // ✅ تصفية الأحداث - فقط الأحدث من ساعة كاملة
+  const oneHourAgo = Date.now() - (60 * 60 * 1000);
+  const recentEvents = detectedEvents.filter(e => e.time.getTime() > oneHourAgo).slice(0, 8);
 
   // تحديد الاتجاه السائد
   const bullishCount = recentAnalyses.filter(a => a.h1Trend === 'BULLISH').length;
@@ -173,7 +173,7 @@ function getMemorySummary(): string {
 
   let summary = `
 ══════════════════════════════════════
-📊 ذاكرة آخر ${recentAnalyses.length} تحليلات (${recentAnalyses.length * 5} دقيقة)
+📊 ذاكرة آخر ${recentAnalyses.length} تحليلات (ساعة كاملة)
 ══════════════════════════════════════
 
 🎯 الاتجاه السائد: ${dominantTrend}
@@ -503,14 +503,14 @@ ${memorySummary}
 3️⃣ البحث عن MSS/BOS (مهم جداً) 📐
    • MSS = Market Structure Shift (تغيير الهيكل)
    • BOS = Break of Structure (كسر الهيكل)
-   • إذا وجدت MSS حديث (آخر 15 دقيقة) → اهتمام عالي!
+   • إذا وجدت MSS حديث (آخر 45 دقيقة) → اهتمام عالي!
    • MSS + Sweep = إعداد قوي جداً
 
 4️⃣ البحث عن Liquidity Sweep
    • سحب قمة/قاع سابق على M5
    • إغلاق قوي داخل النطاق
-   • صالح لمدة 15 دقيقة فقط
-   ⚠️ إذا وجدت Sweep في الذاكرة خلال آخر 15 دقيقة → فرصة قوية!
+   • صالح لمدة 45 دقيقة (للتداول اليومي)
+   ⚠️ إذا وجدت Sweep في الذاكرة خلال آخر 45 دقيقة → فرصة قوية!
 
 5️⃣ تأكيدين قويين على الأقل (إلزامي) ✅
    ✔ رفض سعري قوي (ذيل 30%+ من الشمعة)
