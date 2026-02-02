@@ -203,7 +203,7 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
 
     // التحقق من رصيد المستخدم
     const packagePrice = vipPackage.price || 0;
-    const coinPrice = Math.round(packagePrice * 100); // 1 دولار = 100 عملة
+    const coinPrice = Math.round(packagePrice * 1); // 1 دولار = 1 عملة
     const userCoins = user.coins || 0;
 
     console.log(`💰 User coins: ${userCoins}, Package price: $${packagePrice} (${coinPrice} coins)`);

@@ -263,7 +263,7 @@ async function showPackages(chatId: number, user: any): Promise<void> {
     message += `━━━━━━━━━━━━━━━━━━\n\n`;
     
     packages.forEach((pkg: any) => {
-      const coinPrice = Math.round(pkg.price * 100); // 1 دولار = 100 عملة
+      const coinPrice = Math.round(pkg.price * 1); // 1 دولار = 1 عملة
       message += `📦 <b>${pkg.name_ar}</b>\n`;
       message += `💎 السعر: <b>${coinPrice} عملة</b> ($${pkg.price})\n`;
       message += `⏰ المدة: ${pkg.duration_days} يوم\n`;

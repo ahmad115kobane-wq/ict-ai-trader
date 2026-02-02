@@ -34,7 +34,7 @@ router.get('/packages', async (req, res) => {
         durationType: pkg.durationType,
         durationDays: pkg.durationDays,
         price: pkg.price,
-        coinPrice: Math.round(pkg.price * 100), // 1 دولار = 100 عملة
+        coinPrice: Math.round(pkg.price * 1), // 1 دولار = 1 عملة
         coinsIncluded: pkg.coinsIncluded,
         analysisLimit: pkg.analysisLimit,
         features: pkg.features,
@@ -76,7 +76,7 @@ router.get('/packages/:packageId', async (req, res) => {
         durationType: packageDetails.durationType,
         durationDays: packageDetails.durationDays,
         price: packageDetails.price,
-        coinPrice: Math.round(packageDetails.price * 100), // 1 دولار = 100 عملة
+        coinPrice: Math.round(packageDetails.price * 1), // 1 دولار = 1 عملة
         coinsIncluded: packageDetails.coinsIncluded,
         analysisLimit: packageDetails.analysisLimit,
         features: packageDetails.features,
@@ -147,8 +147,8 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
       console.log(`✅ Upgrade allowed: Monthly to Yearly`);
     }
 
-    // حساب سعر الباقة بالعملات (1 دولار = 100 عملة)
-    const coinPrice = Math.round(packageDetails.price * 100);
+    // حساب سعر الباقة بالعملات (1 دولار = 1 عملة)
+    const coinPrice = Math.round(packageDetails.price * 1);
 
     console.log(`💰 User ${userId} attempting to purchase package ${packageId}`);
     console.log(`💵 Package price: $${packageDetails.price} = ${coinPrice} coins`);
