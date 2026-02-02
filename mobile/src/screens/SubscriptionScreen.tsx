@@ -183,7 +183,7 @@ const SubscriptionScreen = () => {
 
         {/* Packages */}
         {packages.map((pkg, index) => {
-          const coinPrice = Math.round(pkg.price * 100); // 1 دولار = 100 عملة
+          const coinPrice = Math.round(pkg.price * 1); // 1 دولار = 1 عملة
           
           return (
             <View key={pkg.id} style={[styles.packageCard, index === 0 && styles.packageCardFeatured]}>
