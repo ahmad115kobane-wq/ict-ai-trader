@@ -2,9 +2,20 @@
 // Admin routes for user management
 
 import express from 'express';
-import { query as dbQuery } from '../db/postgresAdapter';
+import { Pool } from 'pg';
 
 const router = express.Router();
+
+// Create PostgreSQL pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? {
+    rejectUnauthorized: false
+  } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 
 // Get all users with their subscription info
 router.get('/users', async (req, res) => {
@@ -25,7 +36,7 @@ router.get('/users', async (req, res) => {
       ORDER BY created_at DESC
     `;
 
-    const result = await dbQuery(queryText);
+    const result = await pool.query(queryText);
 
     res.json({
       success: true,
@@ -63,7 +74,7 @@ router.get('/users/:id', async (req, res) => {
       WHERE id = $1
     `;
 
-    const result = await dbQuery(queryText, [id]);
+    const result = await pool.query(queryText, [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -149,7 +160,7 @@ router.put('/users/:id', async (req, res) => {
         subscription_status
     `;
 
-    const result = await dbQuery(queryText, values);
+    const result = await pool.query(queryText, values);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -192,7 +203,7 @@ router.post('/users/:id/add-coins', async (req, res) => {
       RETURNING id, email, telegram_username, coins
     `;
 
-    const result = await dbQuery(queryText, [amount, id]);
+    const result = await pool.query(queryText, [amount, id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -236,7 +247,7 @@ router.get('/stats', async (req, res) => {
 
     const results = await Promise.all(
       Object.entries(queries).map(async ([key, queryText]) => {
-        const result = await dbQuery(queryText);
+        const result = await pool.query(queryText);
         return [key, result.rows[0]];
       })
     );
