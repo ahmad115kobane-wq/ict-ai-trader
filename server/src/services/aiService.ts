@@ -65,14 +65,101 @@ function addEvent(event: MarketEvent): void {
   console.log(`📌 Event Added: ${event.type} @ ${event.price}`);
 }
 
+// ═══════════════════════════════════════════════════════════
+// 🎯 كشف تغير الاتجاه
+// ═══════════════════════════════════════════════════════════
+
+interface TrendChange {
+  changed: boolean;
+  from: string;
+  to: string;
+  strength: number;
+  evidence: string[];
+}
+
+// حساب الاتجاه السائد من مجموعة تحاليل
+function getMajorityTrend(analyses: AnalysisMemory[]): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
+  if (analyses.length === 0) return 'NEUTRAL';
+
+  const bullish = analyses.filter(a => a.h1Trend === 'BULLISH').length;
+  const bearish = analyses.filter(a => a.h1Trend === 'BEARISH').length;
+
+  // يجب أن يكون 60%+ من نفس الاتجاه
+  if (bullish >= analyses.length * 0.6) return 'BULLISH';
+  if (bearish >= analyses.length * 0.6) return 'BEARISH';
+  return 'NEUTRAL';
+}
+
+// كشف تغير الاتجاه بذكاء
+function detectTrendChange(recentAnalyses: AnalysisMemory[]): TrendChange {
+  if (recentAnalyses.length < 6) {
+    return { changed: false, from: '', to: '', strength: 0, evidence: [] };
+  }
+
+  // آخر 3 تحاليل (15 دقيقة الأخيرة)
+  const current = recentAnalyses.slice(0, 3);
+  // السابقة (15-30 دقيقة)
+  const previous = recentAnalyses.slice(3, 6);
+
+  const currentTrend = getMajorityTrend(current);
+  const previousTrend = getMajorityTrend(previous);
+
+  // هل تغير الاتجاه؟
+  if (currentTrend !== previousTrend &&
+    currentTrend !== 'NEUTRAL' &&
+    previousTrend !== 'NEUTRAL') {
+
+    // حساب قوة التغيير
+    const evidence: string[] = [];
+    let strength = 5; // قاعدة
+
+    // كل التحاليل الثلاثة متفقة؟ → قوة +3
+    if (current.every(a => a.h1Trend === currentTrend)) {
+      strength += 3;
+      evidence.push('كل التحاليل الأخيرة متفقة');
+    }
+
+    // يوجد MSS حديث؟
+    const recentMSS = detectedEvents.filter(e =>
+      e.type.includes('MSS') &&
+      Date.now() - e.time.getTime() < 15 * 60 * 1000
+    );
+    if (recentMSS.length > 0) {
+      strength += 2;
+      evidence.push(`MSS ${currentTrend} مكتشف`);
+    }
+
+    // Score عالي؟
+    const avgScore = current.reduce((sum, a) => sum + a.score, 0) / current.length;
+    if (avgScore >= 7) {
+      strength += 1;
+      evidence.push(`ثقة عالية (${avgScore.toFixed(1)}/10)`);
+    }
+
+    return {
+      changed: true,
+      from: previousTrend,
+      to: currentTrend,
+      strength: Math.min(strength, 10),
+      evidence
+    };
+  }
+
+  return { changed: false, from: '', to: '', strength: 0, evidence: [] };
+}
+
 // الحصول على ملخص الذاكرة
 function getMemorySummary(): string {
   if (analysisHistory.length === 0) {
     return "لا توجد بيانات سابقة - هذا أول تحليل";
   }
 
+  // ✅ استخدام آخر 6 تحاليل (30 دقيقة)
   const recentAnalyses = analysisHistory.slice(0, 6);
-  const recentEvents = detectedEvents.slice(0, 10);
+
+  // ✅ تصفية الأحداث - فقط الأحدث من 30 دقيقة
+  const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
+  const recentEvents = detectedEvents.filter(e => e.time.getTime() > thirtyMinutesAgo).slice(0, 5);
 
   // تحديد الاتجاه السائد
   const bullishCount = recentAnalyses.filter(a => a.h1Trend === 'BULLISH').length;
@@ -126,7 +213,94 @@ function getMemorySummary(): string {
     });
   }
 
+  // ⚠️ كشف تغير الاتجاه
+  const trendChange = detectTrendChange(recentAnalyses);
+  if (trendChange.changed) {
+    summary += `
+
+⚠️⚠️⚠️ تنبيه: تغيير الاتجاه مكتشف! ⚠️⚠️⚠️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔄 من: ${trendChange.from} → إلى: ${trendChange.to}
+💪 قوة التغيير: ${trendChange.strength}/10
+
+📌 الأدلة:
+${trendChange.evidence.map(e => `   • ${e}`).join('\n')}
+
+⚡ توصية: ابحث عن صفقات في الاتجاه الجديد (${trendChange.to})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+  }
+
   return summary;
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🔍 كشف MSS و BOS من الشموع
+// ═══════════════════════════════════════════════════════════
+
+// كشف Higher High
+function isHigherHigh(candle: any, previousCandles: any[]): boolean {
+  if (previousCandles.length === 0) return false;
+  const maxHigh = Math.max(...previousCandles.map(c => c.high));
+  return candle.high > maxHigh;
+}
+
+// كشف Lower Low
+function isLowerLow(candle: any, previousCandles: any[]): boolean {
+  if (previousCandles.length === 0) return false;
+  const minLow = Math.min(...previousCandles.map(c => c.low));
+  return candle.low < minLow;
+}
+
+// كشف MSS (Market Structure Shift)
+function detectMSS(candles: any[]): MarketEvent[] {
+  const events: MarketEvent[] = [];
+  if (candles.length < 15) return events;
+
+  const recent = candles.slice(-20); // آخر 20 شمعة
+
+  for (let i = 10; i < recent.length; i++) {
+    const current = recent[i];
+    const previous10 = recent.slice(i - 10, i);
+
+    // MSS Bullish: Higher High بعد فترة من Lower Lows
+    if (isHigherHigh(current, previous10)) {
+      // تحقق من وجود Lower Lows في الماضي القريب
+      const hadBearishStructure = previous10.slice(-5).some((c, idx, arr) => {
+        if (idx === 0) return false;
+        return c.low < arr[idx - 1].low;
+      });
+
+      if (hadBearishStructure && current.close > current.open) {
+        events.push({
+          type: 'MSS_BULLISH',
+          price: current.high,
+          time: new Date(current.time),
+          description: `MSS صعودي @ ${current.high.toFixed(2)} - تغيير هيكل السوق`
+        });
+      }
+    }
+
+    // MSS Bearish: Lower Low بعد فترة من Higher Highs
+    if (isLowerLow(current, previous10)) {
+      // تحقق من وجود Higher Highs في الماضي القريب
+      const hadBullishStructure = previous10.slice(-5).some((c, idx, arr) => {
+        if (idx === 0) return false;
+        return c.high > arr[idx - 1].high;
+      });
+
+      if (hadBullishStructure && current.close < current.open) {
+        events.push({
+          type: 'MSS_BEARISH',
+          price: current.low,
+          time: new Date(current.time),
+          description: `MSS هبوطي @ ${current.low.toFixed(2)} - تغيير هيكل السوق`
+        });
+      }
+    }
+  }
+
+  return events;
 }
 
 // اكتشاف الأحداث من الشموع
@@ -191,7 +365,11 @@ function detectEventsFromCandles(h1Candles: any[], m5Candles: any[], currentPric
     }
   }
 
-  // البحث عن FVG
+  // ✅ كشف MSS من شموع M5
+  const mssEvents = detectMSS(m5Candles);
+  mssEvents.forEach(e => events.push(e));
+
+  // البحث عن FVG (فقط الكبيرة والواضحة)
   for (let i = 2; i < recent20.length; i++) {
     const c1 = recent20[i - 2];
     const c2 = recent20[i - 1];
@@ -310,21 +488,36 @@ ${memorySummary}
 📋 منهجية التحليل ICT
 ═══════════════════════════════════════
 
-1️⃣ تحديد الاتجاه H1 (إلزامي)
+1️⃣ تحديد الاتجاه H1 (إلزامي) 🎯
    • صاعد: Higher Highs + Higher Lows → شراء
    • هابط: Lower Highs + Lower Lows → بيع
    • عرضي: لا تتداول حتى يتضح الاتجاه
 
-2️⃣ البحث عن Liquidity Sweep (مهم جداً)
-   • سحب قمة/قاع سابق على M5 أو H1
-   • إغلاق الشمعة داخل النطاق بعد الاختراق
-   ⚠️ إذا وجدت Sweep في الذاكرة خلال آخر 30 دقيقة → فرصة جيدة!
+2️⃣ أولوية قصوى: كشف تغير الاتجاه 🔥🔥🔥
+   ⚠️ إذا كان هناك تغيير مكتشف في الذاكرة:
+      • هذه فرصة ذهبية! 🌟
+      • السوق يتغير من [السابق] إلى [الجديد]
+      • ركز على الاتجاه الجديد فقط!
+      • ابحث عن MSS/BOS + Sweep + تأكيد
 
-3️⃣ تأكيد واحد على الأقل (اختر الأوضح)
-   ✔ رفض سعري (ذيل طويل 30%+ من الشمعة)
+3️⃣ البحث عن MSS/BOS (مهم جداً) 📐
+   • MSS = Market Structure Shift (تغيير الهيكل)
+   • BOS = Break of Structure (كسر الهيكل)
+   • إذا وجدت MSS حديث (آخر 15 دقيقة) → اهتمام عالي!
+   • MSS + Sweep = إعداد قوي جداً
+
+4️⃣ البحث عن Liquidity Sweep
+   • سحب قمة/قاع سابق على M5
+   • إغلاق قوي داخل النطاق
+   • صالح لمدة 15 دقيقة فقط
+   ⚠️ إذا وجدت Sweep في الذاكرة خلال آخر 15 دقيقة → فرصة قوية!
+
+5️⃣ تأكيدين قويين على الأقل (إلزامي) ✅
+   ✔ رفض سعري قوي (ذيل 30%+ من الشمعة)
    ✔ شمعة ابتلاعية (Engulfing)
-   ✔ FVG أو Order Block قريب من السعر
-   ✔ BOS/MSS مع اتجاه H1
+   ✔ FVG أو Order Block قريب
+   ✔ BOS/MSS واضح
+   ⚠️ يجب وجود تأكيدين مختلفين!
 
 4️⃣ منطقة الدخول (Entry Zone)
    • من FVG أو Order Block أو منطقة الرفض
@@ -340,14 +533,19 @@ ${memorySummary}
    • RR جيد (1:1.5 أو أفضل)
    • لا تنتظر المثالية
 
-❌ ارفض إذا:
-   • الاتجاه غير واضح أو متناقض
-   • Entry بعيد (أكثر من 0.8% من السعر)
-   • RR ضعيف (أقل من 1:1.5)
+❌ ارفض بدون تردد:
+   • الاتجاه غير واضح أو متناقض 🚫
+   • تأكيد واحد فقط (غير كافي) ❌
+   • Entry بعيد (أكثر من 0.6% من السعر) 🚫
+   • RR ضعيف (أقل من 1:1.5) ❌
+   • Score أقل من 7/10 🚫
+   • Confidence أقل من 65% ❌
 
-⚖️ توازن:
-   • لا تكن متساهلاً جداً → صفقات خاسرة
-   • لا تكن صارماً جداً → تفويت فرص
+💡 مبادئ ذكية:
+   • الجودة فوق الكمية 🌟
+   • لا تتساهل في المعايير ⚠️
+   • إذا شككت → NO_TRADE 🚫
+   • انتظر الإعداد المثالي ⏳
 
 ═══════════════════════════════════════
 🎯 نظام الأهداف (TPs)
@@ -687,7 +885,7 @@ ${candleDataText}
           { type: "image_url", image_url: { url: `data:image/png;base64,${cleanM5}` } }
         ]
       }],
-      temperature: 0.15, // زيادة قليلة للتنوع
+      temperature: 0.08, // دقة عالية - لا عشوائية
       max_tokens: 2500
     });
 
