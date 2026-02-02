@@ -14,11 +14,11 @@ router.get('/users', async (req, res) => {
         id,
         email,
         coins,
-        subscription_package,
+        subscription,
         subscription_expiry,
-        subscription_status,
+        auto_analysis_enabled,
         created_at,
-        last_login,
+        updated_at as last_login,
         CASE 
           WHEN email LIKE 'telegram_%@ict-trader.local' THEN 
             SUBSTRING(email FROM 'telegram_(.*)@ict-trader.local')
@@ -58,12 +58,11 @@ router.get('/users/:id', async (req, res) => {
         id,
         email,
         coins,
-        subscription_package,
+        subscription,
         subscription_expiry,
-        subscription_status,
         auto_analysis_enabled,
         created_at,
-        last_login,
+        updated_at as last_login,
         CASE 
           WHEN email LIKE 'telegram_%@ict-trader.local' THEN 
             SUBSTRING(email FROM 'telegram_(.*)@ict-trader.local')
@@ -105,9 +104,8 @@ router.put('/users/:id', async (req, res) => {
     const { id } = req.params;
     const {
       coins,
-      subscription_package,
-      subscription_expiry,
-      subscription_status
+      subscription,
+      subscription_expiry
     } = req.body;
 
     // Build update query dynamically
@@ -121,21 +119,15 @@ router.put('/users/:id', async (req, res) => {
       paramCount++;
     }
 
-    if (subscription_package !== undefined) {
-      updates.push(`subscription_package = $${paramCount}`);
-      values.push(subscription_package);
+    if (subscription !== undefined) {
+      updates.push(`subscription = $${paramCount}`);
+      values.push(subscription);
       paramCount++;
     }
 
     if (subscription_expiry !== undefined) {
       updates.push(`subscription_expiry = $${paramCount}`);
       values.push(subscription_expiry);
-      paramCount++;
-    }
-
-    if (subscription_status !== undefined) {
-      updates.push(`subscription_status = $${paramCount}`);
-      values.push(subscription_status);
       paramCount++;
     }
 
@@ -156,9 +148,8 @@ router.put('/users/:id', async (req, res) => {
         id,
         email,
         coins,
-        subscription_package,
+        subscription,
         subscription_expiry,
-        subscription_status,
         CASE 
           WHEN email LIKE 'telegram_%@ict-trader.local' THEN 
             SUBSTRING(email FROM 'telegram_(.*)@ict-trader.local')

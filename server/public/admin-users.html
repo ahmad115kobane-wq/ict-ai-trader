@@ -501,7 +501,7 @@
                 <div class="form-group">
                     <label>الباقة</label>
                     <select id="editPackage">
-                        <option value="">بدون اشتراك</option>
+                        <option value="free">مجاني</option>
                         <option value="weekly">الباقة الأسبوعية</option>
                         <option value="monthly">الباقة الشهرية</option>
                         <option value="yearly">الباقة السنوية</option>
@@ -511,15 +511,6 @@
                 <div class="form-group">
                     <label>تاريخ انتهاء الاشتراك</label>
                     <input type="datetime-local" id="editExpiry">
-                </div>
-
-                <div class="form-group">
-                    <label>حالة الاشتراك</label>
-                    <select id="editStatus">
-                        <option value="active">نشط</option>
-                        <option value="expired">منتهي</option>
-                        <option value="cancelled">ملغي</option>
-                    </select>
                 </div>
 
                 <div class="form-actions">
@@ -634,10 +625,12 @@
                     ? (user.telegram_id || user.email.replace('telegram_', '').replace('@ict-trader.local', ''))
                     : user.email;
 
-                const packageName = user.subscription_package 
-                    ? (user.subscription_package === 'weekly' ? 'أسبوعية' : 
-                       user.subscription_package === 'monthly' ? 'شهرية' : 'سنوية')
-                    : '-';
+                const packageName = user.subscription 
+                    ? (user.subscription === 'weekly' ? 'أسبوعية' : 
+                       user.subscription === 'monthly' ? 'شهرية' : 
+                       user.subscription === 'yearly' ? 'سنوية' : 
+                       user.subscription === 'free' ? 'مجاني' : user.subscription)
+                    : 'مجاني';
 
                 const expiryDate = user.subscription_expiry 
                     ? new Date(user.subscription_expiry).toLocaleDateString('ar-EG')
@@ -690,7 +683,7 @@
             document.getElementById('editUserId').value = user.id;
             document.getElementById('editEmail').value = userDisplay;
             document.getElementById('editCoins').value = user.coins || 0;
-            document.getElementById('editPackage').value = user.subscription_package || '';
+            document.getElementById('editPackage').value = user.subscription || 'free';
             
             if (user.subscription_expiry) {
                 const date = new Date(user.subscription_expiry);
@@ -700,7 +693,6 @@
                 document.getElementById('editExpiry').value = '';
             }
             
-            document.getElementById('editStatus').value = user.subscription_status || 'expired';
             document.getElementById('editModal').classList.add('active');
         }
 
@@ -713,9 +705,8 @@
             
             const userId = document.getElementById('editUserId').value;
             const coins = parseInt(document.getElementById('editCoins').value);
-            const package_type = document.getElementById('editPackage').value;
+            const subscription = document.getElementById('editPackage').value;
             const expiry = document.getElementById('editExpiry').value;
-            const status = document.getElementById('editStatus').value;
 
             try {
                 const response = await fetch(`${API_URL}/api/admin/users/${userId}`, {
@@ -725,9 +716,8 @@
                     },
                     body: JSON.stringify({
                         coins,
-                        subscription_package: package_type || null,
-                        subscription_expiry: expiry || null,
-                        subscription_status: status
+                        subscription: subscription || 'free',
+                        subscription_expiry: expiry || null
                     })
                 });
 
