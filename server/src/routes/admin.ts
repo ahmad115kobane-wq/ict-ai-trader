@@ -108,6 +108,8 @@ router.put('/users/:id', async (req, res) => {
       subscription_expiry
     } = req.body;
 
+    console.log('📝 Update request:', { id, coins, subscription, subscription_expiry });
+
     // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
@@ -157,6 +159,9 @@ router.put('/users/:id', async (req, res) => {
         END as telegram_id
     `;
 
+    console.log('📊 Query:', queryText);
+    console.log('📊 Values:', values);
+
     const result = await dbQuery(queryText, values);
 
     if (result.rows.length === 0) {
@@ -166,13 +171,15 @@ router.put('/users/:id', async (req, res) => {
       });
     }
 
+    console.log('✅ Update successful:', result.rows[0]);
+
     res.json({
       success: true,
       user: result.rows[0],
       message: 'User updated successfully'
     });
   } catch (error: any) {
-    console.error('Error updating user:', error);
+    console.error('❌ Error updating user:', error);
     res.status(500).json({
       success: false,
       error: error.message
