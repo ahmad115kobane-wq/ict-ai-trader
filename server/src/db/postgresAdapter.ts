@@ -72,6 +72,19 @@ const createTables = async (client: PoolClient): Promise<void> => {
       END $$;
     `);
 
+    // إضافة حقول إشعارات انتهاء الاشتراك إذا لم تكن موجودة
+    await client.query(`
+      DO $ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='subscription_expiry_notified') THEN
+          ALTER TABLE users ADD COLUMN subscription_expiry_notified BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='subscription_expiring_notified') THEN
+          ALTER TABLE users ADD COLUMN subscription_expiring_notified BOOLEAN DEFAULT FALSE;
+        END IF;
+      END $;
+    `);
+
     // جدول تاريخ التحليلات (القديم - للتوافق)
     await client.query(`
       CREATE TABLE IF NOT EXISTS analysis_history (

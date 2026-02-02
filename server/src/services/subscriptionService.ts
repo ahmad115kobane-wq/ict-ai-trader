@@ -357,6 +357,15 @@ export const checkAndExpireSubscriptions = async (): Promise<{
         // إيقاف التحليل التلقائي لمنع استلام الإشعارات
         await setUserAutoAnalysis(subscription.user_id, false);
 
+        // إرسال إشعار انتهاء الاشتراك
+        try {
+          const { notifySubscriptionExpired } = await import('./systemNotificationService');
+          await notifySubscriptionExpired(subscription.user_id, subscription.plan_name);
+          console.log(`📧 Sent expiry notification to user ${subscription.user_id}`);
+        } catch (notifError) {
+          console.error(`❌ Failed to send expiry notification to user ${subscription.user_id}:`, notifError);
+        }
+
         expiredUsers.push(subscription.user_id);
         console.log(`⏰ Expired subscription: ${subscription.plan_name} for user ${subscription.user_id} (auto-analysis disabled)`);
       } catch (error) {
