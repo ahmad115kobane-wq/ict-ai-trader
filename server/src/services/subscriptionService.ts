@@ -203,29 +203,14 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
 
     // التحقق من رصيد المستخدم
     const packagePrice = vipPackage.price || 0;
+    const coinPrice = Math.round(packagePrice * 100); // 1 دولار = 100 عملة
     const userCoins = user.coins || 0;
 
-    console.log(`💰 User coins: ${userCoins}, Package price: ${packagePrice}`);
+    console.log(`💰 User coins: ${userCoins}, Package price: $${packagePrice} (${coinPrice} coins)`);
 
-    if (userCoins < packagePrice) {
-      return {
-        success: false,
-        message: `رصيدك غير كافٍ. تحتاج إلى ${packagePrice} عملة ولديك ${userCoins} عملة فقط.`
-      };
-    }
-
-    // خصم النقاط من رصيد المستخدم
-    const { deductCoins } = await import('../db/index');
-    const deductSuccess = await deductCoins(userId, packagePrice);
-
-    if (!deductSuccess) {
-      return {
-        success: false,
-        message: 'فشل خصم النقاط من رصيدك. يرجى المحاولة لاحقاً.'
-      };
-    }
-
-    console.log(`✅ Deducted ${packagePrice} coins from user ${userId}`);
+    // ملاحظة: الخصم يتم في الـ route قبل استدعاء هذه الدالة
+    // لذلك لا نحتاج لخصم العملات هنا مرة أخرى
+    console.log(`💰 Coins already deducted in route. Proceeding with subscription creation...`);
 
     // حساب تاريخ انتهاء الاشتراك
     const now = new Date();
@@ -259,7 +244,7 @@ export const purchaseSubscription = async (purchase: SubscriptionPurchase): Prom
 
     console.log(`✅ Subscription created: ${vipPackage.name_ar} for user ${userId}`);
 
-    const newBalance = userCoins - packagePrice + (vipPackage.coins_included || 0);
+    const newBalance = userCoins - coinPrice + (vipPackage.coins_included || 0);
 
     return {
       success: true,

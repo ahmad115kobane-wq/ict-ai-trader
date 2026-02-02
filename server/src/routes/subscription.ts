@@ -22,7 +22,7 @@ const router = Router();
 router.get('/packages', async (req, res) => {
   try {
     const packages = await getAvailablePackages();
-    
+
     res.json({
       success: true,
       packages: packages.map(pkg => ({
@@ -57,7 +57,7 @@ router.get('/packages/:packageId', async (req, res) => {
   try {
     const { packageId } = req.params;
     const packageDetails = await getPackageDetails(packageId);
-    
+
     if (!packageDetails) {
       return res.status(404).json({
         success: false,
@@ -120,18 +120,18 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
 
     // التحقق من وجود اشتراك نشط
     const subscriptionStatus = await getUserSubscriptionStatus(userId);
-    
+
     if (subscriptionStatus.hasActiveSubscription && subscriptionStatus.subscription) {
       const currentSubscription = subscriptionStatus.subscription;
-      const currentDuration = currentSubscription.plan_name.includes('شهر') ? 30 : 
-                             currentSubscription.plan_name.includes('أسبوع') ? 7 : 365;
+      const currentDuration = currentSubscription.plan_name.includes('شهر') ? 30 :
+        currentSubscription.plan_name.includes('أسبوع') ? 7 : 365;
       const newDuration = packageDetails.durationDays;
-      
+
       console.log(`📊 Current subscription: ${currentDuration} days, New package: ${newDuration} days`);
-      
+
       // السماح بالترقية فقط من شهري إلى سنوي
       const isUpgrade = currentDuration === 30 && newDuration === 365;
-      
+
       if (!isUpgrade) {
         return res.status(400).json({
           success: false,
@@ -143,13 +143,13 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
           canUpgrade: currentDuration === 30 && newDuration > currentDuration
         });
       }
-      
+
       console.log(`✅ Upgrade allowed: Monthly to Yearly`);
     }
 
     // حساب سعر الباقة بالعملات (1 دولار = 100 عملة)
     const coinPrice = Math.round(packageDetails.price * 100);
-    
+
     console.log(`💰 User ${userId} attempting to purchase package ${packageId}`);
     console.log(`💵 Package price: $${packageDetails.price} = ${coinPrice} coins`);
     console.log(`🪙 User current balance: ${user?.coins || 0} coins`);
@@ -168,7 +168,7 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
     // خصم العملات من المستخدم
     const newBalance = (user.coins || 0) - coinPrice;
     const deductSuccess = addCoinsToUser(userId, -coinPrice, `شراء باقة ${packageDetails.nameAr}`);
-    
+
     if (!deductSuccess) {
       return res.status(500).json({
         success: false,
@@ -284,7 +284,7 @@ router.get('/history', authMiddleware, async (req: AuthRequest, res: Response) =
   try {
     const userId = req.userId!;
     const limit = parseInt(req.query.limit as string) || 10;
-    
+
     const subscriptions = await getUserSubscriptions(userId, limit);
 
     res.json({
