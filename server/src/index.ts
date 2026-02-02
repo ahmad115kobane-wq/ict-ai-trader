@@ -101,6 +101,10 @@ app.get('/backtesting', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'backtest-dashboard.html'));
 });
 
+app.get('/admin-users', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'public', 'admin-users.html'));
+});
+
 // ===== Startup Logic =====
 (async () => {
   try {
