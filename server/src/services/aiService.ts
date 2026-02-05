@@ -1255,9 +1255,9 @@ function validateAndFix(
   // تحويل الأرقام
   let entry = toNumber(t.entry);
   let sl = toNumber(t.sl);
-  let tp1 = toNumber(tp1);
-  let tp2 = toNumber(tp2);
-  let tp3 = toNumber(tp3);
+  let tp1 = toNumber(t.tp1);
+  let tp2 = toNumber(t.tp2);
+  let tp3 = toNumber(t.tp3);
 
   // التحقق من صلاحية الأرقام
   if ([entry, sl, tp1, tp2, tp3].some(isNaN)) {
@@ -1389,7 +1389,7 @@ function validateAndFix(
   // إضافة معلومات الفلاتر للصفقة
   // ═══════════════════════════════════════════════════════════════════════════
 
-  t.filtersApplied = {
+  (t as any).filtersApplied = {
     filter1_peak: h1Candles && isBuy ? "PASS" : "N/A",
     filter2_momentum: m5Candles ? "PASS" : "N/A",
     filter3_pullback: (h1Candles && m5Candles) ? "PASS" : "N/A",
@@ -1583,7 +1583,7 @@ ${candleDataText}
       const t = validated.suggestedTrade;
       console.log(`   ${t.type} @ ${t.entry}`);
       console.log(`   SL: ${t.sl} | TP1: ${t.tp1} | TP2: ${t.tp2} | TP3: ${t.tp3}`);
-      console.log(`   الفلاتر: ${JSON.stringify(t.filtersApplied || {})}`);
+      console.log(`   الفلاتر: ${JSON.stringify((t as any).filtersApplied || {})}`);
     }
     console.log("═══════════════════════════════════════════════════════════════\n");
 
