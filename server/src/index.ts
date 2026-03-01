@@ -39,6 +39,8 @@ import {
   initializeDefaultPackages,
   checkAndExpireSubscriptions,
 } from './services/subscriptionService';
+import { authMiddleware } from './middleware/auth';
+import { activeSubscriptionMiddleware } from './middleware/subscriptionAuth';
 
 import { setupTelegramWebhook } from './services/telegramBotService';
 
@@ -1846,8 +1848,9 @@ app.get('/api/analysis/current-price', async (req, res) => {
 });
 
 // ===================== Economic Calendar Endpoints =====================
+// ⚠️ التقويم الاقتصادي متاح فقط لأصحاب الباقات النشطة
 // جلب التقويم الاقتصادي الكامل
-app.get('/api/economic-calendar', async (req, res) => {
+app.get('/api/economic-calendar', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const { getEconomicCalendar } = await import('./services/economicCalendarService');
     const forceRefresh = req.query.refresh === 'true';
@@ -1863,7 +1866,7 @@ app.get('/api/economic-calendar', async (req, res) => {
 });
 
 // جلب الأحداث ذات التأثير العالي فقط
-app.get('/api/economic-calendar/high-impact', async (req, res) => {
+app.get('/api/economic-calendar/high-impact', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const { getHighImpactEvents } = await import('./services/economicCalendarService');
     const events = await getHighImpactEvents();
@@ -1882,7 +1885,7 @@ app.get('/api/economic-calendar/high-impact', async (req, res) => {
 });
 
 // جلب أحداث اليوم
-app.get('/api/economic-calendar/today', async (req, res) => {
+app.get('/api/economic-calendar/today', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const { getTodayEvents } = await import('./services/economicCalendarService');
     const events = await getTodayEvents();
@@ -1902,7 +1905,7 @@ app.get('/api/economic-calendar/today', async (req, res) => {
 });
 
 // جلب الأحداث القادمة
-app.get('/api/economic-calendar/upcoming', async (req, res) => {
+app.get('/api/economic-calendar/upcoming', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const { getUpcomingEvents } = await import('./services/economicCalendarService');
     const hours = parseInt(req.query.hours as string) || 24;
@@ -1923,7 +1926,7 @@ app.get('/api/economic-calendar/upcoming', async (req, res) => {
 });
 
 // التحقق من وجود أحداث عالية التأثير قريبة
-app.get('/api/economic-calendar/check-upcoming', async (req, res) => {
+app.get('/api/economic-calendar/check-upcoming', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const { hasHighImpactEventSoon } = await import('./services/economicCalendarService');
     const minutes = parseInt(req.query.minutes as string) || 30;
@@ -1958,7 +1961,7 @@ app.get('/send-test-economic-notification', async (req, res) => {
 });
 
 // الحصول على إحصائيات إشعارات الأحداث الاقتصادية
-app.get('/api/economic-calendar/notification-stats', async (req, res) => {
+app.get('/api/economic-calendar/notification-stats', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const { getNotificationStats } = await import('./services/economicEventNotificationService');
     const stats = getNotificationStats();
@@ -1976,7 +1979,7 @@ app.get('/api/economic-calendar/notification-stats', async (req, res) => {
 });
 
 // اختبار البيانات الخام من Forex Factory
-app.get('/api/economic-calendar/test-raw-data', async (req, res) => {
+app.get('/api/economic-calendar/test-raw-data', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const axios = await import('axios');
     const response = await axios.default.get('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {

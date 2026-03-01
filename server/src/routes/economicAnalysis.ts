@@ -3,6 +3,7 @@
 
 import express from 'express';
 import { authMiddleware } from '../middleware/auth';
+import { activeSubscriptionMiddleware } from '../middleware/subscriptionAuth';
 import {
   analyzeEconomicEvent,
   getAnalysis,
@@ -18,7 +19,7 @@ const router = express.Router();
  * GET /api/economic-analysis/today
  * تحليل جميع أحداث اليوم
  */
-router.get('/today', authMiddleware, async (req, res) => {
+router.get('/today', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const userId = (req as any).userId;
     
@@ -44,7 +45,7 @@ router.get('/today', authMiddleware, async (req, res) => {
  * GET /api/economic-analysis/event/:eventId
  * جلب تحليل موجود لحدث محدد
  */
-router.get('/event/:eventId', authMiddleware, async (req, res) => {
+router.get('/event/:eventId', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { eventId } = req.params;
@@ -87,7 +88,7 @@ router.get('/event/:eventId', authMiddleware, async (req, res) => {
  * POST /api/economic-analysis/event/:eventId
  * إنشاء تحليل جديد لحدث محدد
  */
-router.post('/event/:eventId', authMiddleware, async (req, res) => {
+router.post('/event/:eventId', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { eventId } = req.params;
@@ -153,7 +154,7 @@ router.post('/event/:eventId', authMiddleware, async (req, res) => {
  * GET /api/economic-analysis/my-analyses
  * الحصول على تحليلات المستخدم لليوم
  */
-router.get('/my-analyses', authMiddleware, async (req, res) => {
+router.get('/my-analyses', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const userId = (req as any).userId;
     
@@ -178,7 +179,7 @@ router.get('/my-analyses', authMiddleware, async (req, res) => {
  * POST /api/economic-analysis/search
  * البحث عن تحليلات اقتصادية من الإنترنت
  */
-router.post('/search', authMiddleware, async (req, res) => {
+router.post('/search', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const { eventName } = req.body;
     
@@ -209,7 +210,7 @@ router.post('/search', authMiddleware, async (req, res) => {
  * GET /api/economic-analysis/calendar-with-analysis
  * التقويم الاقتصادي مع التحليلات
  */
-router.get('/calendar-with-analysis', authMiddleware, async (req, res) => {
+router.get('/calendar-with-analysis', authMiddleware, activeSubscriptionMiddleware, async (req, res) => {
   try {
     const userId = (req as any).userId;
     

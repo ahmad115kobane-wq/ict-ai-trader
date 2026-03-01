@@ -7,10 +7,9 @@ import {
   getUserById,
   getUserByEmail,
   createUser,
-  getUserActiveSubscription,
-  getAllVipPackages
+  getUserActiveSubscription
 } from '../db/index';
-import { purchaseSubscription } from './subscriptionService';
+import { purchaseSubscription, getAvailablePackages } from './subscriptionService';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -248,7 +247,8 @@ async function handleStartCommand(chatId: number, telegramUser: TelegramUser): P
 async function showPackages(chatId: number, user: any): Promise<void> {
   try {
     console.log(`🔄 Fetching packages for user: ${user.email}`);
-    const packages = await getAllVipPackages();
+    // استخدام نفس مصدر الباقات الموحد مع التطبيق
+    const packages = await getAvailablePackages();
     
     if (packages.length === 0) {
       console.log(`⚠️ No packages available`);
@@ -263,23 +263,23 @@ async function showPackages(chatId: number, user: any): Promise<void> {
     message += `━━━━━━━━━━━━━━━━━━\n\n`;
     
     packages.forEach((pkg: any) => {
-      const coinPrice = Math.round(pkg.price * 1); // 1 دولار = 1 عملة
-      message += `📦 <b>${pkg.name_ar}</b>\n`;
+      const coinPrice = Math.round(pkg.price * 1); // 1 دولار = 1 عملة (موحد مع التطبيق)
+      message += `📦 <b>${pkg.nameAr}</b>\n`;
       message += `💎 السعر: <b>${coinPrice} عملة</b> ($${pkg.price})\n`;
-      message += `⏰ المدة: ${pkg.duration_days} يوم\n`;
-      message += `🎁 عملات مجانية: +${pkg.coins_included} عملة\n`;
-      message += `📊 التحليلات: غير محدودة\n`;
+      message += `⏰ المدة: ${pkg.durationDays} يوم\n`;
+      message += `🎁 عملات مجانية: +${pkg.coinsIncluded} عملة\n`;
+      message += `📊 التحليلات: ${pkg.analysisLimit === -1 ? 'غير محدودة' : pkg.analysisLimit + ' تحليل'}\n`;
       message += `\n`;
     });
 
     message += `━━━━━━━━━━━━━━━━━━\n`;
     message += `👇 اختر الباقة المناسبة لك:`;
 
-    // إنشاء الأزرار
+    // إنشاء الأزرار (استخدام نفس الأسعار الموحدة)
     const buttons = packages.map((pkg: any) => {
-      const coinPrice = Math.round(pkg.price * 1); // 1 دولار = 1 عملة (مطابق للنظام)
+      const coinPrice = Math.round(pkg.price * 1); // 1 دولار = 1 عملة (موحد مع التطبيق)
       return [{
-        text: `💎 ${pkg.name_ar} - ${coinPrice} عملة`,
+        text: `💎 ${pkg.nameAr} - ${coinPrice} عملة`,
         callback_data: `buy_${pkg.id}`
       }];
     });
@@ -620,6 +620,35 @@ async function handleAutoToggle(chatId: number, telegramUser: TelegramUser, call
  */
 async function handleEconomicCalendar(chatId: number, telegramUser: TelegramUser, callbackQueryId: string): Promise<void> {
   try {
+    // التحقق من وجود اشتراك نشط - التقويم الاقتصادي لأصحاب الباقات فقط
+    const user = await getOrCreateUser(telegramUser);
+    if (!user) {
+      await answerCallbackQuery(callbackQueryId, '❌ خطأ في الحساب');
+      return;
+    }
+
+    const activeSubscription = await getUserActiveSubscription(user.id);
+    if (!activeSubscription) {
+      await answerCallbackQuery(callbackQueryId, '🔒 هذه الميزة لأصحاب الباقات فقط');
+      await sendMessage(
+        chatId,
+        `🔒 <b>ميزة حصرية لأصحاب الباقات</b>\n\n` +
+        `📅 التقويم الاقتصادي وتحليل الأخبار متاح فقط للمشتركين في إحدى الباقات.\n\n` +
+        `💡 اشترك الآن للحصول على:\n` +
+        `• 📅 التقويم الاقتصادي مع تحليل AI\n` +
+        `• 📊 تحليلات تداول غير محدودة\n` +
+        `• 🔔 إشعارات فورية\n\n` +
+        `👇 اختر باقة للاشتراك:`,
+        {
+          inline_keyboard: [
+            [{ text: '💎 عرض الباقات', callback_data: 'show_packages' }],
+            [{ text: '🏠 الرئيسية', callback_data: 'back_to_main' }]
+          ]
+        }
+      );
+      return;
+    }
+
     await answerCallbackQuery(callbackQueryId, '📅 جاري تحميل التقويم...');
     
     // استيراد خدمة التقويم الاقتصادي
