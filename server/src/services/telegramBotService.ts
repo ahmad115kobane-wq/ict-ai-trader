@@ -277,7 +277,7 @@ async function showPackages(chatId: number, user: any): Promise<void> {
 
     // إنشاء الأزرار
     const buttons = packages.map((pkg: any) => {
-      const coinPrice = Math.round(pkg.price * 100);
+      const coinPrice = Math.round(pkg.price * 1); // 1 دولار = 1 عملة (مطابق للنظام)
       return [{
         text: `💎 ${pkg.name_ar} - ${coinPrice} عملة`,
         callback_data: `buy_${pkg.id}`
@@ -320,18 +320,65 @@ async function handlePackagePurchase(chatId: number, telegramUser: TelegramUser,
     return;
   }
 
+  // التحقق من وجود الباقة المطلوبة
+  const { getVipPackageById, addCoins } = await import('../db/index');
+  const vipPackage = await getVipPackageById(packageId);
+  
+  if (!vipPackage) {
+    await answerCallbackQuery(callbackQueryId, '❌ الباقة غير موجودة');
+    await sendMessage(chatId, '❌ الباقة المطلوبة غير موجودة.');
+    return;
+  }
+
+  // حساب سعر الباقة بالعملات (1 دولار = 1 عملة)
+  const coinPrice = Math.round(vipPackage.price * 1);
+
   // التحقق من وجود اشتراك نشط
   const activeSubscription = await getUserActiveSubscription(user.id);
   
   if (activeSubscription) {
-    await answerCallbackQuery(callbackQueryId, '⚠️ لديك اشتراك نشط بالفعل');
+    // التحقق من إمكانية الترقية (شهري → سنوي فقط)
+    const currentDuration = activeSubscription.plan_name.includes('شهر') ? 30 :
+      activeSubscription.plan_name.includes('أسبوع') ? 7 : 365;
+    const newDuration = vipPackage.duration_days;
+    const isUpgrade = currentDuration === 30 && newDuration === 365;
+
+    if (!isUpgrade) {
+      await answerCallbackQuery(callbackQueryId, '⚠️ لديك اشتراك نشط بالفعل');
+      await sendMessage(
+        chatId,
+        `⚠️ <b>لديك اشتراك نشط بالفعل</b>\n\n` +
+        `📦 الباقة الحالية: <b>${activeSubscription.plan_name}</b>\n` +
+        `📅 ينتهي في: ${new Date(activeSubscription.expires_at).toLocaleDateString('ar-SA')}\n\n` +
+        `💡 يمكنك فقط الترقية من الباقة الشهرية إلى السنوية.`
+      );
+      return;
+    }
+    console.log(`✅ Telegram: Upgrade allowed for user ${telegramUser.id}: Monthly → Yearly`);
+  }
+
+  // التحقق من رصيد المستخدم
+  const userCoins = user.coins || 0;
+  if (userCoins < coinPrice) {
+    await answerCallbackQuery(callbackQueryId, '❌ رصيدك غير كافٍ');
     await sendMessage(
       chatId,
-      `⚠️ <b>لديك اشتراك نشط بالفعل</b>\n\n` +
-      `📦 الباقة الحالية: <b>${activeSubscription.plan_name}</b>\n` +
-      `📅 ينتهي في: ${new Date(activeSubscription.expires_at).toLocaleDateString('ar-SA')}\n\n` +
-      `لا يمكنك شراء باقة جديدة حتى تنتهي الباقة الحالية.`
+      `❌ <b>رصيدك غير كافٍ</b>\n\n` +
+      `💰 رصيدك الحالي: <b>${userCoins} عملة</b>\n` +
+      `💎 سعر الباقة: <b>${coinPrice} عملة</b>\n` +
+      `📊 ينقصك: <b>${coinPrice - userCoins} عملة</b>\n\n` +
+      `يرجى شحن رصيدك أولاً ثم المحاولة مرة أخرى.`
     );
+    return;
+  }
+
+  // خصم العملات من المستخدم أولاً
+  console.log(`💰 Telegram: Deducting ${coinPrice} coins from user ${telegramUser.id}`);
+  const deductSuccess = await addCoins(user.id, -coinPrice);
+  
+  if (!deductSuccess) {
+    await answerCallbackQuery(callbackQueryId, '❌ فشل في خصم العملات');
+    await sendMessage(chatId, '❌ فشل في خصم العملات. يرجى المحاولة لاحقاً.');
     return;
   }
 
@@ -346,6 +393,7 @@ async function handlePackagePurchase(chatId: number, telegramUser: TelegramUser,
     await answerCallbackQuery(callbackQueryId, '✅ تم تفعيل الاشتراك!');
     
     const expiryDate = result.expiresAt ? new Date(result.expiresAt).toLocaleDateString('ar-SA') : '';
+    const newBalance = userCoins - coinPrice + (vipPackage.coins_included || 0);
     
     // إنشاء زر التحليل التلقائي
     const keyboard = {
@@ -365,13 +413,28 @@ async function handlePackagePurchase(chatId: number, telegramUser: TelegramUser,
       chatId,
       `🎉 <b>تم تفعيل اشتراكك بنجاح!</b>\n\n` +
       `✅ ${result.message}\n` +
-      `📅 ينتهي في: ${expiryDate}\n\n` +
+      `📅 ينتهي في: ${expiryDate}\n` +
+      `💰 تم خصم: ${coinPrice} عملة\n` +
+      `💎 رصيدك الجديد: ${newBalance} عملة\n\n` +
       `يمكنك الآن تفعيل التحليل التلقائي لاستلام إشارات التداول:`,
       keyboard
     );
+
+    // إرسال إشعار نظام بنجاح الشراء
+    try {
+      const { notifySubscriptionPurchased } = await import('./systemNotificationService');
+      const expiryDateObj = new Date(result.expiresAt!);
+      await notifySubscriptionPurchased(user.id, vipPackage.name_ar, expiryDateObj);
+    } catch (notifError) {
+      console.error('Failed to send subscription purchase notification:', notifError);
+    }
   } else {
+    // إرجاع العملات في حالة الفشل
+    console.log(`🔄 Telegram: Refunding ${coinPrice} coins to user ${telegramUser.id}`);
+    await addCoins(user.id, coinPrice);
+    
     await answerCallbackQuery(callbackQueryId, '❌ فشل التفعيل');
-    await sendMessage(chatId, `❌ ${result.message}\n\nيرجى التواصل مع الدعم الفني.`);
+    await sendMessage(chatId, `❌ ${result.message}\n\n💰 تم إرجاع ${coinPrice} عملة إلى رصيدك.\n\nيرجى التواصل مع الدعم الفني.`);
   }
 }
 

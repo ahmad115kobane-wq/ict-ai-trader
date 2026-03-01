@@ -18,8 +18,36 @@ console.log(`📡 API Config: ${BASE_URL} | Model: ${MODEL}`);
 
 // ===================== Constants =====================
 const MIN_SL_DISTANCE = 8;   // $8 minimum SL للذهب
-const MAX_SL_DISTANCE = 20;  // $20 maximum SL
+const MAX_SL_DISTANCE = 25;  // $25 maximum SL (ديناميكي حسب التقلب)
 const MIN_RR_RATIO = 1.5;    // Minimum Risk:Reward
+const MAX_ENTRY_DISTANCE_PERCENT = 0.004; // 0.4% max entry distance (كان 0.8%)
+const DEFAULT_EXPIRY_MINUTES = 45; // صلاحية الأمر المعلق بالدقائق
+
+// حساب ATR (Average True Range) لتحديد التقلب
+function calculateATR(candles: any[], period: number = 14): number {
+  if (!candles || candles.length < period + 1) return 12; // قيمة افتراضية
+  const recentCandles = candles.slice(-(period + 1));
+  let trSum = 0;
+  for (let i = 1; i < recentCandles.length; i++) {
+    const high = recentCandles[i].high;
+    const low = recentCandles[i].low;
+    const prevClose = recentCandles[i - 1].close;
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+    trSum += tr;
+  }
+  return trSum / period;
+}
+
+// حساب SL الديناميكي بناءً على ATR
+function getDynamicSLRange(m5Candles?: any[]): { min: number; max: number } {
+  if (!m5Candles || m5Candles.length < 20) return { min: MIN_SL_DISTANCE, max: MAX_SL_DISTANCE };
+  const atr = calculateATR(m5Candles, 14);
+  // SL = 1.5x إلى 2.5x ATR، محدود بالحدود القصوى
+  const dynamicMin = Math.max(MIN_SL_DISTANCE, Math.round(atr * 1.5 * 100) / 100);
+  const dynamicMax = Math.min(MAX_SL_DISTANCE, Math.round(atr * 2.5 * 100) / 100);
+  console.log(`📏 ATR(14): ${atr.toFixed(2)} | Dynamic SL Range: $${dynamicMin.toFixed(1)} - $${dynamicMax.toFixed(1)}`);
+  return { min: dynamicMin, max: dynamicMax };
+}
 
 // ===================== AI Memory System =====================
 interface MarketEvent {
@@ -265,13 +293,24 @@ function detectMSS(candles: any[]): MarketEvent[] {
 
     // MSS Bullish: Higher High بعد فترة من Lower Lows
     if (isHigherHigh(current, previous10)) {
-      // تحقق من وجود Lower Lows في الماضي القريب
-      const hadBearishStructure = previous10.slice(-5).some((c, idx, arr) => {
-        if (idx === 0) return false;
-        return c.low < arr[idx - 1].low;
-      });
+      // تحقق من وجود Lower Lows متتالية (2 على الأقل) في الماضي القريب
+      let consecutiveLowerLows = 0;
+      const checkCandles = previous10.slice(-6);
+      for (let j = 1; j < checkCandles.length; j++) {
+        if (checkCandles[j].low < checkCandles[j - 1].low) {
+          consecutiveLowerLows++;
+        } else {
+          consecutiveLowerLows = 0; // إعادة العداد إذا انكسر التسلسل
+        }
+      }
+      const hadBearishStructure = consecutiveLowerLows >= 2;
 
-      if (hadBearishStructure && current.close > current.open) {
+      // شرط إضافي: الشمعة الحالية يجب أن تكون قوية (جسم كبير)
+      const bodySize = Math.abs(current.close - current.open);
+      const totalSize = current.high - current.low;
+      const isStrongCandle = totalSize > 0 && bodySize / totalSize > 0.5;
+
+      if (hadBearishStructure && current.close > current.open && isStrongCandle) {
         events.push({
           type: 'MSS_BULLISH',
           price: current.high,
@@ -283,13 +322,24 @@ function detectMSS(candles: any[]): MarketEvent[] {
 
     // MSS Bearish: Lower Low بعد فترة من Higher Highs
     if (isLowerLow(current, previous10)) {
-      // تحقق من وجود Higher Highs في الماضي القريب
-      const hadBullishStructure = previous10.slice(-5).some((c, idx, arr) => {
-        if (idx === 0) return false;
-        return c.high > arr[idx - 1].high;
-      });
+      // تحقق من وجود Higher Highs متتالية (2 على الأقل) في الماضي القريب
+      let consecutiveHigherHighs = 0;
+      const checkCandles = previous10.slice(-6);
+      for (let j = 1; j < checkCandles.length; j++) {
+        if (checkCandles[j].high > checkCandles[j - 1].high) {
+          consecutiveHigherHighs++;
+        } else {
+          consecutiveHigherHighs = 0;
+        }
+      }
+      const hadBullishStructure = consecutiveHigherHighs >= 2;
 
-      if (hadBullishStructure && current.close < current.open) {
+      // شرط إضافي: الشمعة الحالية يجب أن تكون قوية
+      const bodySize = Math.abs(current.close - current.open);
+      const totalSize = current.high - current.low;
+      const isStrongCandle = totalSize > 0 && bodySize / totalSize > 0.5;
+
+      if (hadBullishStructure && current.close < current.open && isStrongCandle) {
         events.push({
           type: 'MSS_BEARISH',
           price: current.low,
@@ -469,13 +519,13 @@ function getCurrentKillzone(): KillzoneInfo {
   };
 }
 
-// ===================== ICT Pro System Prompt v7.0 =====================
+// ===================== ICT Pro System Prompt v8.0 =====================
 // البرومبت الديناميكي - يتم بناؤه مع سياق الذاكرة
 function buildSystemPrompt(memorySummary: string, killzoneInfo: KillzoneInfo): string {
   return `أنت محلل ICT خبير لـ XAUUSD مع ذاكرة للأحداث السابقة.
 
 ═══════════════════════════════════════════════════════════════
-🧠 نظام ذكي مع ذاكرة - ICT Pro v7.0
+🧠 نظام ذكي مع ذاكرة - ICT Pro v8.0
 ═══════════════════════════════════════════════════════════════
 
 ${memorySummary}
@@ -503,14 +553,15 @@ ${memorySummary}
 3️⃣ البحث عن MSS/BOS (مهم جداً) 📐
    • MSS = Market Structure Shift (تغيير الهيكل)
    • BOS = Break of Structure (كسر الهيكل)
-   • إذا وجدت MSS حديث (آخر 45 دقيقة) → اهتمام عالي!
+   • MSS يحتاج Lower Lows/Higher Highs متتالية (2+) ثم انعكاس
+   • إذا وجدت MSS حديث (آخر 30 دقيقة) → اهتمام عالي!
    • MSS + Sweep = إعداد قوي جداً
 
 4️⃣ البحث عن Liquidity Sweep
    • سحب قمة/قاع سابق على M5
    • إغلاق قوي داخل النطاق
-   • صالح لمدة 45 دقيقة (للتداول اليومي)
-   ⚠️ إذا وجدت Sweep في الذاكرة خلال آخر 45 دقيقة → فرصة قوية!
+   • صالح لمدة 30 دقيقة فقط (فرص طازجة)
+   ⚠️ إذا وجدت Sweep في الذاكرة خلال آخر 30 دقيقة → فرصة قوية!
 
 5️⃣ تأكيدين قويين على الأقل (إلزامي) ✅
    ✔ رفض سعري قوي (ذيل 30%+ من الشمعة)
@@ -519,33 +570,38 @@ ${memorySummary}
    ✔ BOS/MSS واضح
    ⚠️ يجب وجود تأكيدين مختلفين!
 
-4️⃣ منطقة الدخول (Entry Zone)
+6️⃣ منطقة الدخول (Entry Zone) 🚨 مهم جداً!
    • من FVG أو Order Block أو منطقة الرفض
-   • المسافة من السعر: 0.1% - 0.5%
+   • المسافة من السعر: 0.05% - 0.4% فقط
    • استخدم LIMIT ORDERS فقط
+   • ⚠️ Entry قريب = تفعيل سريع = فرصة أفضل
+   • ⚠️ Entry بعيد = قد لا يتفعل = فرصة ضائعة
 
 ═══════════════════════════════════════
 💡 قواعد ذكية لزيادة الصفقات
 ═══════════════════════════════════════
 
 ✅ اقبل الصفقة إذا:
-   • الاتجاه واضح + تأكيدات اثنين   على الأقل
+   • الاتجاه واضح + تأكيدات اثنين على الأقل
    • RR جيد (1:1.5 أو أفضل)
-   • لا تنتظر المثالية
+   • Entry قريب من السعر الحالي (0.4% كحد أقصى)
+   • الفرصة طازجة (خلال آخر 30 دقيقة)
 
 ❌ ارفض بدون تردد:
    • الاتجاه غير واضح أو متناقض 🚫
    • تأكيد واحد فقط (غير كافي) ❌
-   • Entry بعيد (أكثر من 0.6% من السعر) 🚫
+   • Entry بعيد (أكثر من 0.4% من السعر) 🚫
    • RR ضعيف (أقل من 1:1.5) ❌
    • Score أقل من 7/10 🚫
    • Confidence أقل من 65% ❌
+   • الفرصة قديمة (أكثر من 30 دقيقة) 🚫
 
 💡 مبادئ ذكية:
    • الجودة فوق الكمية 🌟
    • لا تتساهل في المعايير ⚠️
    • إذا شككت → NO_TRADE 🚫
    • انتظر الإعداد المثالي ⏳
+   • اختر Entry قريب من السعر لضمان تفعيل سريع ⚡
 
 ═══════════════════════════════════════
 🎯 نظام الأهداف (TPs)
@@ -556,7 +612,7 @@ ${memorySummary}
 • TP3: سيولة خارجية رئيسية - 1:4+ RR
 
 • SL: خلف القمة/القاع المسحوب + buffer 5-10$
-• حجم SL: بين 8$ و 20$
+• حجم SL: ديناميكي حسب ATR (سيتم تحديده في البيانات أدناه)
 
 ═══════════════════════════════════════
 📊 JSON الإخراج
@@ -585,7 +641,7 @@ ${memorySummary}
 }
 
 // للتوافق مع الكود القديم
-export const systemInstruction = `ICT Pro v7.0 - Dynamic Prompt`;
+export const systemInstruction = `ICT Pro v8.0 - Dynamic Prompt with Dynamic SL & Session Guard`;
 
 
 // ===================== Result Builder =====================
@@ -604,7 +660,7 @@ function createNoTradeResult(reasons: string[], original: any = {}): ICTAnalysis
 }
 
 // ===================== Enhanced Validator =====================
-function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
+function validateAndFix(r: any, currentPrice: number, m5Candles?: any[]): ICTAnalysis {
   console.log("\n🔍 التحقق من الصفقة...");
 
   r = r || {};
@@ -678,7 +734,7 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // ═══════════════════════════════════════════════════════════
 
   const entryDistance = Math.abs(entry - currentPrice);
-  const maxEntryDistance = currentPrice * 0.008; // 0.8%
+  const maxEntryDistance = currentPrice * MAX_ENTRY_DISTANCE_PERCENT; // 0.4% (كان 0.8%)
 
   if (entryDistance > maxEntryDistance) {
     console.log(`   ❌ Entry بعيد جداً: ${entryDistance.toFixed(2)}$ (max: ${maxEntryDistance.toFixed(2)}$)`);
@@ -689,20 +745,23 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   // التحقق من SL وتصحيحه
   // ═══════════════════════════════════════════════════════════
 
+  // حساب SL الديناميكي بناءً على ATR
+  const slRange = getDynamicSLRange(m5Candles);
   let slDistance = Math.abs(entry - sl);
-  console.log(`   📏 مسافة SL: ${slDistance.toFixed(2)}$`);
+  console.log(`   📏 مسافة SL: ${slDistance.toFixed(2)}$ | النطاق المطلوب: $${slRange.min.toFixed(1)} - $${slRange.max.toFixed(1)}`);
 
   // تصحيح SL إذا كان قريب جداً
-  if (slDistance < MIN_SL_DISTANCE) {
-    const newSl = isBuy ? entry - 10 : entry + 10;
-    console.log(`   🔧 تصحيح SL من ${sl} إلى ${newSl} (كان قريب جداً)`);
+  if (slDistance < slRange.min) {
+    const idealSL = (slRange.min + slRange.max) / 2; // منتصف النطاق
+    const newSl = isBuy ? entry - idealSL : entry + idealSL;
+    console.log(`   🔧 تصحيح SL من ${sl} إلى ${newSl.toFixed(2)} (كان قريب جداً)`);
     sl = round2(newSl);
-    slDistance = MIN_SL_DISTANCE + 2;
+    slDistance = idealSL;
   }
 
   // رفض إذا SL بعيد جداً
-  if (slDistance > MAX_SL_DISTANCE) {
-    console.log(`   ❌ SL بعيد جداً: ${slDistance.toFixed(2)}$`);
+  if (slDistance > slRange.max) {
+    console.log(`   ❌ SL بعيد جداً: ${slDistance.toFixed(2)}$ (max: ${slRange.max.toFixed(1)}$)`);
     return createNoTradeResult([`SL بعيد جداً: ${slDistance.toFixed(1)}$`], r);
   }
 
@@ -758,8 +817,10 @@ function validateAndFix(r: any, currentPrice: number): ICTAnalysis {
   t.tp3 = round2(tp3);
   t.rrRatio = `TP1: 1:${rr1.toFixed(1)} | TP2: 1:${rr2.toFixed(1)} | TP3: 1:${rr3.toFixed(1)}`;
   t.riskAmount = `${risk.toFixed(2)}$`;
+  t.expiryMinutes = DEFAULT_EXPIRY_MINUTES;
+  t.expiryTime = new Date(Date.now() + DEFAULT_EXPIRY_MINUTES * 60 * 1000).toISOString();
 
-  console.log(`   ✅ صفقة صالحة - RR جيد`);
+  console.log(`   ✅ صفقة صالحة - RR جيد | صلاحية: ${DEFAULT_EXPIRY_MINUTES} دقيقة`);
 
   return r as ICTAnalysis;
 }
@@ -806,11 +867,34 @@ export const analyzeMultiTimeframe = async (
   const killzoneInfo = getCurrentKillzone();
 
   console.log("\n═══════════════════════════════════════════════════════════════");
-  console.log("🧠 ICT Pro Analysis v7.0 - With Memory");
+  console.log("🧠 ICT Pro Analysis v8.0 - With Memory + Dynamic SL");
   console.log(`💰 السعر الحالي: ${currentPrice}`);
   console.log(`⏰ الجلسة: ${killzoneInfo.session} (${killzoneInfo.quality})`);
   console.log(`🧠 الذاكرة: ${analysisHistory.length} تحليلات سابقة`);
   console.log("═══════════════════════════════════════════════════════════════\n");
+
+  // حارس جودة الجلسة - لا نتداول في OFF_HOURS
+  if (!killzoneInfo.isActive || killzoneInfo.quality === 'LOW') {
+    console.log(`⚠️ الجلسة غير نشطة أو منخفضة الجودة (${killzoneInfo.session}) - تخطي التحليل`);
+    const noTradeResult = createNoTradeResult([
+      `الجلسة غير نشطة (${killzoneInfo.session}) - لا يوجد سيولة كافية`,
+      `انتظر جلسة London أو New York للحصول على إشارات أفضل`
+    ]);
+    noTradeResult.killzoneInfo = killzoneInfo;
+
+    // لا نزال نحفظ في الذاكرة للتتبع
+    addToMemory({
+      timestamp: new Date(),
+      price: currentPrice,
+      decision: 'NO_TRADE',
+      bias: 'OFF_HOURS',
+      score: 0,
+      events: [],
+      h1Trend: 'NEUTRAL'
+    });
+
+    return noTradeResult;
+  }
 
   // 1. اكتشاف الأحداث من الشموع
   if (h1Candles && m5Candles) {
@@ -834,20 +918,26 @@ export const analyzeMultiTimeframe = async (
   // تحضير بيانات الشموع
   let candleDataText = '';
 
+  // حساب ATR لعرضه في البرومبت
+  const m5ATR = m5Candles ? calculateATR(m5Candles, 14) : 0;
+  const slRange = getDynamicSLRange(m5Candles);
+
   if (h1Candles && h1Candles.length > 0) {
-    const recentH1 = h1Candles.slice(-30);
-    candleDataText += '\n\n📊 بيانات H1 (آخر 30 شمعة):\n';
-    candleDataText += recentH1.map((c, i) =>
-      `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
-    ).join('\n');
+    const recentH1 = h1Candles.slice(-20);
+    candleDataText += '\n\n📊 بيانات H1 (آخر 20 شمعة مع الوقت):\n';
+    candleDataText += recentH1.map((c, i) => {
+      const time = c.time ? new Date(c.time).toISOString().slice(0, 16).replace('T', ' ') : `#${i + 1}`;
+      return `${time} | O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`;
+    }).join('\n');
   }
 
   if (m5Candles && m5Candles.length > 0) {
-    const recentM5 = m5Candles.slice(-60);
-    candleDataText += '\n\n📊 بيانات M5 (آخر 60 شمعة):\n';
-    candleDataText += recentM5.map((c, i) =>
-      `${i + 1}. O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
-    ).join('\n');
+    const recentM5 = m5Candles.slice(-40);
+    candleDataText += '\n\n📊 بيانات M5 (آخر 40 شمعة مع الوقت):\n';
+    candleDataText += recentM5.map((c, i) => {
+      const time = c.time ? new Date(c.time).toISOString().slice(0, 16).replace('T', ' ') : `#${i + 1}`;
+      return `${time} | O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`;
+    }).join('\n');
   }
 
   const userPrompt = `${dynamicPrompt}
@@ -863,14 +953,20 @@ export const analyzeMultiTimeframe = async (
 
 الصورة 1: شارت H1 (لتحديد الاتجاه)
 الصورة 2: شارت M5 (لتحديد الدخول)
+
+📊 معلومات التقلب:
+- ATR(14) M5: ${m5ATR.toFixed(2)}$
+- نطاق SL المطلوب: $${slRange.min.toFixed(1)} - $${slRange.max.toFixed(1)}
 ${candleDataText}
 
 ═══════════════════════════════════════
-⚠️ تذكير مهم
+⚠️ تذكير مهم جداً
 ═══════════════════════════════════════
-- SL: بين 8$ و 20$ من Entry
-- Entry: أقل من 0.5% من السعر الحالي (${(currentPrice * 0.005).toFixed(2)}$)
+- SL: بين $${slRange.min.toFixed(0)} و $${slRange.max.toFixed(0)} من Entry (حسب ATR)
+- Entry: أقل من 0.4% من السعر الحالي (${(currentPrice * MAX_ENTRY_DISTANCE_PERCENT).toFixed(2)}$)
 - RR: minimum 1:1.5
+- الأمر المعلق صالح لمدة ${DEFAULT_EXPIRY_MINUTES} دقيقة فقط
+- اختر Entry قريب من السعر الحالي لضمان تفعيل الصفقة في الوقت المناسب
 
 أعطني JSON فقط - بدون أي نص إضافي
 `;
@@ -892,7 +988,7 @@ ${candleDataText}
     const parsed = safeParseJson(data.content);
     console.log(`📋 قرار AI: ${parsed.decision || 'غير محدد'}`);
 
-    const validated = validateAndFix(parsed, currentPrice);
+    const validated = validateAndFix(parsed, currentPrice, m5Candles);
     validated.killzoneInfo = killzoneInfo;
 
     // 4. حفظ التحليل في الذاكرة
