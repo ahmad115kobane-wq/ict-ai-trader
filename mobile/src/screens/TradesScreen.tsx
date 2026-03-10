@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -62,6 +63,12 @@ const TradesScreen = () => {
   const [closedPositions, setClosedPositions] = useState<PaperPosition[]>([]);
   const [lotSizeInput, setLotSizeInput] = useState('0.10');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Modal للتعديل
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<PaperPosition | null>(null);
+  const [newStopLoss, setNewStopLoss] = useState('');
+  const [newTakeProfit, setNewTakeProfit] = useState('');
 
   useEffect(() => {
     void initialLoad();
@@ -127,6 +134,11 @@ const TradesScreen = () => {
   }, []);
 
   const closeAllBuy = async () => {
+    if (openPositions.filter(p => p.side === 'BUY').length === 0) {
+      showAlert('لا توجد صفقات', 'لا توجد صفقات شراء لإغلاقها');
+      return;
+    }
+    
     showConfirm(
       'إغلاق جميع مراكز الشراء',
       'هل تريد إغلاق جميع مراكز BUY؟',
@@ -134,15 +146,20 @@ const TradesScreen = () => {
         try {
           const closed = await paperTradingService.closeAllBuyPositions(currentPrice);
           await updateTradingSnapshot(currentPrice);
-          showSuccess('تم الإغلاق', `تم إغلاق ${closed.length} صفقة شراء`);
+          showSuccess('تم الإغلاق ✅', `تم إغلاق ${closed.length} صفقة شراء`);
         } catch (error) {
-          showError('فشل الإغلاق', 'تعذر إغلاق الصفقات');
+          showError('فشل الإغلاق ❌', 'تعذر إغلاق الصفقات');
         }
       }
     );
   };
 
   const closeAllSell = async () => {
+    if (openPositions.filter(p => p.side === 'SELL').length === 0) {
+      showAlert('لا توجد صفقات', 'لا توجد صفقات بيع لإغلاقها');
+      return;
+    }
+    
     showConfirm(
       'إغلاق جميع مراكز البيع',
       'هل تريد إغلاق جميع مراكز SELL؟',
@@ -150,32 +167,81 @@ const TradesScreen = () => {
         try {
           const closed = await paperTradingService.closeAllSellPositions(currentPrice);
           await updateTradingSnapshot(currentPrice);
-          showSuccess('تم الإغلاق', `تم إغلاق ${closed.length} صفقة بيع`);
+          showSuccess('تم الإغلاق ✅', `تم إغلاق ${closed.length} صفقة بيع`);
         } catch (error) {
-          showError('فشل الإغلاق', 'تعذر إغلاق الصفقات');
+          showError('فشل الإغلاق ❌', 'تعذر إغلاق الصفقات');
         }
       }
     );
   };
 
   const closeProfitable = async () => {
+    const profitableCount = openPositions.filter(p => {
+      const pnl = paperTradingService.getPositionFloatingPnl(p, currentPrice);
+      return pnl > 0;
+    }).length;
+    
+    if (profitableCount === 0) {
+      showAlert('لا توجد مراكز رابحة', 'لا توجد صفقات رابحة حالياً');
+      return;
+    }
+    
     showConfirm(
       'إغلاق المراكز الرابحة',
-      'هل تريد إغلاق جميع المراكز الرابحة؟',
+      `هل تريد إغلاق ${profitableCount} صفقة رابحة؟`,
       async () => {
         try {
           const closed = await paperTradingService.closeProfitablePositions(currentPrice);
-          if (closed.length === 0) {
-            showAlert('لا توجد مراكز رابحة', 'لا توجد صفقات رابحة حالياً');
-            return;
-          }
           await updateTradingSnapshot(currentPrice);
-          showSuccess('تم الإغلاق', `تم إغلاق ${closed.length} صفقة رابحة`);
+          showSuccess('تم الإغلاق ✅', `تم إغلاق ${closed.length} صفقة رابحة`);
         } catch (error) {
-          showError('فشل الإغلاق', 'تعذر إغلاق الصفقات');
+          showError('فشل الإغلاق ❌', 'تعذر إغلاق الصفقات');
         }
       }
     );
+  };
+
+  const editPosition = (position: PaperPosition) => {
+    setEditingPosition(position);
+    setNewStopLoss(position.stopLoss.toFixed(2));
+    setNewTakeProfit(position.takeProfit.toFixed(2));
+    setEditModalVisible(true);
+  };
+
+  const savePositionEdit = async () => {
+    if (!editingPosition) return;
+
+    const sl = parseFloat(newStopLoss);
+    const tp = parseFloat(newTakeProfit);
+
+    if (!Number.isFinite(sl) || !Number.isFinite(tp)) {
+      showError('قيم غير صحيحة', 'تأكد من إدخال أرقام صحيحة لـ SL و TP');
+      return;
+    }
+
+    try {
+      // تحديث الصفقة في الخدمة
+      const state = await paperTradingService.loadState();
+      const positionIndex = state.openPositions.findIndex(p => p.id === editingPosition.id);
+      
+      if (positionIndex === -1) {
+        showError('خطأ', 'لم يتم العثور على الصفقة');
+        return;
+      }
+
+      state.openPositions[positionIndex].stopLoss = sl;
+      state.openPositions[positionIndex].takeProfit = tp;
+      
+      await paperTradingService.saveState(state);
+      await updateTradingSnapshot(currentPrice);
+      
+      setEditModalVisible(false);
+      setEditingPosition(null);
+      showSuccess('تم التعديل ✅', 'تم تحديث SL و TP بنجاح');
+    } catch (error) {
+      console.error('Edit position error:', error);
+      showError('فشل التعديل ❌', 'تعذر تعديل الصفقة');
+    }
   };
 
   const parseLotSize = (): number | null => {
@@ -369,10 +435,17 @@ const TradesScreen = () => {
           <Text style={styles.positionDetailText}>TP: {item.takeProfit.toFixed(2)}</Text>
         </View>
 
-        <TouchableOpacity style={styles.closeButtonCompact} onPress={() => closePosition(item)}>
-          <Ionicons name="close-circle" size={16} color={colors.text} />
-          <Text style={styles.closeButtonTextCompact}>إغلاق</Text>
-        </TouchableOpacity>
+        <View style={styles.positionButtonsRow}>
+          <TouchableOpacity style={styles.closeButtonCompact} onPress={() => closePosition(item)}>
+            <Ionicons name="close-circle" size={16} color={colors.text} />
+            <Text style={styles.closeButtonTextCompact}>إغلاق</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.editButtonCompact} onPress={() => editPosition(item)}>
+            <Ionicons name="create-outline" size={16} color={colors.text} />
+            <Text style={styles.editButtonTextCompact}>تعديل</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -454,43 +527,11 @@ const TradesScreen = () => {
           </Text>
           <Text style={styles.positionLabel}>P/L المغلق</Text>
         </View>
-      </View>
-
-      <View style={styles.orderCard}>
-        <Text style={styles.sectionTitle}>فتح صفقة سوق</Text>
-        <View style={styles.positionRow}>
-          <Text style={styles.accountValue}>{currentPrice ? currentPrice.toFixed(2) : '...'}</Text>
-          <Text style={styles.positionLabel}>سعر XAUUSD</Text>
-        </View>
-
-        <View style={styles.lotRow}>
-          <TextInput
-            style={styles.lotInput}
-            value={lotSizeInput}
-            onChangeText={setLotSizeInput}
-            keyboardType="decimal-pad"
-            placeholder="0.10"
-            placeholderTextColor={colors.textMuted}
-          />
-          <Text style={styles.positionLabel}>Lot Size</Text>
-        </View>
-
-        <View style={styles.marketButtonsRow}>
-          <TouchableOpacity
-            style={[styles.marketButton, styles.sellButton]}
-            onPress={() => createMarketOrder('SELL')}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.marketButtonText}>SELL</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.marketButton, styles.buyButton]}
-            onPress={() => createMarketOrder('BUY')}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.marketButtonText}>BUY</Text>
-          </TouchableOpacity>
-        </View>
+        
+        <TouchableOpacity style={styles.resetButton} onPress={resetTradingAccount}>
+          <Ionicons name="refresh" size={16} color={colors.text} />
+          <Text style={styles.resetButtonText}>إعادة تعيين الحساب</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.positionActionsRow}>
@@ -587,6 +628,72 @@ const TradesScreen = () => {
         </ScrollView>
       )}
 
+      <Modal
+        visible={editModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>تعديل الصفقة</Text>
+            
+            {editingPosition && (
+              <>
+                <View style={styles.modalInfo}>
+                  <Text style={styles.modalInfoText}>
+                    {editingPosition.side} {editingPosition.lotSize.toFixed(2)} LOT
+                  </Text>
+                  <Text style={styles.modalInfoText}>
+                    Entry: {editingPosition.entryPrice.toFixed(2)}
+                  </Text>
+                </View>
+
+                <View style={styles.modalInputGroup}>
+                  <Text style={styles.modalLabel}>Stop Loss</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newStopLoss}
+                    onChangeText={setNewStopLoss}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+
+                <View style={styles.modalInputGroup}>
+                  <Text style={styles.modalLabel}>Take Profit</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newTakeProfit}
+                    onChangeText={setNewTakeProfit}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalCancelButton]}
+                    onPress={() => setEditModalVisible(false)}
+                  >
+                    <Text style={styles.modalButtonText}>إلغاء</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalSaveButton]}
+                    onPress={savePositionEdit}
+                  >
+                    <Text style={styles.modalButtonText}>حفظ</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <AlertComponent />
     </SafeAreaView>
   );
@@ -648,60 +755,10 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  orderCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
   accountValue: {
     color: colors.text,
     fontSize: fontSizes.lg,
     fontWeight: '700',
-  },
-  lotRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  lotInput: {
-    backgroundColor: colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    color: colors.text,
-    width: 120,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    textAlign: 'center',
-    fontSize: fontSizes.md,
-    fontWeight: '600',
-  },
-  marketButtonsRow: {
-    flexDirection: 'row-reverse',
-    gap: spacing.sm,
-  },
-  marketButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  buyButton: {
-    backgroundColor: colors.buy,
-  },
-  sellButton: {
-    backgroundColor: colors.sell,
-  },
-  marketButtonText: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: fontSizes.lg,
   },
   positionCardCompact: {
     backgroundColor: colors.card,
@@ -737,6 +794,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSizes.xs,
   },
+  positionButtonsRow: {
+    flexDirection: 'row-reverse',
+    gap: spacing.xs,
+  },
   closeButtonCompact: {
     backgroundColor: colors.error,
     borderRadius: borderRadius.sm,
@@ -745,8 +806,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     gap: spacing.xs,
     paddingVertical: spacing.xs,
+    flex: 1,
+    marginRight: spacing.xs,
   },
   closeButtonTextCompact: {
+    color: colors.text,
+    fontWeight: '600',
+    fontSize: fontSizes.sm,
+  },
+  editButtonCompact: {
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row-reverse',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    flex: 1,
+  },
+  editButtonTextCompact: {
     color: colors.text,
     fontWeight: '600',
     fontSize: fontSizes.sm,
@@ -768,6 +846,20 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: fontSizes.xs,
     fontWeight: '600',
+  },
+  resetButton: {
+    marginTop: spacing.md,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.warning,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+  },
+  resetButtonText: {
+    color: colors.text,
+    fontWeight: '700',
   },
   positionCard: {
     backgroundColor: colors.card,
@@ -898,6 +990,82 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    color: colors.text,
+    fontSize: fontSizes.xl,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  modalInfo: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modalInfoText: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.sm,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  modalInputGroup: {
+    marginBottom: spacing.md,
+  },
+  modalLabel: {
+    color: colors.text,
+    fontSize: fontSizes.md,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+    textAlign: 'right',
+  },
+  modalInput: {
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    color: colors.text,
+    fontSize: fontSizes.md,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row-reverse',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: colors.secondary,
+  },
+  modalSaveButton: {
+    backgroundColor: colors.primary,
+  },
+  modalButtonText: {
+    color: colors.text,
+    fontSize: fontSizes.md,
+    fontWeight: '700',
   },
 });
 

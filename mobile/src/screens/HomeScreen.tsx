@@ -11,6 +11,7 @@ import {
   Switch,
   RefreshControl,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +23,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 
 import { useAuth } from '../context/AuthContext';
 import { analysisService, subscriptionService, notificationService } from '../services/apiService';
+import { paperTradingService } from '../services/paperTradingService';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { Analysis } from '../types';
 import { API_BASE_URL } from '../config/api';
@@ -45,16 +47,23 @@ const HomeScreen = () => {
   const [chartHigh, setChartHigh] = useState(0);
   const [chartLow, setChartLow] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [lotSizeInput, setLotSizeInput] = useState('0.10');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [openPositions, setOpenPositions] = useState<any[]>([]);
 
   useEffect(() => {
     fetchData();
+    loadOpenPositions();
     // تحديث السعر كل 3 ثواني
     const priceInterval = setInterval(fetchCurrentPrice, 3000);
     // تحديث البيانات الكاملة كل 30 ثانية
     const dataInterval = setInterval(fetchPriceAndAnalysis, 30000);
+    // تحديث الصفقات كل 5 ثواني
+    const positionsInterval = setInterval(loadOpenPositions, 5000);
     return () => {
       clearInterval(priceInterval);
       clearInterval(dataInterval);
+      clearInterval(positionsInterval);
     };
   }, []);
 
@@ -162,6 +171,92 @@ const HomeScreen = () => {
     chartWebViewRef.current?.injectJavaScript(
       'window.__SCROLL_TO_REALTIME__ && window.__SCROLL_TO_REALTIME__(); true;'
     );
+  };
+
+  const parseLotSize = (): number | null => {
+    const lot = Number(lotSizeInput);
+    if (!Number.isFinite(lot) || lot <= 0 || lot > 50) {
+      return null;
+    }
+    return lot;
+  };
+
+  const loadOpenPositions = async () => {
+    try {
+      const snapshot = await paperTradingService.getSnapshot(currentPrice || 0);
+      const positionsWithPnl = snapshot.openPositions.map(pos => ({
+        ...pos,
+        floatingPnl: paperTradingService.getPositionFloatingPnl(pos, currentPrice || pos.entryPrice),
+      }));
+      setOpenPositions(positionsWithPnl);
+      
+      // إرسال الصفقات إلى الرسم البياني (حتى لو كانت فارغة)
+      if (chartWebViewRef.current) {
+        const positionsJson = JSON.stringify(positionsWithPnl);
+        chartWebViewRef.current.injectJavaScript(`
+          window.__UPDATE_POSITIONS__ && window.__UPDATE_POSITIONS__(${positionsJson});
+          true;
+        `);
+      }
+    } catch (error) {
+      console.error('Error loading positions:', error);
+    }
+  };
+
+  const createMarketOrder = async (side: 'BUY' | 'SELL') => {
+    if (!currentPrice) {
+      showError('السعر غير متاح', 'انتظر تحميل السعر الحالي ثم حاول مرة أخرى');
+      return;
+    }
+
+    const lotSize = parseLotSize();
+    if (!lotSize) {
+      showError('حجم لوت غير صحيح', 'ادخل قيمة بين 0.01 و 50');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const slDistance = 5;
+      const tpDistance = 10;
+
+      const stopLoss = side === 'BUY' ? currentPrice - slDistance : currentPrice + slDistance;
+      const takeProfit = side === 'BUY' ? currentPrice + tpDistance : currentPrice - tpDistance;
+
+      await paperTradingService.openPosition({
+        symbol: 'XAUUSD',
+        side,
+        lotSize,
+        marketPrice: currentPrice,
+        stopLoss,
+        takeProfit,
+      });
+
+      // تحديث الصفقات بعد الفتح
+      await loadOpenPositions();
+
+      showAlert(
+        'تم فتح الصفقة ✅',
+        `تم فتح صفقة ${side === 'BUY' ? 'شراء' : 'بيع'}\n\nالحجم: ${lotSize} LOT\nالسعر: ${currentPrice.toFixed(2)}\nSL: ${stopLoss.toFixed(2)}\nTP: ${takeProfit.toFixed(2)}`
+      );
+    } catch (error: any) {
+      console.error('Open position error:', error);
+      showError('فشل فتح الصفقة ❌', error.message || 'تعذر فتح الصفقة حالياً. تحقق من الهامش المتاح.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleChartMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'EDIT_POSITION') {
+        // الانتقال إلى صفحة السجلات مع تمرير معرف الصفقة
+        navigation.navigate('Trades', { editPositionId: data.positionId });
+      }
+    } catch (error) {
+      console.error('Error handling chart message:', error);
+    }
   };
 
   // HTML للشارت المباشر - تصميم احترافي مثل التطبيقات العالمية
@@ -424,12 +519,13 @@ const HomeScreen = () => {
               mouseWheel: true,
               pressedMouseMove: true,
               horzTouchDrag: true,
-              vertTouchDrag: false,
+              vertTouchDrag: true,
             },
             handleScale: {
               axisPressedMouseMove: true,
               mouseWheel: true,
               pinch: true,
+              axisDoubleClickReset: true,
             },
           });
 
@@ -555,6 +651,117 @@ const HomeScreen = () => {
             }
           };
 
+          // متغيرات لتتبع الصفقات
+          let positionLines = {};
+          
+          window.__UPDATE_POSITIONS__ = (positions) => {
+            try {
+              // إذا كانت المصفوفة فارغة، احذف جميع الخطوط
+              if (!positions || positions.length === 0) {
+                Object.keys(positionLines).forEach(id => {
+                  if (positionLines[id].entryLine) candlestickSeries.removePriceLine(positionLines[id].entryLine);
+                  if (positionLines[id].slLine) candlestickSeries.removePriceLine(positionLines[id].slLine);
+                  if (positionLines[id].tpLine) candlestickSeries.removePriceLine(positionLines[id].tpLine);
+                  delete positionLines[id];
+                });
+                return;
+              }
+              
+              // إزالة الخطوط القديمة التي لم تعد موجودة
+              Object.keys(positionLines).forEach(id => {
+                if (!positions.find(p => p.id === id)) {
+                  if (positionLines[id].entryLine) candlestickSeries.removePriceLine(positionLines[id].entryLine);
+                  if (positionLines[id].slLine) candlestickSeries.removePriceLine(positionLines[id].slLine);
+                  if (positionLines[id].tpLine) candlestickSeries.removePriceLine(positionLines[id].tpLine);
+                  delete positionLines[id];
+                }
+              });
+              
+              // إضافة/تحديث الخطوط الجديدة
+              positions.forEach(position => {
+                if (!positionLines[position.id]) {
+                  const color = position.side === 'BUY' ? '#10b981' : '#ef4444';
+                  const pnlText = position.floatingPnl >= 0 ? '+' : '';
+                  
+                  // خط الدخول
+                  const entryLine = candlestickSeries.createPriceLine({
+                    price: position.entryPrice,
+                    color: color,
+                    lineWidth: 2,
+                    lineStyle: 0,
+                    axisLabelVisible: true,
+                    title: position.side + ' ' + position.lotSize.toFixed(2) + ' | ' + pnlText + position.floatingPnl.toFixed(2) + '$',
+                  });
+                  
+                  // خط SL
+                  const slLine = candlestickSeries.createPriceLine({
+                    price: position.stopLoss,
+                    color: '#ef4444',
+                    lineWidth: 1,
+                    lineStyle: 2,
+                    axisLabelVisible: true,
+                    title: 'SL',
+                  });
+                  
+                  // خط TP
+                  const tpLine = candlestickSeries.createPriceLine({
+                    price: position.takeProfit,
+                    color: '#10b981',
+                    lineWidth: 1,
+                    lineStyle: 2,
+                    axisLabelVisible: true,
+                    title: 'TP',
+                  });
+                  
+                  positionLines[position.id] = { 
+                    entryLine, 
+                    slLine, 
+                    tpLine,
+                    positionId: position.id 
+                  };
+                } else {
+                  // تحديث العنوان فقط
+                  const pnlText = position.floatingPnl >= 0 ? '+' : '';
+                  positionLines[position.id].entryLine.applyOptions({
+                    title: position.side + ' ' + position.lotSize.toFixed(2) + ' | ' + pnlText + position.floatingPnl.toFixed(2) + '$',
+                  });
+                }
+              });
+            } catch (e) {
+              console.error('Error updating positions:', e);
+            }
+          };
+
+          // معالج الضغط على الرسم البياني
+          chart.subscribeClick((param) => {
+            if (param.point && param.time) {
+              const price = candlestickSeries.coordinateToPrice(param.point.y);
+              
+              // البحث عن أقرب خط صفقة
+              let closestPosition = null;
+              let minDistance = Infinity;
+              
+              Object.keys(positionLines).forEach(id => {
+                const line = positionLines[id];
+                const entryPrice = line.entryLine.options().price;
+                const distance = Math.abs(price - entryPrice);
+                
+                if (distance < minDistance && distance < 5) { // ضمن 5 نقاط
+                  minDistance = distance;
+                  closestPosition = line.positionId;
+                }
+              });
+              
+              // إرسال رسالة للتطبيق لتعديل الصفقة
+              if (closestPosition && window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'EDIT_POSITION',
+                  positionId: closestPosition
+                }));
+              }
+            }
+          });
+
           window.addEventListener('resize', () => {
             chart.resize(chartContainer.clientWidth || window.innerWidth, chartContainer.clientHeight || window.innerHeight);
           });
@@ -672,6 +879,7 @@ const HomeScreen = () => {
               originWhitelist={['*']}
               mixedContentMode="always"
               androidLayerType="hardware"
+              onMessage={handleChartMessage}
             />
           </View>
         </View>
@@ -680,19 +888,28 @@ const HomeScreen = () => {
         <View style={styles.tradingControls}>
           <TouchableOpacity
             style={[styles.tradeButton, styles.sellButton]}
-            onPress={() => {/* TODO: Implement sell */}}
+            onPress={() => createMarketOrder('SELL')}
+            disabled={isSubmitting || !currentPrice}
           >
             <Text style={styles.tradeButtonText}>SELL</Text>
           </TouchableOpacity>
           
           <View style={styles.lotSizeContainer}>
             <Text style={styles.lotSizeLabel}>LOT</Text>
-            <Text style={styles.lotSizeValue}>0.10</Text>
+            <TextInput
+              style={styles.lotSizeInput}
+              value={lotSizeInput}
+              onChangeText={setLotSizeInput}
+              keyboardType="decimal-pad"
+              placeholder="0.10"
+              placeholderTextColor={colors.textMuted}
+            />
           </View>
           
           <TouchableOpacity
             style={[styles.tradeButton, styles.buyButton]}
-            onPress={() => {/* TODO: Implement buy */}}
+            onPress={() => createMarketOrder('BUY')}
+            disabled={isSubmitting || !currentPrice}
           >
             <Text style={styles.tradeButtonText}>BUY</Text>
           </TouchableOpacity>
@@ -1006,10 +1223,18 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     marginBottom: 2,
   },
-  lotSizeValue: {
+  lotSizeInput: {
     color: colors.text,
-    fontSize: fontSizes.lg,
+    fontSize: fontSizes.md,
     fontWeight: '700',
+    textAlign: 'center',
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    minWidth: 60,
   },
   bottomSpacer: {
     height: 100, // مسافة إضافية لشريط التنقل العائم
