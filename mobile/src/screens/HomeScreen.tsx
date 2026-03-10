@@ -649,36 +649,13 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {/* Professional Chart */}
+        {/* Professional Chart - Full Screen */}
         <View
           style={styles.chartContainer}
           onTouchStart={() => setIsChartInteracting(true)}
           onTouchEnd={() => setIsChartInteracting(false)}
           onTouchCancel={() => setIsChartInteracting(false)}
         >
-          <View style={styles.chartToolbar}>
-            <View style={styles.chartToolbarLeft}>
-              <View style={styles.symbolPill}>
-                <View style={styles.symbolDot} />
-                <Text style={styles.symbolPillText}>XAUUSD</Text>
-              </View>
-              <View style={styles.liveBadge}>
-                <Text style={styles.liveText}>LIVE</Text>
-              </View>
-            </View>
-            <View style={styles.chartToolbarRight}>
-              <TouchableOpacity style={styles.chartToolButton} onPress={handleGoToRealTime}>
-                <Ionicons name="locate-outline" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.chartToolButton}
-                onPress={() => navigation.navigate('FullChart')}
-              >
-                <Ionicons name="expand-outline" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-          
           <View style={styles.chartWrapper}>
             <WebView
               key={selectedTimeframe}
@@ -697,60 +674,44 @@ const HomeScreen = () => {
               androidLayerType="hardware"
             />
           </View>
-
-          {/* Chart Footer */}
-          <View style={styles.chartFooter}>
-            <View style={styles.chartFooterLeft}>
-              <View style={styles.autoAnalysisDot} />
-              <Text style={styles.autoAnalysisText}>AUTO ANALYSIS</Text>
-            </View>
-            <View style={styles.chartFooterRight}>
-              <Ionicons name="analytics-outline" size={14} color={colors.primary} />
-                <Text style={styles.chartFooterText}>ICT Trading Data</Text>
-            </View>
-          </View>
         </View>
 
-        {/* Auto Analysis Toggle */}
-        <View style={styles.autoAnalysisCard}>
-          <View style={styles.autoAnalysisRow}>
-            <Switch
-              value={autoAnalysisEnabled}
-              onValueChange={handleToggleAutoAnalysis}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.text}
-              disabled={isLoading}
-            />
-            <View style={styles.autoAnalysisInfo}>
-              <Text style={styles.autoAnalysisTitle}>
-                استقبال تحاليل الخادم التلقائية
-              </Text>
-              <View style={styles.subscriptionBadge}>
-                <Ionicons name="star" size={12} color={colors.gold} />
-                <Text style={styles.subscriptionBadgeText}>
-                  {user?.subscriptionStatus?.subscription?.packageNameAr || 'الحزمة الاسبوعية'}
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="notifications-outline" size={24} color={colors.textSecondary} />
+        {/* Trading Controls - Compact */}
+        <View style={styles.tradingControls}>
+          <TouchableOpacity
+            style={[styles.tradeButton, styles.sellButton]}
+            onPress={() => {/* TODO: Implement sell */}}
+          >
+            <Text style={styles.tradeButtonText}>SELL</Text>
+          </TouchableOpacity>
+          
+          <View style={styles.lotSizeContainer}>
+            <Text style={styles.lotSizeLabel}>LOT</Text>
+            <Text style={styles.lotSizeValue}>0.10</Text>
           </View>
           
+          <TouchableOpacity
+            style={[styles.tradeButton, styles.buyButton]}
+            onPress={() => {/* TODO: Implement buy */}}
+          >
+            <Text style={styles.tradeButtonText}>BUY</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Auto Analysis Toggle - Floating Compact */}
+        <View style={styles.autoAnalysisFloating}>
+          <Switch
+            value={autoAnalysisEnabled}
+            onValueChange={handleToggleAutoAnalysis}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.text}
+            disabled={isLoading}
+          />
+          <Text style={styles.autoAnalysisFloatingText}>التداول التلقائي</Text>
           <View style={[
-            styles.connectionStatus,
-            { backgroundColor: autoAnalysisEnabled ? colors.primary + '20' : colors.error + '20' }
-          ]}>
-            <Ionicons 
-              name={autoAnalysisEnabled ? "checkmark-circle" : "close-circle"} 
-              size={18} 
-              color={autoAnalysisEnabled ? colors.primary : colors.error} 
-            />
-            <Text style={[
-              styles.connectionText,
-              { color: autoAnalysisEnabled ? colors.primary : colors.error }
-            ]}>
-              {autoAnalysisEnabled ? 'متصل بالخادم' : 'متوقف'}
-            </Text>
-          </View>
+            styles.autoAnalysisStatusDot,
+            { backgroundColor: autoAnalysisEnabled ? colors.primary : colors.error }
+          ]} />
         </View>
 
         <View style={styles.bottomSpacer} />
@@ -836,18 +797,13 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
   },
   chartContainer: {
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
+    marginHorizontal: 0,
+    marginVertical: 0,
     backgroundColor: '#0a0e14',
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(55, 65, 81, 0.5)',
+    borderRadius: 0,
+    borderWidth: 0,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    height: Dimensions.get('window').height * 0.6, // 60% من ارتفاع الشاشة
   },
   chartToolbar: {
     flexDirection: 'row',
@@ -927,8 +883,7 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
   },
   chartWrapper: {
-    height: 320,
-    position: 'relative',
+    flex: 1,
     backgroundColor: '#0a0e14',
   },
   chart: {
@@ -986,60 +941,75 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5,
   },
-  autoAnalysisCard: {
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: spacing.md,
+  autoAnalysisFloating: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: colors.card + 'DD',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    gap: spacing.xs,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  autoAnalysisRow: {
+  autoAnalysisFloatingText: {
+    color: colors.text,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+  },
+  autoAnalysisStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  tradingControls: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  autoAnalysisInfo: {
+  tradeButton: {
     flex: 1,
-    marginHorizontal: spacing.md,
-    alignItems: 'flex-start',
-  },
-  autoAnalysisTitle: {
-    color: colors.text,
-    fontSize: fontSizes.md,
-    fontWeight: '500',
-    textAlign: 'left',
-  },
-  subscriptionBadge: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    marginTop: spacing.xs,
-    gap: spacing.xs,
-  },
-  subscriptionBadgeText: {
-    color: colors.primary,
-    fontSize: fontSizes.xs,
-    fontWeight: '500',
-  },
-  connectionStatus: {
-    flexDirection: 'row-reverse',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
   },
-  connectionText: {
-    fontSize: fontSizes.sm,
-    fontWeight: '600',
-    textAlign: 'right',
+  buyButton: {
+    backgroundColor: colors.buy,
+  },
+  sellButton: {
+    backgroundColor: colors.sell,
+  },
+  tradeButtonText: {
+    color: colors.text,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+  },
+  lotSizeContainer: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  lotSizeLabel: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.xs,
+    marginBottom: 2,
+  },
+  lotSizeValue: {
+    color: colors.text,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
   },
   bottomSpacer: {
     height: 100, // مسافة إضافية لشريط التنقل العائم

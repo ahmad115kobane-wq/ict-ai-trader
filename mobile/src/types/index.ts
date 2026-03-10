@@ -100,3 +100,31 @@ export interface PriceData {
   price: number;
   timestamp: string;
 }
+
+export type PositionSide = 'BUY' | 'SELL';
+
+export interface PaperPosition {
+  id: string;
+  symbol: string;
+  side: PositionSide;
+  lotSize: number;
+  entryPrice: number;
+  stopLoss: number;
+  takeProfit: number;
+  openedAt: string;
+  closedAt?: string;
+  closePrice?: number;
+  realizedPnl?: number;
+  status: 'open' | 'closed';
+}
+
+export interface PaperTradingAccount {
+  initialBalance: number;
+  balance: number;
+  equity: number;
+  floatingPnl: number;
+  closedPnl: number;
+  usedMargin: number;
+  freeMargin: number;
+  openPositionsCount: number;
+}
