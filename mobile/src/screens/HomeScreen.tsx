@@ -12,6 +12,7 @@ import {
   RefreshControl,
   Dimensions,
   TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -50,6 +51,17 @@ const HomeScreen = () => {
   const [lotSizeInput, setLotSizeInput] = useState('0.10');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openPositions, setOpenPositions] = useState<any[]>([]);
+  
+  // Modal للتعديل
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<any | null>(null);
+  const [newStopLoss, setNewStopLoss] = useState('');
+  const [newTakeProfit, setNewTakeProfit] = useState('');
+  
+  // Modal للإغلاق الجزئي
+  const [partialCloseModalVisible, setPartialCloseModalVisible] = useState(false);
+  const [closingPosition, setClosingPosition] = useState<any | null>(null);
+  const [partialLotSize, setPartialLotSize] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -251,12 +263,135 @@ const HomeScreen = () => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'EDIT_POSITION') {
-        // الانتقال إلى صفحة السجلات مع تمرير معرف الصفقة
-        navigation.navigate('Trades', { editPositionId: data.positionId });
+        // فتح Modal التعديل في نفس الصفحة
+        const position = openPositions.find(p => p.id === data.positionId);
+        if (position) {
+          openEditModal(position);
+        }
       }
     } catch (error) {
       console.error('Error handling chart message:', error);
     }
+  };
+
+  const openEditModal = (position: any) => {
+    setEditingPosition(position);
+    setNewStopLoss(position.stopLoss.toFixed(2));
+    setNewTakeProfit(position.takeProfit.toFixed(2));
+    setEditModalVisible(true);
+  };
+
+  const savePositionEdit = async () => {
+    if (!editingPosition) return;
+
+    const sl = parseFloat(newStopLoss);
+    const tp = parseFloat(newTakeProfit);
+
+    if (!Number.isFinite(sl) || !Number.isFinite(tp)) {
+      showError('قيم غير صحيحة', 'تأكد من إدخال أرقام صحيحة لـ SL و TP');
+      return;
+    }
+
+    try {
+      const updated = await paperTradingService.updatePosition(editingPosition.id, {
+        stopLoss: sl,
+        takeProfit: tp,
+      });
+
+      if (!updated) {
+        showError('خطأ', 'لم يتم العثور على الصفقة');
+        return;
+      }
+
+      // تحديث فوري
+      await loadOpenPositions();
+      
+      setEditModalVisible(false);
+      setEditingPosition(null);
+      showSuccess('تم التعديل ✅', 'تم تحديث SL و TP بنجاح');
+    } catch (error: any) {
+      console.error('Edit position error:', error);
+      showError('فشل التعديل ❌', error.message || 'تعذر تعديل الصفقة');
+    }
+  };
+
+  const openPartialCloseModal = (position: any) => {
+    setClosingPosition(position);
+    setPartialLotSize('');
+    setPartialCloseModalVisible(true);
+  };
+
+  const executePartialClose = async () => {
+    if (!closingPosition) return;
+
+    const lotSize = parseFloat(partialLotSize);
+
+    if (!Number.isFinite(lotSize) || lotSize <= 0) {
+      showError('حجم غير صحيح', 'أدخل حجم لوت صحيح');
+      return;
+    }
+
+    if (lotSize >= closingPosition.lotSize) {
+      showError('حجم كبير جداً', `الحد الأقصى: ${(closingPosition.lotSize - 0.01).toFixed(2)} LOT`);
+      return;
+    }
+
+    try {
+      const result = await paperTradingService.partialClosePosition(
+        closingPosition.id,
+        lotSize,
+        currentPrice
+      );
+
+      if (!result) {
+        showError('خطأ', 'لم يتم العثور على الصفقة');
+        return;
+      }
+
+      // تحديث فوري
+      await loadOpenPositions();
+      
+      setPartialCloseModalVisible(false);
+      setClosingPosition(null);
+      
+      const pnl = result.closedPosition.realizedPnl || 0;
+      showSuccess(
+        'إغلاق جزئي ✅',
+        `تم إغلاق ${lotSize.toFixed(2)} LOT\n\nالربح/الخسارة: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}$\n\nالمتبقي: ${result.remainingPosition ? result.remainingPosition.lotSize.toFixed(2) : '0.00'} LOT`
+      );
+    } catch (error: any) {
+      console.error('Partial close error:', error);
+      showError('فشل الإغلاق ❌', error.message || 'تعذر إغلاق الصفقة جزئياً');
+    }
+  };
+
+  const closePositionFull = async (position: any) => {
+    showConfirm(
+      'إغلاق الصفقة',
+      `هل تريد إغلاق صفقة ${position.side} ${position.lotSize.toFixed(2)} LOT؟`,
+      async () => {
+        try {
+          const closed = await paperTradingService.closePosition(position.id, currentPrice);
+          
+          if (!closed) {
+            showError('خطأ', 'لم يتم العثور على الصفقة');
+            return;
+          }
+
+          // تحديث فوري
+          await loadOpenPositions();
+          
+          const pnl = closed.realizedPnl || 0;
+          showSuccess(
+            'تم الإغلاق ✅',
+            `النتيجة: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}$`
+          );
+        } catch (error: any) {
+          console.error('Close position error:', error);
+          showError('فشل الإغلاق ❌', 'تعذر إغلاق الصفقة');
+        }
+      }
+    );
   };
 
   // HTML للشارت المباشر - تصميم احترافي مثل التطبيقات العالمية
@@ -931,8 +1066,217 @@ const HomeScreen = () => {
           ]} />
         </View>
 
+        {/* Open Positions List */}
+        {openPositions.length > 0 && (
+          <View style={styles.positionsSection}>
+            <Text style={styles.sectionTitle}>الصفقات المفتوحة ({openPositions.length})</Text>
+            {openPositions.map((position) => {
+              const pnl = position.floatingPnl || 0;
+              const isProfit = pnl >= 0;
+              
+              return (
+                <View key={position.id} style={styles.positionCard}>
+                  <View style={styles.positionHeader}>
+                    <View style={[
+                      styles.sideBadge,
+                      { backgroundColor: position.side === 'BUY' ? colors.buy + '22' : colors.sell + '22' }
+                    ]}>
+                      <Text style={[
+                        styles.sideText,
+                        { color: position.side === 'BUY' ? colors.buy : colors.sell }
+                      ]}>
+                        {position.side}
+                      </Text>
+                    </View>
+                    <Text style={styles.positionSymbol}>{position.symbol}</Text>
+                    <Text style={[styles.positionPnl, { color: isProfit ? colors.profit : colors.loss }]}>
+                      {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$
+                    </Text>
+                  </View>
+
+                  <View style={styles.positionDetails}>
+                    <View style={styles.positionDetailRow}>
+                      <Text style={styles.positionDetailLabel}>Entry:</Text>
+                      <Text style={styles.positionDetailValue}>{position.entryPrice.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.positionDetailRow}>
+                      <Text style={styles.positionDetailLabel}>Lot:</Text>
+                      <Text style={styles.positionDetailValue}>{position.lotSize.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.positionDetailRow}>
+                      <Text style={styles.positionDetailLabel}>SL:</Text>
+                      <Text style={styles.positionDetailValue}>{position.stopLoss.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.positionDetailRow}>
+                      <Text style={styles.positionDetailLabel}>TP:</Text>
+                      <Text style={styles.positionDetailValue}>{position.takeProfit.toFixed(2)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.positionActions}>
+                    <TouchableOpacity
+                      style={[styles.positionActionButton, styles.editButton]}
+                      onPress={() => openEditModal(position)}
+                    >
+                      <Ionicons name="create-outline" size={16} color={colors.text} />
+                      <Text style={styles.positionActionText}>تعديل</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.positionActionButton, styles.partialButton]}
+                      onPress={() => openPartialCloseModal(position)}
+                    >
+                      <Ionicons name="remove-circle-outline" size={16} color={colors.text} />
+                      <Text style={styles.positionActionText}>إغلاق جزئي</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.positionActionButton, styles.closeButton]}
+                      onPress={() => closePositionFull(position)}
+                    >
+                      <Ionicons name="close-circle" size={16} color={colors.text} />
+                      <Text style={styles.positionActionText}>إغلاق</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Edit Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>تعديل الصفقة</Text>
+            
+            {editingPosition && (
+              <>
+                <View style={styles.modalInfo}>
+                  <Text style={styles.modalInfoText}>
+                    {editingPosition.side} {editingPosition.lotSize.toFixed(2)} LOT
+                  </Text>
+                  <Text style={styles.modalInfoText}>
+                    Entry: {editingPosition.entryPrice.toFixed(2)}
+                  </Text>
+                </View>
+
+                <View style={styles.modalInputGroup}>
+                  <Text style={styles.modalLabel}>Stop Loss</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newStopLoss}
+                    onChangeText={setNewStopLoss}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+
+                <View style={styles.modalInputGroup}>
+                  <Text style={styles.modalLabel}>Take Profit</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newTakeProfit}
+                    onChangeText={setNewTakeProfit}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalCancelButton]}
+                    onPress={() => setEditModalVisible(false)}
+                  >
+                    <Text style={styles.modalButtonText}>إلغاء</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalSaveButton]}
+                    onPress={savePositionEdit}
+                  >
+                    <Text style={styles.modalButtonText}>حفظ</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Partial Close Modal */}
+      <Modal
+        visible={partialCloseModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPartialCloseModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>إغلاق جزئي</Text>
+            
+            {closingPosition && (
+              <>
+                <View style={styles.modalInfo}>
+                  <Text style={styles.modalInfoText}>
+                    {closingPosition.side} {closingPosition.lotSize.toFixed(2)} LOT
+                  </Text>
+                  <Text style={styles.modalInfoText}>
+                    Entry: {closingPosition.entryPrice.toFixed(2)}
+                  </Text>
+                  <Text style={[
+                    styles.modalInfoText,
+                    { color: (closingPosition.floatingPnl || 0) >= 0 ? colors.profit : colors.loss }
+                  ]}>
+                    P/L: {(closingPosition.floatingPnl || 0) >= 0 ? '+' : ''}{(closingPosition.floatingPnl || 0).toFixed(2)}$
+                  </Text>
+                </View>
+
+                <View style={styles.modalInputGroup}>
+                  <Text style={styles.modalLabel}>حجم الإغلاق (LOT)</Text>
+                  <Text style={styles.modalHint}>
+                    الحد الأقصى: {(closingPosition.lotSize - 0.01).toFixed(2)} LOT
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={partialLotSize}
+                    onChangeText={setPartialLotSize}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalCancelButton]}
+                    onPress={() => setPartialCloseModalVisible(false)}
+                  >
+                    <Text style={styles.modalButtonText}>إلغاء</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalSaveButton]}
+                    onPress={executePartialClose}
+                  >
+                    <Text style={styles.modalButtonText}>إغلاق</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <AlertComponent />
     </SafeAreaView>
@@ -1238,6 +1582,178 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 100, // مسافة إضافية لشريط التنقل العائم
+  },
+  positionsSection: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+    textAlign: 'right',
+    marginBottom: spacing.sm,
+  },
+  positionCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  positionHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  sideBadge: {
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  sideText: {
+    fontWeight: '700',
+    fontSize: fontSizes.sm,
+  },
+  positionSymbol: {
+    color: colors.text,
+    fontSize: fontSizes.md,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  positionPnl: {
+    fontSize: fontSizes.md,
+    fontWeight: '700',
+  },
+  positionDetails: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  positionDetailRow: {
+    alignItems: 'center',
+  },
+  positionDetailLabel: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.xs,
+  },
+  positionDetailValue: {
+    color: colors.text,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+  },
+  positionActions: {
+    flexDirection: 'row-reverse',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  positionActionButton: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  editButton: {
+    backgroundColor: colors.secondary,
+  },
+  partialButton: {
+    backgroundColor: colors.warning,
+  },
+  closeButton: {
+    backgroundColor: colors.error,
+  },
+  positionActionText: {
+    color: colors.text,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    color: colors.text,
+    fontSize: fontSizes.xl,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  modalInfo: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modalInfoText: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.sm,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  modalInputGroup: {
+    marginBottom: spacing.md,
+  },
+  modalLabel: {
+    color: colors.text,
+    fontSize: fontSizes.md,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+    textAlign: 'right',
+  },
+  modalHint: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+    marginBottom: spacing.xs,
+    textAlign: 'right',
+  },
+  modalInput: {
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    color: colors.text,
+    fontSize: fontSizes.md,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row-reverse',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: colors.secondary,
+  },
+  modalSaveButton: {
+    backgroundColor: colors.primary,
+  },
+  modalButtonText: {
+    color: colors.text,
+    fontSize: fontSizes.md,
+    fontWeight: '700',
   },
 });
 

@@ -373,10 +373,102 @@ const closeAllSellPositions = async (marketPrice: number): Promise<PaperPosition
   return closedPositions;
 };
 
+// تعديل SL/TP لصفقة موجودة
+const updatePosition = async (
+  positionId: string,
+  updates: { stopLoss?: number; takeProfit?: number }
+): Promise<PaperPosition | null> => {
+  const state = await loadState();
+  const index = state.openPositions.findIndex((p) => p.id === positionId);
+
+  if (index === -1) {
+    return null;
+  }
+
+  const position = state.openPositions[index];
+  
+  if (updates.stopLoss !== undefined) {
+    position.stopLoss = round2(updates.stopLoss);
+  }
+  
+  if (updates.takeProfit !== undefined) {
+    position.takeProfit = round2(updates.takeProfit);
+  }
+
+  state.openPositions[index] = position;
+  await saveState(state);
+  
+  return position;
+};
+
+// إغلاق جزئي للصفقة
+const partialClosePosition = async (
+  positionId: string,
+  closeLotSize: number,
+  marketPrice: number
+): Promise<{ closedPosition: PaperPosition; remainingPosition: PaperPosition | null } | null> => {
+  const state = await loadState();
+  const index = state.openPositions.findIndex((p) => p.id === positionId);
+
+  if (index === -1) {
+    return null;
+  }
+
+  const position = state.openPositions[index];
+  
+  // التحقق من أن حجم الإغلاق أقل من حجم الصفقة
+  if (closeLotSize >= position.lotSize) {
+    throw new Error('حجم الإغلاق يجب أن يكون أقل من حجم الصفقة الكلي');
+  }
+  
+  if (closeLotSize <= 0) {
+    throw new Error('حجم الإغلاق يجب أن يكون أكبر من صفر');
+  }
+
+  // حساب الربح/الخسارة للجزء المغلق
+  const delta = (marketPrice - position.entryPrice) * getDirectionMultiplier(position.side);
+  const partialPnl = round2(delta * closeLotSize * CONTRACT_SIZE);
+
+  // إنشاء صفقة مغلقة للجزء المغلق
+  const closedPosition: PaperPosition = {
+    ...position,
+    id: `${position.id}_partial_${Date.now()}`,
+    lotSize: round2(closeLotSize),
+    status: 'closed',
+    closePrice: round2(marketPrice),
+    closedAt: new Date().toISOString(),
+    realizedPnl: partialPnl,
+  };
+
+  // تحديث الصفقة المتبقية
+  const remainingLotSize = round2(position.lotSize - closeLotSize);
+  
+  if (remainingLotSize > 0) {
+    position.lotSize = remainingLotSize;
+    state.openPositions[index] = position;
+  } else {
+    // إذا لم يتبق شيء، احذف الصفقة
+    state.openPositions.splice(index, 1);
+  }
+
+  // تحديث الرصيد
+  state.balance = round2(state.balance + partialPnl);
+  state.closedPositions = [closedPosition, ...state.closedPositions].slice(0, 100);
+
+  await saveState(state);
+  
+  return {
+    closedPosition,
+    remainingPosition: remainingLotSize > 0 ? position : null,
+  };
+};
+
 export const paperTradingService = {
   getSnapshot,
   openPosition,
   closePosition,
+  updatePosition,
+  partialClosePosition,
   autoCloseTriggeredPositions,
   resetAccount,
   getPositionFloatingPnl,
@@ -384,4 +476,6 @@ export const paperTradingService = {
   closeProfitablePositions,
   closeAllBuyPositions,
   closeAllSellPositions,
+  loadState,
+  saveState,
 };

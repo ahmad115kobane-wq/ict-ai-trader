@@ -220,27 +220,24 @@ const TradesScreen = () => {
     }
 
     try {
-      // تحديث الصفقة في الخدمة
-      const state = await paperTradingService.loadState();
-      const positionIndex = state.openPositions.findIndex(p => p.id === editingPosition.id);
-      
-      if (positionIndex === -1) {
+      const updated = await paperTradingService.updatePosition(editingPosition.id, {
+        stopLoss: sl,
+        takeProfit: tp,
+      });
+
+      if (!updated) {
         showError('خطأ', 'لم يتم العثور على الصفقة');
         return;
       }
 
-      state.openPositions[positionIndex].stopLoss = sl;
-      state.openPositions[positionIndex].takeProfit = tp;
-      
-      await paperTradingService.saveState(state);
       await updateTradingSnapshot(currentPrice);
       
       setEditModalVisible(false);
       setEditingPosition(null);
       showSuccess('تم التعديل ✅', 'تم تحديث SL و TP بنجاح');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Edit position error:', error);
-      showError('فشل التعديل ❌', 'تعذر تعديل الصفقة');
+      showError('فشل التعديل ❌', error.message || 'تعذر تعديل الصفقة');
     }
   };
 
