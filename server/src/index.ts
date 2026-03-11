@@ -723,7 +723,7 @@ app.get('/set-push-token', async (req, res) => {
 // Auto Trading System Status - حالة نظام التداول التلقائي
 app.get('/auto-trading-status', async (req, res) => {
   try {
-    const { getSystemStatus, getTodayStats } = await import('./services/autoTradingService');
+    const { getSystemStatus } = await import('./services/autoTradingService');
     const { getTodayStats: getScalpingStats } = await import('./services/scalpingService');
     
     const systemStatus = getSystemStatus();

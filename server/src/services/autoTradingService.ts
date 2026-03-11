@@ -7,9 +7,9 @@
 
 import * as cron from 'node-cron';
 import { analyzeScalping, resetDailyStats } from './scalpingService';
-import { getOandaCandles, getCurrentPrice } from './oandaService';
+import { getCandles, getCurrentPrice } from './oandaService';
 import { getUsersWithAutoAnalysisEnabled, saveAutoAnalysis } from '../db/index';
-import { sendAnalysisNotification } from './notificationService';
+import { sendTradeNotification } from './expoPushService';
 
 console.log("🤖 Auto Trading Service v1.0 - 24/7 Scalping System");
 
@@ -44,7 +44,7 @@ async function runAutoAnalysis() {
     // 1. جلب البيانات
     console.log('📊 جلب بيانات السوق...');
     const [m5Candles, priceData] = await Promise.all([
-      getOandaCandles(SYMBOL, '5m', 50),
+      getCandles(SYMBOL, '5m', 50),
       getCurrentPrice(SYMBOL)
     ]);
 
@@ -53,7 +53,7 @@ async function runAutoAnalysis() {
       return;
     }
 
-    const currentPrice = priceData?.price || m5Candles[m5Candles.length - 1].close;
+    const currentPrice = typeof priceData === 'number' ? priceData : m5Candles[m5Candles.length - 1].close;
     console.log(`💰 السعر الحالي: ${currentPrice.toFixed(2)}`);
 
     // 2. تحليل السوق
@@ -68,20 +68,24 @@ async function runAutoAnalysis() {
 
     // 3. حفظ التحليل في قاعدة البيانات
     const analysisId = `auto_${Date.now()}`;
+    const suggestedTradeJson = analysis.suggestedTrade ? JSON.stringify(analysis.suggestedTrade) : null;
+    
     await saveAutoAnalysis(
       analysisId,
       SYMBOL,
+      '', // h1Image - not used in scalping
+      '', // m5Image - not used in scalping
       currentPrice,
       analysis.decision,
       analysis.score,
       analysis.confidence,
-      analysis.suggestedTrade ? JSON.stringify(analysis.suggestedTrade) : null
+      suggestedTradeJson
     );
 
     console.log(`💾 تم حفظ التحليل: ${analysisId}`);
 
     // 4. إرسال الإشعارات للمستخدمين المشتركين
-    if (analysis.decision !== 'WAIT' && analysis.suggestedTrade) {
+    if (analysis.decision !== 'NO_TRADE' && analysis.suggestedTrade) {
       console.log('\n📢 إرسال الإشعارات للمستخدمين...');
       
       const users = await getUsersWithAutoAnalysisEnabled();
@@ -89,28 +93,21 @@ async function runAutoAnalysis() {
 
       if (users.length > 0) {
         // إرسال إشعار لكل مستخدم
-        const notificationPromises = users.map(user => 
-          sendAnalysisNotification(
-            user.id,
-            {
-              symbol: SYMBOL,
-              decision: analysis.decision,
-              score: analysis.score,
-              confidence: analysis.confidence,
-              entry: analysis.suggestedTrade!.entry,
-              sl: analysis.suggestedTrade!.sl,
-              tp1: analysis.suggestedTrade!.tp1,
-              tp2: analysis.suggestedTrade!.tp2,
-              tp3: analysis.suggestedTrade!.tp3,
-              reasoning: analysis.reasoning
-            }
-          ).catch(err => {
-            console.error(`❌ فشل إرسال الإشعار للمستخدم ${user.id}:`, err.message);
-          })
-        );
-
-        await Promise.all(notificationPromises);
-        console.log(`✅ تم إرسال ${users.length} إشعار`);
+        const pushTokens = users.map((u: any) => u.push_token).filter(Boolean);
+        
+        if (pushTokens.length > 0) {
+          try {
+            await sendTradeNotification(
+              pushTokens,
+              analysis.suggestedTrade,
+              analysis.score,
+              currentPrice
+            );
+            console.log(`✅ تم إرسال ${pushTokens.length} إشعار`);
+          } catch (err: any) {
+            console.error(`❌ فشل إرسال الإشعارات:`, err.message);
+          }
+        }
       } else {
         console.log('ℹ️ لا يوجد مستخدمين مفعلين حالياً');
       }

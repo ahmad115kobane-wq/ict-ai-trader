@@ -5,7 +5,7 @@
 // ✅ أهداف قريبة (5-10 نقاط) و SL قريب (3-5 نقاط)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { ICTAnalysis, SuggestedTrade } from "../types";
+import { ICTAnalysis, SuggestedTrade, TradeType } from "../types";
 
 console.log("🚀 Scalping Service v1.0 - Fast 5M Strategy");
 
@@ -39,7 +39,7 @@ const marketState: MarketState = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface MomentumAnalysis {
-  direction: 'BUY' | 'SELL' | 'WAIT';
+  direction: 'PLACE_PENDING' | 'NO_TRADE';
   strength: number;
   score: number;
   reason: string;
@@ -49,7 +49,7 @@ interface MomentumAnalysis {
 function analyzeFastMomentum(candles: any[]): MomentumAnalysis {
   if (!candles || candles.length < 10) {
     return {
-      direction: 'WAIT',
+      direction: 'NO_TRADE',
       strength: 0,
       score: 0,
       reason: 'بيانات غير كافية',
@@ -86,20 +86,20 @@ function analyzeFastMomentum(candles: any[]): MomentumAnalysis {
   
   // قوة الزخم (0-10)
   let strength = 0;
-  let direction: 'BUY' | 'SELL' | 'WAIT' = 'WAIT';
+  let direction: 'PLACE_PENDING' | 'NO_TRADE' = 'NO_TRADE';
   let reason = '';
 
   // تحديد الاتجاه
   if (bullishCount >= 4) {
-    direction = 'BUY';
+    direction = 'PLACE_PENDING';
     strength = (bullishCount / 5) * 10;
     reason = `زخم صاعد قوي: ${bullishCount}/5 شموع صاعدة`;
   } else if (bearishCount >= 4) {
-    direction = 'SELL';
+    direction = 'PLACE_PENDING';
     strength = (bearishCount / 5) * 10;
     reason = `زخم هابط قوي: ${bearishCount}/5 شموع هابطة`;
   } else {
-    direction = 'WAIT';
+    direction = 'NO_TRADE';
     strength = 5;
     reason = 'زخم متذبذب - انتظار';
   }
@@ -114,7 +114,7 @@ function analyzeFastMomentum(candles: any[]): MomentumAnalysis {
   const score = Math.min(10, Math.round(strength));
 
   // التحقق من إمكانية التداول
-  const canTrade = score >= MIN_MOMENTUM_SCORE && direction !== 'WAIT';
+  const canTrade = score >= MIN_MOMENTUM_SCORE && direction !== 'NO_TRADE';
 
   console.log(`📊 Momentum: ${direction} | Score: ${score}/10 | ${reason}`);
 
@@ -173,7 +173,7 @@ export async function analyzeScalping(
   symbol: string,
   m5Candles: any[],
   currentPrice: number
-): Promise<ICTAnalysis> {
+): Promise<ICTAnalysis & { symbol: string; currentPrice: number }> {
   console.log(`\n🔥 ═══════════════════════════════════════════════════════`);
   console.log(`🔥 Scalping Analysis - ${symbol} @ ${currentPrice.toFixed(2)}`);
   console.log(`🔥 ═══════════════════════════════════════════════════════\n`);
@@ -190,21 +190,46 @@ export async function analyzeScalping(
       return {
         symbol,
         currentPrice,
-        decision: 'WAIT',
+        decision: 'NO_TRADE',
         bias: 'NEUTRAL',
         score: 0,
         confidence: 0,
         reasoning: `انتظار ${remainingMinutes} دقيقة قبل الصفقة التالية`,
         suggestedTrade: undefined,
-        killzones: [],
-        managementAdvice: {
-          stopLoss: 0,
-          takeProfit1: 0,
-          takeProfit2: 0,
-          takeProfit3: 0,
-          riskRewardRatio: 0,
-          positionSize: 0.1
-        }
+        sentiment: 'NEUTRAL',
+        h1Analysis: {
+          bias: 'NEUTRAL',
+          allowBuy: false,
+          allowSell: false,
+          liquiditySweep: '',
+          nearestBSL: '',
+          nearestSSL: ''
+        },
+        m5Analysis: {
+          marketStructure: 'CONSOLIDATION',
+          displacement: 'WEAK',
+          pdArray: 'NONE',
+          readyForEntry: false
+        },
+        priceLocation: 'MID',
+        liquidityPurge: {
+          occurred: false,
+          type: 'NONE',
+          levelName: '',
+          evidence: {
+            wickRejection: false,
+            closedBackInside: false,
+            reversedWithin3Candles: false
+          }
+        },
+        drawOnLiquidity: {
+          direction: 'NEUTRAL',
+          target: '',
+          nearestBSL: '',
+          nearestSSL: ''
+        },
+        confluences: [],
+        reasons: []
       };
     }
   }
@@ -216,19 +241,21 @@ export async function analyzeScalping(
   const sr = findQuickSR(m5Candles, currentPrice);
   
   // 3. تحديد القرار
-  let decision: 'BUY' | 'SELL' | 'WAIT' = 'WAIT';
+  let decision: 'PLACE_PENDING' | 'NO_TRADE' = 'NO_TRADE';
+  let tradeType: TradeType | null = null;
   let score = momentum.score;
   let reasoning = momentum.reason;
   
   if (momentum.canTrade) {
-    if (momentum.direction === 'BUY' && !sr.nearResistance) {
-      decision = 'BUY';
-      reasoning += ' | بعيد عن المقاومة';
-    } else if (momentum.direction === 'SELL' && !sr.nearSupport) {
-      decision = 'SELL';
-      reasoning += ' | بعيد عن الدعم';
+    if (!sr.nearResistance && !sr.nearSupport) {
+      decision = 'PLACE_PENDING';
+      // تحديد نوع الصفقة بناءً على الزخم
+      const lastCandle = m5Candles[m5Candles.length - 1];
+      const isBullish = lastCandle.close > lastCandle.open;
+      tradeType = isBullish ? 'BUY_LIMIT' : 'SELL_LIMIT';
+      reasoning += isBullish ? ' | بعيد عن المقاومة' : ' | بعيد عن الدعم';
     } else {
-      decision = 'WAIT';
+      decision = 'NO_TRADE';
       score = 5;
       reasoning = 'قريب من مستوى حرج - انتظار';
     }
@@ -237,37 +264,41 @@ export async function analyzeScalping(
   // 4. حساب SL و TP
   let suggestedTrade: SuggestedTrade | undefined;
   
-  if (decision !== 'WAIT') {
+  if (decision !== 'NO_TRADE' && tradeType) {
     const entry = currentPrice;
-    const sl = decision === 'BUY' 
+    const isBuy = tradeType.startsWith('BUY');
+    const isSell = tradeType.startsWith('SELL');
+    const sl = isBuy 
       ? entry - SCALP_SL_DISTANCE 
       : entry + SCALP_SL_DISTANCE;
-    const tp1 = decision === 'BUY'
+    const tp1 = isBuy
       ? entry + SCALP_TP_DISTANCE
       : entry - SCALP_TP_DISTANCE;
-    const tp2 = decision === 'BUY'
+    const tp2 = isBuy
       ? entry + (SCALP_TP_DISTANCE * 1.5)
       : entry - (SCALP_TP_DISTANCE * 1.5);
-    const tp3 = decision === 'BUY'
+    const tp3 = isBuy
       ? entry + (SCALP_TP_DISTANCE * 2)
       : entry - (SCALP_TP_DISTANCE * 2);
 
     suggestedTrade = {
-      type: decision,
+      type: tradeType,
       entry: parseFloat(entry.toFixed(2)),
       sl: parseFloat(sl.toFixed(2)),
       tp1: parseFloat(tp1.toFixed(2)),
       tp2: parseFloat(tp2.toFixed(2)),
-      tp3: parseFloat(tp3.toFixed(2))
+      tp3: parseFloat(tp3.toFixed(2)),
+      expiryMinutes: 30,
+      cancelConditions: ['إذا تم كسر مستوى الدعم/المقاومة']
     };
 
     // تحديث حالة السوق
     marketState.lastTradeTime = new Date();
     marketState.todayTrades++;
     marketState.lastPrice = currentPrice;
-    marketState.trend = decision === 'BUY' ? 'BULLISH' : 'BEARISH';
+    marketState.trend = isBuy ? 'BULLISH' : 'BEARISH';
 
-    console.log(`\n✅ إشارة ${decision}:`);
+    console.log(`\n✅ إشارة ${tradeType}:`);
     console.log(`   Entry: ${entry.toFixed(2)}`);
     console.log(`   SL: ${sl.toFixed(2)} (${SCALP_SL_DISTANCE}$)`);
     console.log(`   TP1: ${tp1.toFixed(2)} (${SCALP_TP_DISTANCE}$)`);
@@ -275,26 +306,54 @@ export async function analyzeScalping(
     console.log(`   TP3: ${tp3.toFixed(2)}`);
   }
 
-  const confidence = decision === 'WAIT' ? 0 : Math.min(95, score * 10);
+  const confidence = decision === 'NO_TRADE' ? 0 : Math.min(95, score * 10);
+  const isBuyTrade = tradeType ? tradeType.startsWith('BUY') : false;
+  const isSellTrade = tradeType ? tradeType.startsWith('SELL') : false;
+  const bias = isBuyTrade ? 'BULLISH' : isSellTrade ? 'BEARISH' : 'NEUTRAL';
 
   return {
     symbol,
     currentPrice,
     decision,
-    bias: decision === 'BUY' ? 'BULLISH' : decision === 'SELL' ? 'BEARISH' : 'NEUTRAL',
+    bias,
     score,
     confidence,
     reasoning,
     suggestedTrade,
-    killzones: [],
-    managementAdvice: {
-      stopLoss: suggestedTrade?.sl || 0,
-      takeProfit1: suggestedTrade?.tp1 || 0,
-      takeProfit2: suggestedTrade?.tp2 || 0,
-      takeProfit3: suggestedTrade?.tp3 || 0,
-      riskRewardRatio: SCALP_TP_DISTANCE / SCALP_SL_DISTANCE,
-      positionSize: 0.1
-    }
+    sentiment: bias as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+    h1Analysis: {
+      bias: bias as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+      allowBuy: isBuyTrade,
+      allowSell: isSellTrade,
+      liquiditySweep: '',
+      nearestBSL: sr.resistance.toFixed(2),
+      nearestSSL: sr.support.toFixed(2)
+    },
+    m5Analysis: {
+      marketStructure: decision === 'PLACE_PENDING' ? 'BOS' : 'CONSOLIDATION',
+      displacement: momentum.strength > 8 ? 'STRONG' : momentum.strength > 5 ? 'MODERATE' : 'WEAK',
+      pdArray: 'NONE',
+      readyForEntry: decision === 'PLACE_PENDING'
+    },
+    priceLocation: 'MID',
+    liquidityPurge: {
+      occurred: false,
+      type: 'NONE',
+      levelName: '',
+      evidence: {
+        wickRejection: false,
+        closedBackInside: false,
+        reversedWithin3Candles: false
+      }
+    },
+    drawOnLiquidity: {
+      direction: bias as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+      target: '',
+      nearestBSL: sr.resistance.toFixed(2),
+      nearestSSL: sr.support.toFixed(2)
+    },
+    confluences: [],
+    reasons: [reasoning]
   };
 }
 
