@@ -99,6 +99,10 @@ app.get('/economic-calendar', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'economic-calendar.html'));
 });
 
+app.get('/run-migrations', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'public', 'run-migrations.html'));
+});
+
 app.get('/backtesting', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'backtest-dashboard.html'));
 });
@@ -1884,6 +1888,43 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     version: '1.0.0'
   });
+});
+
+// ===================== Database Migration Endpoints =====================
+// تشغيل migrations لإنشاء الجداول والحقول المطلوبة
+app.post('/api/admin/run-migrations', async (req, res) => {
+  try {
+    const { runMigrations } = await import('./db/migrations');
+    await runMigrations();
+    res.json({
+      success: true,
+      message: 'Migrations completed successfully'
+    });
+  } catch (error: any) {
+    console.error('❌ Migration failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// التحقق من حالة قاعدة البيانات
+app.get('/api/admin/database-status', async (req, res) => {
+  try {
+    const { checkDatabaseStatus } = await import('./db/migrations');
+    const status = await checkDatabaseStatus();
+    res.json({
+      success: true,
+      ...status
+    });
+  } catch (error: any) {
+    console.error('❌ Failed to check database status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Current price endpoint

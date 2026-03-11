@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Migrations - ICT AI Trader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .status-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .status-value {
+            color: #333;
+            font-weight: bold;
+        }
+
+        .status-value.success {
+            color: #28a745;
+        }
+
+        .status-value.error {
+            color: #dc3545;
+        }
+
+        .status-value.warning {
+            color: #ffc107;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .log-box {
+            background: #1e1e1e;
+            color: #00ff00;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .log-box.show {
+            display: block;
+        }
+
+        .log-line {
+            margin-bottom: 5px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        .spinner.show {
+            display: block;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Database Migrations</h1>
+        <p class="subtitle">تحديث قاعدة البيانات لنظام التداول الورقي</p>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="status-box" id="statusBox">
+            <div class="status-item">
+                <span class="status-label">حالة قاعدة البيانات:</span>
+                <span class="status-value" id="dbStatus">جاري التحقق...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">حقل Balance:</span>
+                <span class="status-value" id="balanceStatus">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">جدول Positions:</span>
+                <span class="status-value" id="tableStatus">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">عدد المستخدمين:</span>
+                <span class="status-value" id="usersCount">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">الصفقات المفتوحة:</span>
+                <span class="status-value" id="openPositions">-</span>
+            </div>
+        </div>
+
+        <button class="btn-secondary" onclick="checkStatus()">🔍 التحقق من الحالة</button>
+        <button class="btn-primary" onclick="runMigrations()" id="migrateBtn">▶️ تشغيل Migrations</button>
+
+        <div class="spinner" id="spinner"></div>
+
+        <div class="log-box" id="logBox"></div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+
+        function showAlert(message, type = 'success') {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type} show`;
+            alert.textContent = message;
+            setTimeout(() => {
+                alert.className = 'alert';
+            }, 5000);
+        }
+
+        function addLog(message) {
+            const logBox = document.getElementById('logBox');
+            logBox.classList.add('show');
+            const line = document.createElement('div');
+            line.className = 'log-line';
+            line.textContent = `[${new Date().toLocaleTimeString('ar-EG')}] ${message}`;
+            logBox.appendChild(line);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        async function checkStatus() {
+            const spinner = document.getElementById('spinner');
+            spinner.classList.add('show');
+
+            try {
+                addLog('🔍 جاري التحقق من حالة قاعدة البيانات...');
+                
+                const response = await fetch(`${API_URL}/api/admin/database-status`);
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('dbStatus').textContent = data.needsMigration ? 'يحتاج تحديث' : 'محدثة';
+                    document.getElementById('dbStatus').className = `status-value ${data.needsMigration ? 'warning' : 'success'}`;
+                    
+                    document.getElementById('balanceStatus').textContent = data.hasBalanceColumn ? '✅ موجود' : '❌ غير موجود';
+                    document.getElementById('balanceStatus').className = `status-value ${data.hasBalanceColumn ? 'success' : 'error'}`;
+                    
+                    document.getElementById('tableStatus').textContent = data.hasPositionsTable ? '✅ موجود' : '❌ غير موجود';
+                    document.getElementById('tableStatus').className = `status-value ${data.hasPositionsTable ? 'success' : 'error'}`;
+                    
+                    document.getElementById('usersCount').textContent = data.usersCount;
+                    document.getElementById('openPositions').textContent = data.openPositions;
+
+                    addLog(`✅ التحقق اكتمل: ${data.usersCount} مستخدم، ${data.openPositions} صفقة مفتوحة`);
+                    
+                    if (data.needsMigration) {
+                        showAlert('⚠️ قاعدة البيانات تحتاج إلى تحديث!', 'warning');
+                    } else {
+                        showAlert('✅ قاعدة البيانات محدثة!', 'success');
+                    }
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                addLog(`❌ خطأ: ${error.message}`);
+                showAlert(`خطأ: ${error.message}`, 'error');
+            } finally {
+                spinner.classList.remove('show');
+            }
+        }
+
+        async function runMigrations() {
+            const btn = document.getElementById('migrateBtn');
+            const spinner = document.getElementById('spinner');
+            
+            if (!confirm('هل أنت متأكد من تشغيل migrations؟')) {
+                return;
+            }
+
+            btn.disabled = true;
+            spinner.classList.add('show');
+
+            try {
+                addLog('🚀 بدء تشغيل migrations...');
+                
+                const response = await fetch(`${API_URL}/api/admin/run-migrations`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+
+                if (data.success) {
+                    addLog('✅ Migrations اكتملت بنجاح!');
+                    showAlert('✅ تم تحديث قاعدة البيانات بنجاح!', 'success');
+                    
+                    // التحقق من الحالة بعد Migration
+                    setTimeout(() => checkStatus(), 1000);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                addLog(`❌ فشل Migration: ${error.message}`);
+                showAlert(`خطأ: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                spinner.classList.remove('show');
+            }
+        }
+
+        // التحقق التلقائي عند تحميل الصفحة
+        window.onload = () => {
+            checkStatus();
+        };
+    </script>
+</body>
+</html>
