@@ -720,6 +720,63 @@ app.get('/set-push-token', async (req, res) => {
   }
 });
 
+// Auto Trading System Status - حالة نظام التداول التلقائي
+app.get('/auto-trading-status', async (req, res) => {
+  try {
+    const { getSystemStatus, getTodayStats } = await import('./services/autoTradingService');
+    const { getTodayStats: getScalpingStats } = await import('./services/scalpingService');
+    
+    const systemStatus = getSystemStatus();
+    const scalpingStats = getScalpingStats();
+    
+    res.json({
+      success: true,
+      system: {
+        isRunning: systemStatus.isRunning,
+        analysisCount: systemStatus.analysisCount,
+        lastAnalysisTime: systemStatus.lastAnalysisTime,
+        nextAnalysis: systemStatus.nextAnalysis,
+        uptime: `${Math.floor(systemStatus.uptime / 3600)}h ${Math.floor((systemStatus.uptime % 3600) / 60)}m`
+      },
+      trading: {
+        todayTrades: scalpingStats.todayTrades,
+        consecutiveWins: scalpingStats.consecutiveWins,
+        consecutiveLosses: scalpingStats.consecutiveLosses,
+        currentTrend: scalpingStats.currentTrend,
+        lastTradeTime: scalpingStats.lastTradeTime
+      },
+      config: {
+        interval: 'كل 5 دقائق',
+        strategy: 'سكالبينج سريع',
+        targetProfit: '7 دولار',
+        stopLoss: '4 دولار',
+        riskReward: '1:1.75'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Manual Analysis Trigger - تشغيل تحليل يدوي
+app.post('/trigger-analysis', async (req, res) => {
+  try {
+    const { runManualAnalysis } = await import('./services/autoTradingService');
+    const result = await runManualAnalysis();
+    
+    res.json({
+      success: true,
+      message: 'تم تشغيل التحليل اليدوي بنجاح',
+      result
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      error: (error as Error).message 
+    });
+  }
+});
+
 // Debug notifications endpoint - للتحقق من حالة الإشعارات لكل مستخدم
 app.get('/debug-notifications', async (req, res) => {
   try {
@@ -2493,12 +2550,18 @@ const startServer = async () => {
 ║  💎 VIP subscription system active                ║
 ║  🕐 Daily expiry check at 12:00 AM                ║
 ║  💾 Database initialized                           ║
+║  🤖 24/7 Scalping System ACTIVE                   ║
 ╚════════════════════════════════════════════════════╝
       `);
 
       // ✅ التحليل التلقائي مفعّل
       console.log('✅ Auto analysis is ENABLED - AI will analyze every 5 minutes');
       scheduleNextAnalysis(); // مفعّل
+
+      // ✅ بدء نظام التداول التلقائي (سكالبينج 24/7)
+      const { startAutoTrading } = require('./services/autoTradingService');
+      startAutoTrading();
+      console.log('✅ 24/7 Scalping System is ENABLED - Trading signals every 5 minutes');
 
       // ✅ بدء مراقبة الأحداث الاقتصادية
       const { startEconomicEventMonitoring } = require('./services/economicEventNotificationService');
