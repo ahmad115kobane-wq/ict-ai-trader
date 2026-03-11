@@ -296,6 +296,32 @@ export const initDatabase = async (): Promise<void> => {
     db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user_active ON sessions(user_id, is_active)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`);
 
+    // جدول الصفقات الورقية - Paper Trading Positions
+    db.run(`
+    CREATE TABLE IF NOT EXISTS paper_positions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      side TEXT NOT NULL,
+      lot_size REAL NOT NULL,
+      entry_price REAL NOT NULL,
+      stop_loss REAL NOT NULL,
+      take_profit REAL NOT NULL,
+      opened_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      closed_at TEXT,
+      close_price REAL,
+      realized_pnl REAL,
+      status TEXT DEFAULT 'open',
+      close_reason TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
+    // فهارس للبحث السريع
+    db.run(`CREATE INDEX IF NOT EXISTS idx_positions_user ON paper_positions(user_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_positions_status ON paper_positions(status)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_positions_user_status ON paper_positions(user_id, status)`);
+
     // تحديث هيكل قاعدة البيانات للنسخة الجديدة
     await updateDatabaseSchema();
 
@@ -1396,3 +1422,213 @@ export const cleanupExpiredSessions = (): number => {
 
 export default db;
 
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📊 Position Management Functions - إدارة الصفقات على الخادم
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// الحصول على جميع الصفقات المفتوحة
+export const getAllOpenPositions = (): any[] => {
+  if (!db) return [];
+  try {
+    const result = db.exec(`
+      SELECT p.*, u.balance 
+      FROM paper_positions p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.status = 'open'
+      ORDER BY p.opened_at DESC
+    `);
+    
+    if (result.length === 0) return [];
+    
+    const columns = result[0].columns;
+    return result[0].values.map(row => {
+      const obj: any = {};
+      columns.forEach((col, idx) => {
+        obj[col] = row[idx];
+      });
+      return obj;
+    });
+  } catch (error) {
+    console.error('Error getting open positions:', error);
+    return [];
+  }
+};
+
+// إغلاق صفقة في قاعدة البيانات
+export const closePositionInDb = (
+  positionId: string,
+  closePrice: number,
+  realizedPnl: number,
+  reason: string
+): void => {
+  if (!db) return;
+  try {
+    db.run(`
+      UPDATE paper_positions 
+      SET status = 'closed',
+          close_price = ?,
+          realized_pnl = ?,
+          closed_at = datetime('now'),
+          close_reason = ?
+      WHERE id = ?
+    `, [closePrice, realizedPnl, reason, positionId]);
+    
+    saveDatabase();
+  } catch (error) {
+    console.error('Error closing position:', error);
+  }
+};
+
+// تحديث رصيد المستخدم
+export const updateUserBalance = (userId: string, newBalance: number): void => {
+  if (!db) return;
+  try {
+    db.run('UPDATE users SET balance = ? WHERE id = ?', [newBalance, userId]);
+    saveDatabase();
+  } catch (error) {
+    console.error('Error updating user balance:', error);
+  }
+};
+
+// فتح صفقة جديدة
+export const openPositionInDb = (
+  userId: string,
+  symbol: string,
+  side: 'BUY' | 'SELL',
+  lotSize: number,
+  entryPrice: number,
+  stopLoss: number,
+  takeProfit: number
+): string => {
+  if (!db) throw new Error('Database not initialized');
+  
+  const positionId = `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  try {
+    db.run(`
+      INSERT INTO paper_positions (
+        id, user_id, symbol, side, lot_size, 
+        entry_price, stop_loss, take_profit, 
+        opened_at, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 'open')
+    `, [positionId, userId, symbol, side, lotSize, entryPrice, stopLoss, takeProfit]);
+    
+    saveDatabase();
+    return positionId;
+  } catch (error) {
+    console.error('Error opening position:', error);
+    throw error;
+  }
+};
+
+// الحصول على صفقات مستخدم معين
+export const getUserOpenPositions = (userId: string): any[] => {
+  if (!db) return [];
+  try {
+    const result = db.exec(`
+      SELECT * FROM paper_positions 
+      WHERE user_id = ? AND status = 'open'
+      ORDER BY opened_at DESC
+    `, [userId]);
+    
+    if (result.length === 0) return [];
+    
+    const columns = result[0].columns;
+    return result[0].values.map(row => {
+      const obj: any = {};
+      columns.forEach((col, idx) => {
+        obj[col] = row[idx];
+      });
+      return obj;
+    });
+  } catch (error) {
+    console.error('Error getting user positions:', error);
+    return [];
+  }
+};
+
+// الحصول على صفقات مستخدم المغلقة
+export const getUserClosedPositions = (userId: string, limit: number = 50): any[] => {
+  if (!db) return [];
+  try {
+    const result = db.exec(`
+      SELECT * FROM paper_positions 
+      WHERE user_id = ? AND status = 'closed'
+      ORDER BY closed_at DESC
+      LIMIT ?
+    `, [userId, limit]);
+    
+    if (result.length === 0) return [];
+    
+    const columns = result[0].columns;
+    return result[0].values.map(row => {
+      const obj: any = {};
+      columns.forEach((col, idx) => {
+        obj[col] = row[idx];
+      });
+      return obj;
+    });
+  } catch (error) {
+    console.error('Error getting closed positions:', error);
+    return [];
+  }
+};
+
+// تحديث SL/TP لصفقة
+export const updatePositionSlTp = (
+  positionId: string,
+  stopLoss?: number,
+  takeProfit?: number
+): void => {
+  if (!db) return;
+  try {
+    if (stopLoss !== undefined && takeProfit !== undefined) {
+      db.run(`
+        UPDATE paper_positions 
+        SET stop_loss = ?, take_profit = ?
+        WHERE id = ? AND status = 'open'
+      `, [stopLoss, takeProfit, positionId]);
+    } else if (stopLoss !== undefined) {
+      db.run(`
+        UPDATE paper_positions 
+        SET stop_loss = ?
+        WHERE id = ? AND status = 'open'
+      `, [stopLoss, positionId]);
+    } else if (takeProfit !== undefined) {
+      db.run(`
+        UPDATE paper_positions 
+        SET take_profit = ?
+        WHERE id = ? AND status = 'open'
+      `, [takeProfit, positionId]);
+    }
+    
+    saveDatabase();
+  } catch (error) {
+    console.error('Error updating position SL/TP:', error);
+  }
+};
+
+// الحصول على صفقة واحدة
+export const getPositionById = (positionId: string): any => {
+  if (!db) return null;
+  try {
+    const result = db.exec('SELECT * FROM paper_positions WHERE id = ?', [positionId]);
+    
+    if (result.length === 0 || result[0].values.length === 0) {
+      return null;
+    }
+    
+    const columns = result[0].columns;
+    const row = result[0].values[0];
+    const obj: any = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    return obj;
+  } catch (error) {
+    console.error('Error getting position:', error);
+    return null;
+  }
+};

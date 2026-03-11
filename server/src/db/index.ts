@@ -73,3 +73,13 @@ export const terminateSession = isProduction ? postgresDb.terminateSession : wra
 export const terminateAllUserSessions = isProduction ? postgresDb.terminateAllUserSessions : wrapSync(sqliteDb.terminateAllUserSessions);
 export const getUserActiveSessions = isProduction ? postgresDb.getUserActiveSessions : wrapSync(sqliteDb.getUserActiveSessions);
 export const cleanupExpiredSessions = isProduction ? postgresDb.cleanupExpiredSessions : wrapSync(sqliteDb.cleanupExpiredSessions);
+
+// Position management operations
+export const getAllOpenPositions = isProduction ? postgresDb.getAllOpenPositions : wrapSync(sqliteDb.getAllOpenPositions);
+export const closePositionInDb = isProduction ? postgresDb.closePositionInDb : wrapSync(sqliteDb.closePositionInDb);
+export const updateUserBalance = isProduction ? postgresDb.updateUserBalance : wrapSync(sqliteDb.updateUserBalance);
+export const openPositionInDb = isProduction ? postgresDb.openPositionInDb : wrapSync(sqliteDb.openPositionInDb);
+export const getUserOpenPositions = isProduction ? postgresDb.getUserOpenPositions : wrapSync(sqliteDb.getUserOpenPositions);
+export const getUserClosedPositions = isProduction ? postgresDb.getUserClosedPositions : wrapSync(sqliteDb.getUserClosedPositions);
+export const updatePositionSlTp = isProduction ? postgresDb.updatePositionSlTp : wrapSync(sqliteDb.updatePositionSlTp);
+export const getPositionById = isProduction ? postgresDb.getPositionById : wrapSync(sqliteDb.getPositionById);

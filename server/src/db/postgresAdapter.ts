@@ -212,6 +212,42 @@ const createTables = async (client: PoolClient): Promise<void> => {
       ON sessions(token)
     `);
 
+    // جدول الصفقات الورقية - Paper Trading Positions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS paper_positions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL,
+        lot_size REAL NOT NULL,
+        entry_price REAL NOT NULL,
+        stop_loss REAL NOT NULL,
+        take_profit REAL NOT NULL,
+        opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        closed_at TIMESTAMP,
+        close_price REAL,
+        realized_pnl REAL,
+        status TEXT DEFAULT 'open',
+        close_reason TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_positions_user 
+      ON paper_positions(user_id)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_positions_status 
+      ON paper_positions(status)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_positions_user_status 
+      ON paper_positions(user_id, status)
+    `);
+
     // جدول الباقات VIP
     await client.query(`
       CREATE TABLE IF NOT EXISTS vip_packages (

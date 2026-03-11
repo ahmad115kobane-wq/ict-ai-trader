@@ -1,8 +1,9 @@
 // db/postgresOperations.ts
 // PostgreSQL operations implementation
 
-import { initPostgres, query } from './postgresAdapter';
+import { initPostgres, query, getClient } from './postgresAdapter';
 import { v4 as uuidv4 } from 'uuid';
+import pool from './postgresAdapter';
 
 // ===================== Initialization =====================
 export const initDatabase = async (): Promise<void> => {
@@ -778,5 +779,186 @@ export const cleanupExpiredSessions = async (): Promise<number> => {
   } catch (error) {
     console.error('Error cleaning up sessions:', error);
     return 0;
+  }
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📊 Position Management Functions - إدارة الصفقات على الخادم
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// الحصول على جميع الصفقات المفتوحة
+export const getAllOpenPositions = async (): Promise<any[]> => {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT p.*, u.balance 
+      FROM paper_positions p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.status = 'open'
+      ORDER BY p.opened_at DESC
+    `);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting open positions:', error);
+    return [];
+  } finally {
+    client.release();
+  }
+};
+
+// إغلاق صفقة في قاعدة البيانات
+export const closePositionInDb = async (
+  positionId: string,
+  closePrice: number,
+  realizedPnl: number,
+  reason: string
+): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      UPDATE paper_positions 
+      SET status = 'closed',
+          close_price = $1,
+          realized_pnl = $2,
+          closed_at = NOW(),
+          close_reason = $3
+      WHERE id = $4
+    `, [closePrice, realizedPnl, reason, positionId]);
+  } catch (error) {
+    console.error('Error closing position:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// تحديث رصيد المستخدم
+export const updateUserBalance = async (userId: string, newBalance: number): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query('UPDATE users SET balance = $1 WHERE id = $2', [newBalance, userId]);
+  } catch (error) {
+    console.error('Error updating user balance:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// فتح صفقة جديدة
+export const openPositionInDb = async (
+  userId: string,
+  symbol: string,
+  side: 'BUY' | 'SELL',
+  lotSize: number,
+  entryPrice: number,
+  stopLoss: number,
+  takeProfit: number
+): Promise<string> => {
+  const client = await pool.connect();
+  const positionId = `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  try {
+    await client.query(`
+      INSERT INTO paper_positions (
+        id, user_id, symbol, side, lot_size, 
+        entry_price, stop_loss, take_profit, 
+        opened_at, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'open')
+    `, [positionId, userId, symbol, side, lotSize, entryPrice, stopLoss, takeProfit]);
+    
+    return positionId;
+  } catch (error) {
+    console.error('Error opening position:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// الحصول على صفقات مستخدم معين
+export const getUserOpenPositions = async (userId: string): Promise<any[]> => {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT * FROM paper_positions 
+      WHERE user_id = $1 AND status = 'open'
+      ORDER BY opened_at DESC
+    `, [userId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting user positions:', error);
+    return [];
+  } finally {
+    client.release();
+  }
+};
+
+// الحصول على صفقات مستخدم المغلقة
+export const getUserClosedPositions = async (userId: string, limit: number = 50): Promise<any[]> => {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT * FROM paper_positions 
+      WHERE user_id = $1 AND status = 'closed'
+      ORDER BY closed_at DESC
+      LIMIT $2
+    `, [userId, limit]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting closed positions:', error);
+    return [];
+  } finally {
+    client.release();
+  }
+};
+
+// تحديث SL/TP لصفقة
+export const updatePositionSlTp = async (
+  positionId: string,
+  stopLoss?: number,
+  takeProfit?: number
+): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    if (stopLoss !== undefined && takeProfit !== undefined) {
+      await client.query(`
+        UPDATE paper_positions 
+        SET stop_loss = $1, take_profit = $2
+        WHERE id = $3 AND status = 'open'
+      `, [stopLoss, takeProfit, positionId]);
+    } else if (stopLoss !== undefined) {
+      await client.query(`
+        UPDATE paper_positions 
+        SET stop_loss = $1
+        WHERE id = $2 AND status = 'open'
+      `, [stopLoss, positionId]);
+    } else if (takeProfit !== undefined) {
+      await client.query(`
+        UPDATE paper_positions 
+        SET take_profit = $1
+        WHERE id = $2 AND status = 'open'
+      `, [takeProfit, positionId]);
+    }
+  } catch (error) {
+    console.error('Error updating position SL/TP:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// الحصول على صفقة واحدة
+export const getPositionById = async (positionId: string): Promise<any> => {
+  const client = await pool.connect();
+  try {
+    const result = await client.query('SELECT * FROM paper_positions WHERE id = $1', [positionId]);
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error getting position:', error);
+    return null;
+  } finally {
+    client.release();
   }
 };
