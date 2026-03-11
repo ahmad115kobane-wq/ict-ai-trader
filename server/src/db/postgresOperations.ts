@@ -1,9 +1,8 @@
 // db/postgresOperations.ts
 // PostgreSQL operations implementation
 
-import { initPostgres, query, getClient } from './postgresAdapter';
+import { initPostgres, query, getClient, getPool } from './postgresAdapter';
 import { v4 as uuidv4 } from 'uuid';
-import pool from './postgresAdapter';
 
 // ===================== Initialization =====================
 export const initDatabase = async (): Promise<void> => {
@@ -789,6 +788,7 @@ export const cleanupExpiredSessions = async (): Promise<number> => {
 
 // الحصول على جميع الصفقات المفتوحة
 export const getAllOpenPositions = async (): Promise<any[]> => {
+  const pool = getPool();
   if (!pool) throw new Error('PostgreSQL not initialized');
   const client = await pool.connect();
   try {
@@ -815,6 +815,7 @@ export const closePositionInDb = async (
   realizedPnl: number,
   reason: string
 ): Promise<void> => {
+  const pool = getPool();
   if (!pool) throw new Error('PostgreSQL not initialized');
   const client = await pool.connect();
   try {
@@ -837,6 +838,7 @@ export const closePositionInDb = async (
 
 // تحديث رصيد المستخدم
 export const updateUserBalance = async (userId: string, newBalance: number): Promise<void> => {
+  const pool = getPool();
   if (!pool) throw new Error('PostgreSQL not initialized');
   const client = await pool.connect();
   try {
@@ -859,6 +861,7 @@ export const openPositionInDb = async (
   stopLoss: number,
   takeProfit: number
 ): Promise<string> => {
+  const pool = getPool();
   if (!pool) throw new Error('PostgreSQL not initialized');
   const client = await pool.connect();
   const positionId = `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -883,6 +886,7 @@ export const openPositionInDb = async (
 
 // الحصول على صفقات مستخدم معين
 export const getUserOpenPositions = async (userId: string): Promise<any[]> => {
+  const pool = getPool();
   if (!pool) throw new Error('PostgreSQL not initialized');
   const client = await pool.connect();
   try {
@@ -902,6 +906,7 @@ export const getUserOpenPositions = async (userId: string): Promise<any[]> => {
 
 // الحصول على صفقات مستخدم المغلقة
 export const getUserClosedPositions = async (userId: string, limit: number = 50): Promise<any[]> => {
+  const pool = getPool();
   if (!pool) throw new Error('PostgreSQL not initialized');
   const client = await pool.connect();
   try {
@@ -926,6 +931,7 @@ export const updatePositionSlTp = async (
   stopLoss?: number,
   takeProfit?: number
 ): Promise<void> => {
+  const pool = getPool();
   if (!pool) throw new Error('PostgreSQL not initialized');
   const client = await pool.connect();
   try {
@@ -958,6 +964,7 @@ export const updatePositionSlTp = async (
 
 // الحصول على صفقة واحدة
 export const getPositionById = async (positionId: string): Promise<any> => {
+  const pool = getPool();
   if (!pool) throw new Error('PostgreSQL not initialized');
   const client = await pool.connect();
   try {

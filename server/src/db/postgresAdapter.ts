@@ -405,4 +405,9 @@ export const closePool = async (): Promise<void> => {
   }
 };
 
+// الحصول على pool (للاستخدام في الدوال الأخرى)
+export const getPool = (): Pool | null => {
+  return pool;
+};
+
 export default pool;
