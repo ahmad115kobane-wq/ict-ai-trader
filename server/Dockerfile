@@ -61,7 +61,7 @@ RUN apt-get update && \
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
     apt-get install -y \
-    wine wine64 \
+    wine wine32 wine64 \
     xvfb \
     chromium-browser \
     fonts-liberation \
