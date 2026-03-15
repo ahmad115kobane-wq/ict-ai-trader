@@ -39,16 +39,45 @@ RUN apt-get update && apt-get install -y \
 # Create MT5 directories
 RUN mkdir -p /opt/mt5/base /opt/mt5/instances /opt/mt5/wineprefix
 
-# Initialize Wine prefix (headless)
+# MT5 + Wine environment
 ENV WINEPREFIX=/opt/mt5/wineprefix
 ENV WINEDEBUG=-all
 ENV DISPLAY=:99
-
-# MT5 environment variables
 ENV MT5_BASE_DIR=/opt/mt5/base
 ENV MT5_INSTANCES_DIR=/opt/mt5/instances
 ENV MT5_MAX_INSTANCES=20
 ENV MT5_IDLE_TIMEOUT=3600000
+
+# Download and install MT5 via Wine during build
+RUN Xvfb :99 -screen 0 800x600x16 -ac & \
+    sleep 2 && \
+    wineboot --init 2>/dev/null && \
+    sleep 3 && \
+    wget -q -O /tmp/mt5setup.exe "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" && \
+    echo "Running MT5 installer..." && \
+    timeout 180 wine /tmp/mt5setup.exe /auto 2>/dev/null & \
+    MT5_PID=$! && \
+    WAITED=0 && \
+    while [ $WAITED -lt 150 ]; do \
+      sleep 10; \
+      WAITED=$((WAITED + 10)); \
+      echo "  Waiting for MT5 install... ${WAITED}s"; \
+      if [ -f "$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe" ]; then \
+        echo "  MT5 files found!"; \
+        break; \
+      fi; \
+    done && \
+    kill $MT5_PID 2>/dev/null || true && \
+    sleep 2 && \
+    if [ -d "$WINEPREFIX/drive_c/Program Files/MetaTrader 5" ]; then \
+      cp -r "$WINEPREFIX/drive_c/Program Files/MetaTrader 5"/* /opt/mt5/base/ 2>/dev/null || true; \
+      echo "✅ MT5 installed to /opt/mt5/base/"; \
+      ls -la /opt/mt5/base/terminal64.exe 2>/dev/null || echo "⚠️ terminal64.exe not found"; \
+    else \
+      echo "⚠️ MT5 auto-install incomplete - manual setup may be needed"; \
+    fi && \
+    pkill -f Xvfb 2>/dev/null || true && \
+    rm -f /tmp/mt5setup.exe
 
 # Set working directory
 WORKDIR /app
