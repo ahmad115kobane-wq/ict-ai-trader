@@ -17,6 +17,28 @@ const CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
 const DISPLAY = process.env.DISPLAY || ':99';
 const ENCRYPTION_KEY = process.env.MT5_ENCRYPTION_KEY || 'change-this-key-in-production-32c!';
 
+// Find wine binary - try multiple paths
+function findWineBinary(): string {
+  const candidates = [
+    'wine64',
+    '/usr/bin/wine64',
+    '/usr/lib/wine/wine64',
+    'wine',
+    '/usr/bin/wine',
+  ];
+  for (const bin of candidates) {
+    try {
+      const { execSync } = require('child_process');
+      execSync(`which ${bin} 2>/dev/null || test -x ${bin}`, { stdio: 'ignore' });
+      console.log(`🍷 Wine binary found: ${bin}`);
+      return bin;
+    } catch {}
+  }
+  console.warn('⚠️ No wine binary found, MT5 will not work');
+  return 'wine64'; // fallback
+}
+const WINE_BIN = findWineBinary();
+
 // ===================== Types =====================
 export interface MT5AccountConfig {
   brokerServer: string;
@@ -201,7 +223,7 @@ MaxBars=5000
 
     try {
       // تشغيل MT5 عبر Wine
-      const child = spawn('wine64', [
+      const child = spawn(WINE_BIN, [
         path.join(instancePath, 'terminal64.exe'),
         '/portable',
         `/login:${config.accountLogin}`,

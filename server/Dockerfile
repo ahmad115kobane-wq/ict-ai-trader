@@ -65,8 +65,8 @@ COPY server/ ./
 RUN npm run build
 RUN chmod +x start.sh
 
-# 3) Install system packages (Chromium, Wine64, Xvfb)
-RUN apt-get update && apt-get install -y \
+# 3) Install system packages (Chromium, Xvfb) - with --no-install-recommends
+RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     chromium-sandbox \
     fonts-liberation \
@@ -93,10 +93,16 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libxshmfence1 \
     xdg-utils \
-    wine64 \
     xvfb \
-    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
+
+# 3b) Install Wine64 separately (WITHOUT --no-install-recommends to get the actual binary)
+RUN apt-get update && apt-get install -y wine64 \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "=== Wine64 verification ===" \
+    && which wine64 || echo "wine64 not in PATH" \
+    && ls -la /usr/bin/wine* 2>/dev/null || echo "No wine binaries in /usr/bin" \
+    && find / -name "wine64" -type f 2>/dev/null | head -5 || echo "wine64 binary not found anywhere"
 
 # 4) Copy MT5 base files from stage 1
 COPY --from=mt5-installer /opt/mt5/base /opt/mt5/base
