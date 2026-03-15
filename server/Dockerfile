@@ -1,7 +1,7 @@
 # Use official Node.js image
 FROM node:20-slim
 
-# Install Chromium and dependencies
+# Install Chromium, Wine, Xvfb and dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-sandbox \
@@ -29,8 +29,26 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libxshmfence1 \
     xdg-utils \
+    wine64 \
+    xvfb \
+    wget \
+    ca-certificates \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
+
+# Create MT5 directories
+RUN mkdir -p /opt/mt5/base /opt/mt5/instances /opt/mt5/wineprefix
+
+# Initialize Wine prefix (headless)
+ENV WINEPREFIX=/opt/mt5/wineprefix
+ENV WINEDEBUG=-all
+ENV DISPLAY=:99
+
+# MT5 environment variables
+ENV MT5_BASE_DIR=/opt/mt5/base
+ENV MT5_INSTANCES_DIR=/opt/mt5/instances
+ENV MT5_MAX_INSTANCES=20
+ENV MT5_IDLE_TIMEOUT=3600000
 
 # Set working directory
 WORKDIR /app
@@ -55,5 +73,5 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 # Expose port
 EXPOSE 3001
 
-# Start server
-CMD ["node", "dist/index.js"]
+# Start Xvfb + server
+CMD Xvfb :99 -screen 0 800x600x16 -ac & sleep 1 && node dist/index.js
