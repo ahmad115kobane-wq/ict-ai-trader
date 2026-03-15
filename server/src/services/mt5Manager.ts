@@ -200,8 +200,8 @@ MaxBars=5000
     };
 
     try {
-      // تشغيل MT5 عبر Wine
-      const child = spawn('wine', [
+      // تشغيل MT5 عبر Wine64
+      const child = spawn('wine64', [
         path.join(instancePath, 'terminal64.exe'),
         '/portable',
         `/login:${config.accountLogin}`,

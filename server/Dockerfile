@@ -99,6 +99,7 @@ ENV MT5_BASE_DIR=/opt/mt5/base
 ENV MT5_INSTANCES_DIR=/opt/mt5/instances
 ENV MT5_MAX_INSTANCES=20
 ENV MT5_IDLE_TIMEOUT=3600000
+ENV PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/mt5/base"
 
 # Set working directory
 WORKDIR /app
