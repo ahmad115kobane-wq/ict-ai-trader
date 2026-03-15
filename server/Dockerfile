@@ -1,8 +1,9 @@
 # Use official Node.js image
 FROM node:20-slim
 
-# Install Chromium, Wine, Xvfb and dependencies
-RUN apt-get update && apt-get install -y \
+# Install Chromium, Wine, Xvfb, 7zip and dependencies
+RUN dpkg --add-architecture i386 && \
+    apt-get update && apt-get install -y \
     chromium \
     chromium-sandbox \
     fonts-liberation \
@@ -29,10 +30,13 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libxshmfence1 \
     xdg-utils \
+    wine \
     wine64 \
+    wine32 \
     xvfb \
     wget \
     ca-certificates \
+    p7zip-full \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
@@ -48,36 +52,29 @@ ENV MT5_INSTANCES_DIR=/opt/mt5/instances
 ENV MT5_MAX_INSTANCES=20
 ENV MT5_IDLE_TIMEOUT=3600000
 
-# Download and install MT5 via Wine during build
-RUN Xvfb :99 -screen 0 800x600x16 -ac & \
-    sleep 2 && \
-    wineboot --init 2>/dev/null && \
-    sleep 3 && \
-    wget -q -O /tmp/mt5setup.exe "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" && \
-    echo "Running MT5 installer..." && \
-    timeout 180 wine /tmp/mt5setup.exe /auto 2>/dev/null & \
-    MT5_PID=$! && \
-    WAITED=0 && \
-    while [ $WAITED -lt 150 ]; do \
-      sleep 10; \
-      WAITED=$((WAITED + 10)); \
-      echo "  Waiting for MT5 install... ${WAITED}s"; \
-      if [ -f "$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe" ]; then \
-        echo "  MT5 files found!"; \
-        break; \
-      fi; \
-    done && \
-    kill $MT5_PID 2>/dev/null || true && \
-    sleep 2 && \
-    if [ -d "$WINEPREFIX/drive_c/Program Files/MetaTrader 5" ]; then \
-      cp -r "$WINEPREFIX/drive_c/Program Files/MetaTrader 5"/* /opt/mt5/base/ 2>/dev/null || true; \
-      echo "✅ MT5 installed to /opt/mt5/base/"; \
-      ls -la /opt/mt5/base/terminal64.exe 2>/dev/null || echo "⚠️ terminal64.exe not found"; \
+# Download MT5 and extract with 7z (NSIS installer extraction - no Wine needed at build)
+RUN wget -q -O /tmp/mt5setup.exe "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" && \
+    echo "=== Extracting MT5 installer with 7z ===" && \
+    mkdir -p /tmp/mt5extract && \
+    7z x /tmp/mt5setup.exe -o/tmp/mt5extract -y > /dev/null 2>&1 || true && \
+    echo "=== Contents of extracted archive ===" && \
+    find /tmp/mt5extract -maxdepth 3 -type f | head -30 && \
+    echo "=== Looking for terminal64.exe ===" && \
+    TERM_FILE=$(find /tmp/mt5extract -name "terminal64.exe" -type f 2>/dev/null | head -1) && \
+    if [ -n "$TERM_FILE" ]; then \
+      TERM_DIR=$(dirname "$TERM_FILE") && \
+      cp -r "$TERM_DIR"/* /opt/mt5/base/ 2>/dev/null || true && \
+      echo "✅ MT5 extracted via 7z to /opt/mt5/base/"; \
     else \
-      echo "⚠️ MT5 auto-install incomplete - manual setup may be needed"; \
+      echo "⚠️ 7z extraction: terminal64.exe not in top level, searching deeper..." && \
+      find /tmp/mt5extract -name "*.exe" -type f 2>/dev/null | head -20 && \
+      cp -r /tmp/mt5extract/* /opt/mt5/base/ 2>/dev/null || true && \
+      echo "Copied all extracted files to /opt/mt5/base/"; \
     fi && \
-    pkill -f Xvfb 2>/dev/null || true && \
-    rm -f /tmp/mt5setup.exe
+    ls -la /opt/mt5/base/ | head -20 && \
+    rm -rf /tmp/mt5setup.exe /tmp/mt5extract && \
+    echo "=== MT5 base dir final contents ===" && \
+    ls /opt/mt5/base/ 2>/dev/null | head -20
 
 # Set working directory
 WORKDIR /app
