@@ -20,11 +20,10 @@ const ENCRYPTION_KEY = process.env.MT5_ENCRYPTION_KEY || 'change-this-key-in-pro
 // Find wine binary - try multiple paths
 function findWineBinary(): string {
   const candidates = [
-    'wine64',
-    '/usr/bin/wine64',
-    '/usr/lib/wine/wine64',
     'wine',
     '/usr/bin/wine',
+    'wine64',
+    '/usr/bin/wine64',
   ];
   for (const bin of candidates) {
     try {
