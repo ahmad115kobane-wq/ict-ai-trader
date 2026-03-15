@@ -234,7 +234,7 @@ MaxBars=5000
           ...process.env,
           WINEPREFIX: WINE_PREFIX,
           DISPLAY: DISPLAY,
-          WINEDEBUG: '-all', // إسكات مخرجات Wine
+          WINEDEBUG: '+err,+fixme', // تفعيل مخرجات الأخطاء للتشخيص
         },
         cwd: instancePath,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -257,9 +257,19 @@ MaxBars=5000
         instance.pid = null;
       });
 
-      // لا نستهلك ذاكرة بتخزين stdout/stderr
-      child.stdout?.resume();
-      child.stderr?.resume();
+      // التقاط مخرجات Wine للتشخيص
+      let stderrBuffer = '';
+      let stdoutBuffer = '';
+      child.stdout?.on('data', (data: Buffer) => {
+        const text = data.toString().slice(0, 500);
+        stdoutBuffer += text;
+        console.log(`📤 MT5 [${key}] stdout: ${text.trim()}`);
+      });
+      child.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString().slice(0, 500);
+        stderrBuffer += text;
+        console.log(`📥 MT5 [${key}] stderr: ${text.trim()}`);
+      });
       child.unref(); // لا يمنع إغلاق Node
 
       this.instances.set(key, instance);
