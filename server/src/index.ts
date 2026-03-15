@@ -2616,10 +2616,10 @@ const startServer = async () => {
       startAutoTrading();
       console.log('✅ 24/7 Scalping System is ENABLED - Trading signals every 5 minutes');
 
-      // ✅ بدء مراقبة الصفقات على الخادم (SL/TP Monitoring)
-      const { startPositionMonitoring } = require('./services/positionMonitorService');
-      startPositionMonitoring();
-      console.log('✅ Position Monitoring is ENABLED - Checking SL/TP every 5 seconds');
+      // ❌ Position monitoring disabled - trading system removed
+      // const { startPositionMonitoring } = require('./services/positionMonitorService');
+      // startPositionMonitoring();
+      console.log('ℹ️ Position Monitoring is DISABLED - trading system removed');
 
       // ✅ بدء مراقبة الأحداث الاقتصادية
       const { startEconomicEventMonitoring } = require('./services/economicEventNotificationService');
