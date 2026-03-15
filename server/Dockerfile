@@ -96,13 +96,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# 3b) Install Wine64 separately (WITHOUT --no-install-recommends to get the actual binary)
-RUN apt-get update && apt-get install -y wine64 \
+# 3b) Install Wine64 + all X11 libs Wine needs for its graphics driver (winex11.drv)
+RUN apt-get update && apt-get install -y \
+    wine64 \
+    libwine \
+    libxrender1 \
+    libxcursor1 \
+    libxi6 \
+    libxinerama1 \
+    libxxf86vm1 \
+    libfreetype6 \
+    libfontconfig1 \
+    libgl1 \
+    libglu1-mesa \
+    libosmesa6 \
     && rm -rf /var/lib/apt/lists/* \
     && echo "=== Wine64 verification ===" \
-    && which wine64 || echo "wine64 not in PATH" \
-    && ls -la /usr/bin/wine* 2>/dev/null || echo "No wine binaries in /usr/bin" \
-    && find / -name "wine64" -type f 2>/dev/null | head -5 || echo "wine64 binary not found anywhere"
+    && which wine64 && wine64 --version \
+    && echo "=== X11 driver check ===" \
+    && find /usr -name "winex11*" 2>/dev/null | head -5 || echo "winex11 driver not found"
 
 # 4) Copy MT5 base files from stage 1
 COPY --from=mt5-installer /opt/mt5/base /opt/mt5/base
