@@ -34,6 +34,7 @@ import economicAnalysisRoutes from './routes/economicAnalysis';
 import systemNotificationsRoutes from './routes/systemNotifications';
 import backtestingRoutes from './routes/backtesting';
 import adminRoutes from './routes/admin';
+import profileRoutes from './routes/profile';
 
 import {
   initializeDefaultPackages,
@@ -81,6 +82,7 @@ app.use('/api/economic-analysis', economicAnalysisRoutes);
 app.use('/api/system-notifications', systemNotificationsRoutes);
 app.use('/api/backtesting', backtestingRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/profile', profileRoutes);
 
 // صفحات HTML
 app.get('/setup-telegram', (req, res) => {
@@ -93,6 +95,10 @@ app.get('/test-telegram-webhook', (req, res) => {
 
 app.get('/manual-trade', (req, res) => {
   res.sendFile(path.join(SERVER_ROOT, 'public', 'manual-trade.html'));
+});
+
+app.get('/mt5', (req, res) => {
+  res.sendFile(path.join(SERVER_ROOT, 'public', 'mt5.html'));
 });
 
 app.get('/economic-calendar', (req, res) => {

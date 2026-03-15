@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MT5 Trading Terminal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #161b22, #1c2333);
+            border-bottom: 1px solid #30363d;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 18px;
+            color: white;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #e6edf3;
+        }
+
+        .header-subtitle {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 2px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 13px;
+            color: #10b981;
+        }
+
+        .status-badge.disconnected {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        .status-badge.disconnected .status-dot {
+            background: #ef4444;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Connection form */
+        .connection-panel {
+            max-width: 500px;
+            margin: 60px auto;
+            padding: 32px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 16px;
+        }
+
+        .connection-panel h2 {
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 24px;
+        }
+
+        .connection-panel p {
+            text-align: center;
+            color: #8b949e;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #c9d1d9;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: #e6edf3;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            border-color: #10b981;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            margin-top: 8px;
+        }
+
+        .btn-secondary {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+        }
+
+        /* VNC Viewer */
+        .vnc-container {
+            flex: 1;
+            display: none;
+            background: #000;
+            position: relative;
+        }
+
+        .vnc-container.active {
+            display: flex;
+        }
+
+        .vnc-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .vnc-placeholder {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            color: #8b949e;
+        }
+
+        .vnc-placeholder svg {
+            width: 80px;
+            height: 80px;
+            opacity: 0.5;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            background: #161b22;
+            border-top: 1px solid #30363d;
+            padding: 8px 16px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .toolbar.active {
+            display: flex;
+        }
+
+        .toolbar-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .toolbar-btn {
+            padding: 8px 16px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: #c9d1d9;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .toolbar-btn:hover {
+            background: #30363d;
+        }
+
+        .toolbar-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: #8b949e;
+        }
+
+        /* Instructions panel */
+        .instructions {
+            max-width: 700px;
+            margin: 24px auto;
+            padding: 0 24px;
+        }
+
+        .instruction-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+        }
+
+        .instruction-card h3 {
+            color: #10b981;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .instruction-card p, .instruction-card li {
+            color: #8b949e;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .instruction-card ul {
+            padding-right: 20px;
+            margin-top: 8px;
+        }
+
+        .instruction-card code {
+            background: #0d1117;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #e6edf3;
+        }
+
+        .info-banner {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .info-banner .icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .info-banner p {
+            color: #93c5fd;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 600px) {
+            .header { padding: 12px 16px; }
+            .header-title { font-size: 16px; }
+            .connection-panel { margin: 24px 16px; padding: 20px; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">MT5</div>
+            <div>
+                <div class="header-title">MetaTrader 5 Terminal</div>
+                <div class="header-subtitle">Remote Trading Access</div>
+            </div>
+        </div>
+        <div id="statusBadge" class="status-badge disconnected">
+            <div class="status-dot"></div>
+            <span id="statusText">غير متصل</span>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Connection Panel -->
+        <div id="connectionPanel" class="connection-panel">
+            <h2>🖥️ الاتصال بمنصة MT5</h2>
+            <p>أدخل بيانات خادم VNC للوصول إلى منصة MetaTrader 5</p>
+
+            <div class="info-banner">
+                <span class="icon">ℹ️</span>
+                <p>
+                    يجب أن يكون لديك خادم Windows VPS مع MT5 مثبت عليه و VNC Server نشط.
+                    أدخل عنوان الخادم أدناه للاتصال.
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label>عنوان الخادم (VNC Host)</label>
+                <input type="text" id="vncHost" placeholder="مثال: your-vps-ip.com" value="">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>المنفذ (Port)</label>
+                    <input type="number" id="vncPort" placeholder="6080" value="6080">
+                </div>
+                <div class="form-group">
+                    <label>البروتوكول</label>
+                    <select id="vncProtocol">
+                        <option value="https">HTTPS (آمن)</option>
+                        <option value="http">HTTP</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>كلمة مرور VNC (اختياري)</label>
+                <input type="password" id="vncPassword" placeholder="كلمة مرور VNC">
+            </div>
+
+            <button class="btn btn-primary" onclick="connectVNC()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13.8 12H3"/>
+                </svg>
+                اتصال بالمنصة
+            </button>
+        </div>
+
+        <!-- VNC Viewer Container -->
+        <div id="vncContainer" class="vnc-container">
+            <iframe id="vncFrame" src="about:blank" allowfullscreen></iframe>
+        </div>
+
+        <!-- Instructions -->
+        <div id="instructionsPanel" class="instructions">
+            <div class="instruction-card">
+                <h3>📋 خطوات إعداد الخادم</h3>
+                <ul>
+                    <li>احصل على Windows VPS (مثل Contabo, Hetzner, Vultr)</li>
+                    <li>ثبّت MetaTrader 5 على الخادم</li>
+                    <li>ثبّت <code>TightVNC Server</code> أو <code>TigerVNC</code></li>
+                    <li>ثبّت <code>noVNC</code> و <code>websockify</code> للوصول عبر الويب</li>
+                    <li>شغّل websockify: <code>websockify --web /usr/share/novnc 6080 localhost:5900</code></li>
+                </ul>
+            </div>
+
+            <div class="instruction-card">
+                <h3>🤖 إضافة روبوت تداول (Expert Advisor)</h3>
+                <ul>
+                    <li>بعد الاتصال بالمنصة، افتح MT5</li>
+                    <li>انتقل إلى: File → Open Data Folder → MQL5 → Experts</li>
+                    <li>انسخ ملف الروبوت (.ex5 أو .mq5) إلى مجلد Experts</li>
+                    <li>أعد تشغيل MT5 أو اضغط Refresh في Navigator</li>
+                    <li>اسحب الروبوت على الرسم البياني المطلوب</li>
+                </ul>
+            </div>
+
+            <div class="instruction-card">
+                <h3>🔒 نصائح الأمان</h3>
+                <ul>
+                    <li>استخدم HTTPS دائماً للاتصال</li>
+                    <li>قم بتعيين كلمة مرور قوية لـ VNC</li>
+                    <li>استخدم VPN إضافي إن أمكن</li>
+                    <li>فعّل جدار الحماية وافتح المنافذ المطلوبة فقط</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toolbar (visible when connected) -->
+    <div id="toolbar" class="toolbar">
+        <div class="toolbar-actions">
+            <button class="toolbar-btn" onclick="toggleFullscreen()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                </svg>
+                شاشة كاملة
+            </button>
+            <button class="toolbar-btn" onclick="refreshConnection()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                تحديث
+            </button>
+            <button class="toolbar-btn" onclick="disconnectVNC()" style="color: #ef4444; border-color: rgba(239,68,68,0.3);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                    <line x1="12" y1="2" x2="12" y2="12"/>
+                </svg>
+                قطع الاتصال
+            </button>
+        </div>
+        <div class="toolbar-info">
+            <span id="connectionInfo">-</span>
+        </div>
+    </div>
+
+    <script>
+        let isConnected = false;
+
+        function connectVNC() {
+            const host = document.getElementById('vncHost').value.trim();
+            const port = document.getElementById('vncPort').value.trim() || '6080';
+            const protocol = document.getElementById('vncProtocol').value;
+            const password = document.getElementById('vncPassword').value;
+
+            if (!host) {
+                alert('يرجى إدخال عنوان الخادم');
+                return;
+            }
+
+            // Build noVNC URL
+            let vncUrl = `${protocol}://${host}:${port}/vnc.html?autoconnect=true&resize=scale`;
+            if (password) {
+                vncUrl += `&password=${encodeURIComponent(password)}`;
+            }
+
+            // Show VNC container
+            document.getElementById('connectionPanel').style.display = 'none';
+            document.getElementById('instructionsPanel').style.display = 'none';
+            document.getElementById('vncContainer').classList.add('active');
+            document.getElementById('toolbar').classList.add('active');
+
+            // Load VNC
+            document.getElementById('vncFrame').src = vncUrl;
+
+            // Update status
+            isConnected = true;
+            const badge = document.getElementById('statusBadge');
+            badge.classList.remove('disconnected');
+            document.getElementById('statusText').textContent = 'متصل';
+            document.getElementById('connectionInfo').textContent = `${host}:${port}`;
+
+            // Save connection info
+            localStorage.setItem('mt5_vnc_host', host);
+            localStorage.setItem('mt5_vnc_port', port);
+            localStorage.setItem('mt5_vnc_protocol', protocol);
+        }
+
+        function disconnectVNC() {
+            document.getElementById('vncFrame').src = 'about:blank';
+            document.getElementById('vncContainer').classList.remove('active');
+            document.getElementById('toolbar').classList.remove('active');
+            document.getElementById('connectionPanel').style.display = 'block';
+            document.getElementById('instructionsPanel').style.display = 'block';
+
+            isConnected = false;
+            const badge = document.getElementById('statusBadge');
+            badge.classList.add('disconnected');
+            document.getElementById('statusText').textContent = 'غير متصل';
+        }
+
+        function refreshConnection() {
+            const frame = document.getElementById('vncFrame');
+            frame.src = frame.src;
+        }
+
+        function toggleFullscreen() {
+            const container = document.getElementById('vncContainer');
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                container.requestFullscreen();
+            }
+        }
+
+        // Restore saved connection info
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedHost = localStorage.getItem('mt5_vnc_host');
+            const savedPort = localStorage.getItem('mt5_vnc_port');
+            const savedProtocol = localStorage.getItem('mt5_vnc_protocol');
+
+            if (savedHost) document.getElementById('vncHost').value = savedHost;
+            if (savedPort) document.getElementById('vncPort').value = savedPort;
+            if (savedProtocol) document.getElementById('vncProtocol').value = savedProtocol;
+        });
+
+        // Handle messages from mobile app
+        window.addEventListener('message', (event) => {
+            if (event.data === 'GET_STATUS') {
+                const statusData = JSON.stringify({
+                    type: 'MT5_STATUS',
+                    connected: isConnected,
+                    host: document.getElementById('vncHost').value,
+                });
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(statusData);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

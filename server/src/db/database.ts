@@ -184,6 +184,63 @@ const updateDatabaseSchema = async (): Promise<void> => {
       db.run('ALTER TABLE users ADD COLUMN subscription_expiring_notified BOOLEAN DEFAULT 0');
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // إضافة حقول حساب التداول والملف الشخصي للمستخدم
+    // ═══════════════════════════════════════════════════════════════
+    const updatedUserCols = db.exec("PRAGMA table_info(users)");
+    const updatedUserColNames = updatedUserCols[0]?.values.map(row => row[1]) || [];
+
+    // حقول حساب التداول
+    if (!updatedUserColNames.includes('balance')) {
+      console.log('💰 Adding trading account columns to users table...');
+      db.run('ALTER TABLE users ADD COLUMN balance REAL DEFAULT 10000');
+      db.run('ALTER TABLE users ADD COLUMN leverage INTEGER DEFAULT 500');
+      db.run('ALTER TABLE users ADD COLUMN account_currency TEXT DEFAULT \'USD\'');
+      db.run('ALTER TABLE users ADD COLUMN initial_balance REAL DEFAULT 10000');
+      db.run('ALTER TABLE users ADD COLUMN margin_call_level REAL DEFAULT 50');
+      db.run('ALTER TABLE users ADD COLUMN stop_out_level REAL DEFAULT 20');
+      db.run('ALTER TABLE users ADD COLUMN total_profit REAL DEFAULT 0');
+      db.run('ALTER TABLE users ADD COLUMN total_loss REAL DEFAULT 0');
+      db.run('ALTER TABLE users ADD COLUMN total_trades INTEGER DEFAULT 0');
+      db.run('ALTER TABLE users ADD COLUMN winning_trades INTEGER DEFAULT 0');
+      db.run('ALTER TABLE users ADD COLUMN losing_trades INTEGER DEFAULT 0');
+      // تحديث الأرصدة الحالية للمستخدمين الموجودين
+      db.run('UPDATE users SET balance = 10000, initial_balance = 10000 WHERE balance IS NULL');
+      console.log('✅ Trading account columns added');
+    }
+
+    // حقول الملف الشخصي
+    if (!updatedUserColNames.includes('full_name')) {
+      console.log('👤 Adding profile columns to users table...');
+      db.run('ALTER TABLE users ADD COLUMN full_name TEXT');
+      db.run('ALTER TABLE users ADD COLUMN phone TEXT');
+      db.run('ALTER TABLE users ADD COLUMN country TEXT');
+      db.run('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+      db.run('ALTER TABLE users ADD COLUMN bio TEXT');
+      db.run('ALTER TABLE users ADD COLUMN date_of_birth TEXT');
+      db.run('ALTER TABLE users ADD COLUMN preferred_language TEXT DEFAULT \'ar\'');
+      db.run('ALTER TABLE users ADD COLUMN trading_experience TEXT DEFAULT \'beginner\'');
+      db.run('ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0');
+      db.run('ALTER TABLE users ADD COLUMN last_login_at TEXT');
+      console.log('✅ Profile columns added');
+    }
+
+    // إضافة حقل close_reason لجدول paper_positions إذا لم يكن موجوداً
+    const positionCols = db.exec("PRAGMA table_info(paper_positions)");
+    const positionColNames = positionCols[0]?.values.map(row => row[1]) || [];
+    if (!positionColNames.includes('close_reason')) {
+      try {
+        db.run('ALTER TABLE paper_positions ADD COLUMN close_reason TEXT');
+      } catch (e) { /* already exists */ }
+    }
+    if (!positionColNames.includes('commission')) {
+      try {
+        db.run('ALTER TABLE paper_positions ADD COLUMN commission REAL DEFAULT 0');
+        db.run('ALTER TABLE paper_positions ADD COLUMN swap REAL DEFAULT 0');
+        db.run('ALTER TABLE paper_positions ADD COLUMN comment TEXT');
+      } catch (e) { /* already exists */ }
+    }
+
     saveDatabase();
     console.log('✅ Database schema updated successfully');
 
@@ -334,7 +391,7 @@ export const initDatabase = async (): Promise<void> => {
 };
 
 // حفظ قاعدة البيانات
-const saveDatabase = () => {
+export const saveDatabase = () => {
   if (db) {
     const data = db.export();
     const buffer = Buffer.from(data);
@@ -1420,9 +1477,107 @@ export const cleanupExpiredSessions = (): number => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 👤 Profile Management Functions - إدارة الملف الشخصي
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const updateUserProfile = (
+  userId: string,
+  updates: Record<string, any>
+): boolean => {
+  if (!db) return false;
+  try {
+    const setClauses: string[] = [];
+    const values: any[] = [];
+
+    const allowedFields: Record<string, string> = {
+      fullName: 'full_name',
+      phone: 'phone',
+      country: 'country',
+      bio: 'bio',
+      dateOfBirth: 'date_of_birth',
+      preferredLanguage: 'preferred_language',
+      tradingExperience: 'trading_experience',
+      avatarUrl: 'avatar_url',
+    };
+
+    for (const [key, dbCol] of Object.entries(allowedFields)) {
+      if (updates[key] !== undefined) {
+        setClauses.push(`${dbCol} = ?`);
+        values.push(updates[key]);
+      }
+    }
+
+    if (setClauses.length === 0) return false;
+
+    setClauses.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(userId);
+
+    db.run(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, values);
+    saveDatabase();
+    return true;
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return false;
+  }
+};
+
+export const updateUserPassword = (userId: string, hashedPassword: string): boolean => {
+  if (!db) return false;
+  try {
+    db.run('UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [hashedPassword, userId]);
+    saveDatabase();
+    return true;
+  } catch (error) {
+    console.error('Error updating password:', error);
+    return false;
+  }
+};
+
+export const updateUserTradingStatsDb = (userId: string, pnl: number): void => {
+  if (!db) return;
+  try {
+    if (pnl >= 0) {
+      db.run(`UPDATE users SET 
+        total_profit = COALESCE(total_profit, 0) + ?,
+        total_trades = COALESCE(total_trades, 0) + 1,
+        winning_trades = COALESCE(winning_trades, 0) + 1,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [pnl, userId]);
+    } else {
+      db.run(`UPDATE users SET 
+        total_loss = COALESCE(total_loss, 0) + ?,
+        total_trades = COALESCE(total_trades, 0) + 1,
+        losing_trades = COALESCE(losing_trades, 0) + 1,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [Math.abs(pnl), userId]);
+    }
+    saveDatabase();
+  } catch (error) {
+    console.error('Error updating trading stats:', error);
+  }
+};
+
+export const resetUserTradingStatsDb = (userId: string, initialBalance: number): void => {
+  if (!db) return;
+  try {
+    db.run(`UPDATE users SET 
+      balance = ?,
+      initial_balance = ?,
+      total_profit = 0,
+      total_loss = 0,
+      total_trades = 0,
+      winning_trades = 0,
+      losing_trades = 0,
+      updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`, [initialBalance, initialBalance, userId]);
+    saveDatabase();
+  } catch (error) {
+    console.error('Error resetting trading stats:', error);
+  }
+};
+
 export default db;
-
-
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 📊 Position Management Functions - إدارة الصفقات على الخادم

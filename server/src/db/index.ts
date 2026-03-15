@@ -83,3 +83,10 @@ export const getUserOpenPositions = isProduction ? postgresDb.getUserOpenPositio
 export const getUserClosedPositions = isProduction ? postgresDb.getUserClosedPositions : wrapSync(sqliteDb.getUserClosedPositions);
 export const updatePositionSlTp = isProduction ? postgresDb.updatePositionSlTp : wrapSync(sqliteDb.updatePositionSlTp);
 export const getPositionById = isProduction ? postgresDb.getPositionById : wrapSync(sqliteDb.getPositionById);
+
+// Profile management operations
+export const updateUserProfile = wrapSync(sqliteDb.updateUserProfile);
+export const updateUserPassword = wrapSync(sqliteDb.updateUserPassword);
+export const updateUserTradingStatsDb = wrapSync(sqliteDb.updateUserTradingStatsDb);
+export const resetUserTradingStatsDb = wrapSync(sqliteDb.resetUserTradingStatsDb);
+export const saveDatabase = wrapSync(sqliteDb.saveDatabase);
