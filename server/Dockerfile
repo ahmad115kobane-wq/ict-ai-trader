@@ -1,7 +1,60 @@
-# Use official Node.js image
+# ============================================================
+# Stage 1: Install MT5 using Ubuntu with wine32 support
+# ============================================================
+FROM ubuntu:22.04 AS mt5-installer
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN dpkg --add-architecture i386 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    wine wine32 wine64 xvfb wget ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV WINEPREFIX=/root/.wine
+ENV WINEDEBUG=-all
+ENV DISPLAY=:99
+
+RUN mkdir -p /opt/mt5/base && \
+    Xvfb :99 -screen 0 800x600x16 -ac & \
+    sleep 2 && \
+    echo "=== Initializing Wine ===" && \
+    wineboot --init 2>/dev/null; \
+    sleep 5 && \
+    echo "=== Downloading MT5 ===" && \
+    wget -q -O /tmp/mt5setup.exe \
+      "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" && \
+    echo "=== Running MT5 installer ===" && \
+    wine /tmp/mt5setup.exe /auto 2>/dev/null & \
+    WAITED=0; \
+    while [ $WAITED -lt 180 ]; do \
+      sleep 10; \
+      WAITED=$((WAITED + 10)); \
+      echo "  Waiting... ${WAITED}s"; \
+      if [ -f "/root/.wine/drive_c/Program Files/MetaTrader 5/terminal64.exe" ]; then \
+        echo "  ✅ terminal64.exe found!"; \
+        break; \
+      fi; \
+    done && \
+    pkill -f mt5setup 2>/dev/null || true && \
+    sleep 2 && \
+    if [ -d "/root/.wine/drive_c/Program Files/MetaTrader 5" ]; then \
+      cp -r "/root/.wine/drive_c/Program Files/MetaTrader 5"/* /opt/mt5/base/ && \
+      echo "✅ MT5 copied to /opt/mt5/base/"; \
+      ls -la /opt/mt5/base/terminal64.exe; \
+    else \
+      echo "❌ MT5 installation failed"; \
+      find /root/.wine/drive_c -name "*.exe" 2>/dev/null | head -20; \
+    fi && \
+    pkill -f Xvfb 2>/dev/null || true && \
+    rm -f /tmp/mt5setup.exe
+
+# ============================================================
+# Stage 2: Production image
+# ============================================================
 FROM node:20-slim
 
-# Install Chromium, Wine, Xvfb and dependencies
+# Install Chromium, Wine64, Xvfb and dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-sandbox \
@@ -31,13 +84,12 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     wine64 \
     xvfb \
-    wget \
-    ca-certificates \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Create MT5 directories
-RUN mkdir -p /opt/mt5/base /opt/mt5/instances /opt/mt5/wineprefix
+# Copy MT5 base files from stage 1
+COPY --from=mt5-installer /opt/mt5/base /opt/mt5/base
+RUN mkdir -p /opt/mt5/instances /opt/mt5/wineprefix
 
 # MT5 + Wine environment
 ENV WINEPREFIX=/opt/mt5/wineprefix
@@ -74,5 +126,5 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 # Expose port
 EXPOSE 3001
 
-# Start via startup script (Xvfb + MT5 auto-install + Node.js)
+# Start via startup script (Xvfb + Node.js)
 CMD ["bash", "start.sh"]
