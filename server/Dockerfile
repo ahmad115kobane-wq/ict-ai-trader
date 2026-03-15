@@ -54,7 +54,18 @@ RUN mkdir -p /opt/mt5/base && \
 # ============================================================
 FROM node:20-slim
 
-# Install Chromium, Wine64, Xvfb and dependencies
+# 1) Install npm deps FIRST (before system packages that might conflict)
+WORKDIR /app
+COPY server/package*.json ./server/
+WORKDIR /app/server
+RUN npm ci --include=dev
+
+# 2) Copy source code and build
+COPY server/ ./
+RUN npm run build
+RUN chmod +x start.sh
+
+# 3) Install system packages (Chromium, Wine64, Xvfb)
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-sandbox \
@@ -87,7 +98,7 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy MT5 base files from stage 1
+# 4) Copy MT5 base files from stage 1
 COPY --from=mt5-installer /opt/mt5/base /opt/mt5/base
 RUN mkdir -p /opt/mt5/instances /opt/mt5/wineprefix
 
@@ -99,26 +110,6 @@ ENV MT5_BASE_DIR=/opt/mt5/base
 ENV MT5_INSTANCES_DIR=/opt/mt5/instances
 ENV MT5_MAX_INSTANCES=20
 ENV MT5_IDLE_TIMEOUT=3600000
-ENV PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/mt5/base"
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY server/package*.json ./server/
-
-# Install dependencies
-WORKDIR /app/server
-RUN npm ci --include=dev
-
-# Copy source code
-COPY server/ ./
-
-# Build TypeScript
-RUN npm run build
-
-# Make startup script executable
-RUN chmod +x start.sh
 
 # Set Puppeteer to use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
