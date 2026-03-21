@@ -1,12 +1,13 @@
 // src/screens/TradesScreen.tsx
 // شاشة إشارات التداول AI
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -36,6 +37,8 @@ type SignalItem = {
   isServerAnalysis?: boolean;
 };
 
+const AUTO_FETCH_INTERVAL = 30000; // 30 ثانية
+
 const TradesScreen = () => {
   const { user } = useAuth();
   const { showSuccess, showError, AlertComponent } = useCustomAlert();
@@ -43,10 +46,15 @@ const TradesScreen = () => {
   const [signals, setSignals] = useState<SignalItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [fetchingServer, setFetchingServer] = useState(false);
+  const [autoReceiveEnabled, setAutoReceiveEnabled] = useState(false);
+  const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
+  const autoFetchTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadAllData();
+    return () => {
+      if (autoFetchTimer.current) clearInterval(autoFetchTimer.current);
+    };
   }, []);
 
   const parseServerAnalyses = (analyses: any[]): SignalItem[] => {
@@ -66,7 +74,6 @@ const TradesScreen = () => {
   const loadAllData = async () => {
     setIsLoading(true);
     try {
-      // جلب التحليلات التلقائية من الخادم (الأساسية) + سجل الصفقات
       const [serverData, historyData] = await Promise.all([
         analysisService.getServerAnalyses(20).catch(() => null),
         analysisService.getTradesHistory(50).catch(() => null),
@@ -74,12 +81,10 @@ const TradesScreen = () => {
 
       const allSignals: SignalItem[] = [];
 
-      // التحليلات التلقائية من الخادم (بيع/شراء)
       if (serverData?.success && Array.isArray(serverData.analyses)) {
         allSignals.push(...parseServerAnalyses(serverData.analyses));
       }
 
-      // سجل الصفقات المنفذة
       if (historyData?.success && Array.isArray(historyData.trades)) {
         const existingIds = new Set(allSignals.map(s => s.id));
         const historyItems = historyData.trades
@@ -88,7 +93,6 @@ const TradesScreen = () => {
         allSignals.push(...historyItems);
       }
 
-      // ترتيب حسب التاريخ (الأحدث أولاً)
       allSignals.sort((a, b) => {
         const dateA = new Date(a.created_at || 0).getTime();
         const dateB = new Date(b.created_at || 0).getTime();
@@ -96,6 +100,9 @@ const TradesScreen = () => {
       });
 
       setSignals(allSignals);
+      if (allSignals.length > 0) {
+        setLastFetchTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
+      }
     } catch (error) {
       console.error('Error fetching signals:', error);
     } finally {
@@ -103,15 +110,12 @@ const TradesScreen = () => {
     }
   };
 
-  const fetchServerAnalyses = async () => {
-    setFetchingServer(true);
+  const fetchServerAnalysesBackground = async () => {
     try {
       const data = await analysisService.getServerAnalyses(20);
       if (data.success && Array.isArray(data.analyses) && data.analyses.length > 0) {
         const serverItems = parseServerAnalyses(data.analyses);
-
         setSignals(prev => {
-          // حذف التحليلات القديمة من الخادم واستبدالها بالجديدة
           const nonServer = prev.filter(s => !s.isServerAnalysis);
           const merged = [...serverItems, ...nonServer];
           merged.sort((a, b) => {
@@ -121,15 +125,24 @@ const TradesScreen = () => {
           });
           return merged;
         });
-
-        showSuccess('تم التحديث', `تم جلب ${data.analyses.length} تحليلات من الخادم`);
-      } else {
-        showSuccess('لا توجد تحليلات', 'لا توجد تحليلات جديدة من الخادم حالياً');
+        setLastFetchTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
       }
-    } catch (error: any) {
-      showError('خطأ', 'فشل في جلب التحليلات من الخادم');
-    } finally {
-      setFetchingServer(false);
+    } catch (error) {
+      console.error('Background fetch error:', error);
+    }
+  };
+
+  const handleToggleAutoReceive = (value: boolean) => {
+    setAutoReceiveEnabled(value);
+    if (value) {
+      // جلب فوري ثم تشغيل التحديث التلقائي
+      fetchServerAnalysesBackground();
+      autoFetchTimer.current = setInterval(fetchServerAnalysesBackground, AUTO_FETCH_INTERVAL);
+    } else {
+      if (autoFetchTimer.current) {
+        clearInterval(autoFetchTimer.current);
+        autoFetchTimer.current = null;
+      }
     }
   };
 
@@ -139,19 +152,22 @@ const TradesScreen = () => {
     setRefreshing(false);
   }, []);
 
-  const copySignal = async (trade?: SuggestedTrade) => {
-    if (!trade) return;
+  const copySignal = async (item: SignalItem) => {
+    const trade = item.suggestedTrade;
+    const decision = item.decision || trade?.type || '';
 
-    const text = [
-      `Type: ${trade.type}`,
-      `Entry: ${trade.entry}`,
-      `SL: ${trade.sl}`,
-      `TP1: ${trade.tp1}`,
-      `TP2: ${trade.tp2}`,
-      `TP3: ${trade.tp3}`,
-    ].join('\n');
+    const parts: string[] = [];
+    parts.push(`📊 ${item.symbol}`);
+    if (decision) parts.push(`📌 ${decision}`);
+    if (item.price) parts.push(`💰 السعر: ${item.price}`);
+    if (trade?.entry) parts.push(`🎯 الدخول: ${trade.entry}`);
+    if (trade?.sl) parts.push(`🛑 وقف الخسارة: ${trade.sl}`);
+    if (trade?.tp1) parts.push(`✅ TP1: ${trade.tp1}`);
+    if (trade?.tp2) parts.push(`✅ TP2: ${trade.tp2}`);
+    if (trade?.tp3) parts.push(`✅ TP3: ${trade.tp3}`);
+    if (item.confidence) parts.push(`📈 الثقة: ${item.confidence}%`);
 
-    await Clipboard.setStringAsync(text);
+    await Clipboard.setStringAsync(parts.join('\n'));
     showSuccess('تم النسخ', 'تم نسخ تفاصيل الإشارة');
   };
 
@@ -166,34 +182,42 @@ const TradesScreen = () => {
     });
   };
 
-  const renderServerButton = () => (
-    <TouchableOpacity
-      style={styles.serverButton}
-      onPress={fetchServerAnalyses}
-      disabled={fetchingServer}
-      activeOpacity={0.8}
-    >
+  const renderToggleHeader = () => (
+    <View style={styles.toggleContainer}>
       <LinearGradient
-        colors={['#10b981', '#059669']}
+        colors={autoReceiveEnabled ? ['#10b981', '#059669'] : ['#374151', '#1f2937']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={styles.serverButtonGradient}
+        style={styles.toggleGradient}
       >
-        {fetchingServer ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <Ionicons name="cloud-download-outline" size={22} color="#fff" />
-        )}
-        <Text style={styles.serverButtonText}>
-          {fetchingServer ? 'جارٍ الجلب...' : 'استلام التحليلات من الخادم'}
-        </Text>
-        {!fetchingServer && (
-          <View style={styles.serverButtonBadge}>
-            <Ionicons name="sparkles" size={12} color={colors.gold} />
+        <View style={styles.toggleRow}>
+          <Switch
+            value={autoReceiveEnabled}
+            onValueChange={handleToggleAutoReceive}
+            trackColor={{ false: 'rgba(255,255,255,0.2)', true: 'rgba(255,255,255,0.3)' }}
+            thumbColor={autoReceiveEnabled ? '#fff' : '#9ca3af'}
+          />
+          <View style={styles.toggleInfo}>
+            <Text style={styles.toggleTitle}>استلام التحليلات التلقائي</Text>
+            <Text style={styles.toggleSubtitle}>
+              {autoReceiveEnabled
+                ? `🟢 مفعّل - آخر تحديث: ${lastFetchTime || '--:--'}`
+                : '⚪ معطّل - فعّل لاستقبال الصفقات تلقائياً'
+              }
+            </Text>
           </View>
-        )}
+          <View style={styles.toggleIcon}>
+            {autoReceiveEnabled ? (
+              <View style={styles.pulseWrapper}>
+                <Ionicons name="radio" size={24} color="#fff" />
+              </View>
+            ) : (
+              <Ionicons name="radio-outline" size={24} color="#9ca3af" />
+            )}
+          </View>
+        </View>
       </LinearGradient>
-    </TouchableOpacity>
+    </View>
   );
 
   const renderSignalCard = ({ item }: { item: SignalItem }) => {
@@ -203,94 +227,102 @@ const TradesScreen = () => {
     const isSell = decision.toUpperCase().includes('SELL');
     const directionColor = isBuy ? colors.buy : isSell ? colors.sell : colors.textMuted;
     const directionLabel = isBuy ? 'شراء BUY' : isSell ? 'بيع SELL' : decision || 'انتظار';
+    const directionIcon = isBuy ? 'trending-up' : isSell ? 'trending-down' : 'remove';
+
+    // Extract entry/SL/TP - from suggestedTrade or construct from analysis data
+    const entry = trade?.entry || item.price || null;
+    const sl = trade?.sl || null;
+    const tp1 = trade?.tp1 || null;
+    const tp2 = trade?.tp2 || null;
+    const tp3 = trade?.tp3 || null;
 
     return (
       <View style={[styles.signalCard, item.isServerAnalysis && styles.serverSignalCard]}>
-        {item.isServerAnalysis && (
-          <View style={styles.serverTag}>
-            <Ionicons name="cloud" size={10} color={colors.primary} />
-            <Text style={styles.serverTagText}>تحليل تلقائي</Text>
+        {/* Top bar: type badge + symbol + score */}
+        <View style={styles.signalTopBar}>
+          <View style={[styles.typeBadgeLarge, { backgroundColor: directionColor + '20', borderColor: directionColor + '40' }]}>
+            <Ionicons name={directionIcon as any} size={18} color={directionColor} />
+            <Text style={[styles.typeBadgeText, { color: directionColor }]}>{directionLabel}</Text>
           </View>
-        )}
-
-        {/* القرار + الرمز + النقاط */}
-        <View style={styles.signalHeader}>
-          <View style={[styles.sideBadge, { backgroundColor: directionColor + '22' }]}>
-            <Ionicons
-              name={isBuy ? 'trending-up' : isSell ? 'trending-down' : 'remove'}
-              size={14}
-              color={directionColor}
-            />
-            <Text style={[styles.sideText, { color: directionColor }]}>{directionLabel}</Text>
+          <View style={styles.symbolScoreRow}>
+            <Text style={styles.symbolText}>{item.symbol}</Text>
+            {item.isServerAnalysis && (
+              <View style={styles.serverTag}>
+                <Ionicons name="cloud" size={10} color={colors.primary} />
+              </View>
+            )}
           </View>
-          <Text style={styles.symbolText}>{item.symbol}</Text>
           <View style={styles.scoreContainer}>
             <Ionicons name="star" size={14} color={colors.gold} />
             <Text style={styles.scoreText}>{item.score}/10</Text>
           </View>
         </View>
 
-        {/* السعر والثقة */}
-        {(item.price || item.confidence) && (
-          <View style={styles.priceConfidenceRow}>
-            {item.price ? (
-              <View style={styles.priceBox}>
-                <Text style={styles.priceLabel}>السعر</Text>
-                <Text style={styles.priceValue}>{item.price}</Text>
-              </View>
-            ) : null}
-            {item.confidence ? (
-              <View style={styles.priceBox}>
-                <Text style={styles.priceLabel}>الثقة</Text>
-                <Text style={[styles.priceValue, { color: item.confidence >= 70 ? colors.success : colors.warning }]}>
-                  {item.confidence}%
-                </Text>
-              </View>
-            ) : null}
+        {/* Trade details grid */}
+        <View style={styles.tradeGrid}>
+          {/* Entry */}
+          <View style={[styles.tradeCell, styles.tradeCellEntry]}>
+            <Text style={styles.tradeCellLabel}>🎯 الدخول</Text>
+            <Text style={[styles.tradeCellValue, { color: colors.text }]}>
+              {entry || '---'}
+            </Text>
           </View>
-        )}
-
-        {/* تفاصيل الصفقة */}
-        {trade && (
-          <View style={styles.tradeDetails}>
-            <View style={styles.tradeRow}>
-              <Text style={styles.tradeValue}>{trade.entry}</Text>
-              <Text style={styles.tradeLabel}>Entry</Text>
-            </View>
-            <View style={styles.tradeRow}>
-              <Text style={[styles.tradeValue, { color: colors.loss }]}>{trade.sl}</Text>
-              <Text style={styles.tradeLabel}>SL</Text>
-            </View>
-            <View style={styles.tradeRow}>
-              <Text style={[styles.tradeValue, { color: colors.profit }]}>{trade.tp1}</Text>
-              <Text style={styles.tradeLabel}>TP1</Text>
-            </View>
-            {trade.tp2 && (
-              <View style={styles.tradeRow}>
-                <Text style={[styles.tradeValue, { color: colors.profit }]}>{trade.tp2}</Text>
-                <Text style={styles.tradeLabel}>TP2</Text>
-              </View>
-            )}
-            {trade.tp3 && (
-              <View style={styles.tradeRow}>
-                <Text style={[styles.tradeValue, { color: colors.profit }]}>{trade.tp3}</Text>
-                <Text style={styles.tradeLabel}>TP3</Text>
-              </View>
-            )}
+          {/* Stop Loss */}
+          <View style={[styles.tradeCell, styles.tradeCellSL]}>
+            <Text style={styles.tradeCellLabel}>🛑 وقف الخسارة</Text>
+            <Text style={[styles.tradeCellValue, { color: colors.loss || '#ef4444' }]}>
+              {sl || '---'}
+            </Text>
           </View>
-        )}
+          {/* TP1 */}
+          <View style={[styles.tradeCell, styles.tradeCellTP]}>
+            <Text style={styles.tradeCellLabel}>✅ TP1</Text>
+            <Text style={[styles.tradeCellValue, { color: colors.profit || '#10b981' }]}>
+              {tp1 || '---'}
+            </Text>
+          </View>
+          {/* TP2 */}
+          {tp2 ? (
+            <View style={[styles.tradeCell, styles.tradeCellTP]}>
+              <Text style={styles.tradeCellLabel}>✅ TP2</Text>
+              <Text style={[styles.tradeCellValue, { color: colors.profit || '#10b981' }]}>
+                {tp2}
+              </Text>
+            </View>
+          ) : null}
+          {/* TP3 */}
+          {tp3 ? (
+            <View style={[styles.tradeCell, styles.tradeCellTP]}>
+              <Text style={styles.tradeCellLabel}>✅ TP3</Text>
+              <Text style={[styles.tradeCellValue, { color: colors.profit || '#10b981' }]}>
+                {tp3}
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
-        {trade && (
-          <TouchableOpacity
-            style={styles.copyButton}
-            onPress={() => copySignal(trade)}
-          >
-            <Ionicons name="copy-outline" size={16} color={colors.text} />
-            <Text style={styles.copyButtonText}>نسخ الإشارة</Text>
+        {/* Confidence bar */}
+        {item.confidence ? (
+          <View style={styles.confidenceRow}>
+            <View style={styles.confidenceBarBg}>
+              <View style={[styles.confidenceBarFill, {
+                width: `${Math.min(item.confidence, 100)}%`,
+                backgroundColor: item.confidence >= 70 ? colors.success : item.confidence >= 50 ? colors.warning : colors.error,
+              }]} />
+            </View>
+            <Text style={styles.confidenceText}>{item.confidence}%</Text>
+            <Text style={styles.confidenceLabel}>الثقة</Text>
+          </View>
+        ) : null}
+
+        {/* Footer: copy + date */}
+        <View style={styles.cardFooter}>
+          <TouchableOpacity style={styles.copyBtn} onPress={() => copySignal(item)}>
+            <Ionicons name="copy-outline" size={14} color={colors.primary} />
+            <Text style={styles.copyBtnText}>نسخ</Text>
           </TouchableOpacity>
-        )}
-
-        <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
+          <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
+        </View>
       </View>
     );
   };
@@ -310,7 +342,7 @@ const TradesScreen = () => {
           keyExtractor={(item) => item.id}
           renderItem={renderSignalCard}
           contentContainerStyle={styles.listContent}
-          ListHeaderComponent={renderServerButton}
+          ListHeaderComponent={renderToggleHeader}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -318,7 +350,7 @@ const TradesScreen = () => {
             <View style={styles.emptyContainer}>
               <Ionicons name="document-text-outline" size={64} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>لا توجد إشارات</Text>
-              <Text style={styles.emptySubtitle}>اضغط على زر استلام التحليلات أعلاه لجلب الإشارات من الخادم</Text>
+              <Text style={styles.emptySubtitle}>فعّل استلام التحليلات أعلاه لتلقي الصفقات تلقائياً</Text>
             </View>
           }
           showsVerticalScrollIndicator={false}
@@ -344,37 +376,53 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     paddingBottom: 130,
   },
-  serverButton: {
+  // ======= Toggle Header =======
+  toggleContainer: {
     marginBottom: spacing.md,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 4,
   },
-  serverButtonGradient: {
+  toggleGradient: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  toggleRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
     gap: spacing.sm,
   },
-  serverButtonText: {
+  toggleInfo: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  toggleTitle: {
     color: '#fff',
-    fontSize: fontSizes.lg,
+    fontSize: fontSizes.md,
     fontWeight: '700',
   },
-  serverButtonBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+  toggleSubtitle: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: fontSizes.xs,
+    marginTop: 2,
+  },
+  toggleIcon: {
+    width: 40,
+    alignItems: 'center',
+  },
+  pulseWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ======= Signal Card =======
   signalCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
@@ -385,67 +433,43 @@ const styles = StyleSheet.create({
   },
   serverSignalCard: {
     borderColor: colors.primary + '40',
+  },
+  signalTopBar: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  typeBadgeLarge: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
   },
-  serverTag: {
+  typeBadgeText: {
+    fontWeight: '800',
+    fontSize: fontSizes.md,
+  },
+  symbolScoreRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    alignSelf: 'flex-end',
-    gap: 4,
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing.xs,
-  },
-  serverTagText: {
-    color: colors.primary,
-    fontSize: fontSizes.xs,
-    fontWeight: '600',
-  },
-  signalHeader: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  sideBadge: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  sideText: {
-    fontWeight: '700',
-    fontSize: fontSizes.sm,
-  },
-  priceConfidenceRow: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-around',
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  priceBox: {
-    alignItems: 'center',
-  },
-  priceLabel: {
-    color: colors.textMuted,
-    fontSize: fontSizes.xs,
-    marginBottom: 2,
-  },
-  priceValue: {
-    color: colors.text,
-    fontSize: fontSizes.lg,
-    fontWeight: '700',
+    gap: 6,
   },
   symbolText: {
     color: colors.text,
     fontSize: fontSizes.lg,
     fontWeight: '700',
+  },
+  serverTag: {
+    backgroundColor: colors.primary + '20',
+    borderRadius: 6,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scoreContainer: {
     flexDirection: 'row',
@@ -455,46 +479,99 @@ const styles = StyleSheet.create({
   scoreText: {
     color: colors.gold,
     fontWeight: '700',
+    fontSize: fontSizes.sm,
   },
-  tradeDetails: {
+  // ======= Trade Grid =======
+  tradeGrid: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
     gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  tradeRow: {
+  tradeCell: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    minWidth: '30%',
+    flex: 1,
+  },
+  tradeCellEntry: {
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary + '50',
+  },
+  tradeCellSL: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#ef4444' + '50',
+  },
+  tradeCellTP: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#10b981' + '50',
+  },
+  tradeCellLabel: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+    marginBottom: 4,
+  },
+  tradeCellValue: {
+    fontSize: fontSizes.md,
+    fontWeight: '700',
+  },
+  // ======= Confidence =======
+  confidenceRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  confidenceLabel: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+  },
+  confidenceText: {
+    color: colors.text,
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
+    minWidth: 36,
+  },
+  confidenceBarBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: colors.border,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  confidenceBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  // ======= Footer =======
+  cardFooter: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
-  tradeLabel: {
-    color: colors.textSecondary,
-    fontSize: fontSizes.sm,
-  },
-  tradeValue: {
-    color: colors.text,
-    fontSize: fontSizes.md,
-    fontWeight: '600',
-  },
-  copyButton: {
+  copyBtn: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    marginTop: spacing.md,
+    gap: 4,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
   },
-  copyButtonText: {
-    color: colors.text,
-    fontWeight: '700',
+  copyBtnText: {
+    color: colors.primary,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
   },
   dateText: {
     color: colors.textMuted,
-    fontSize: fontSizes.sm,
-    textAlign: 'center',
-    marginTop: spacing.sm,
+    fontSize: fontSizes.xs,
   },
   emptyContainer: {
     alignItems: 'center',

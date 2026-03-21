@@ -254,7 +254,9 @@ const HomeScreen = () => {
 
   useEffect(() => {
     if (activeIndicators.length >= 0) {
-      setTimeout(() => injectIndicatorsToChart(), 2000);
+      // تأخير كافٍ لتحميل بيانات الشموع
+      const timer = setTimeout(() => injectIndicatorsToChart(), 5000);
+      return () => clearTimeout(timer);
     }
   }, [activeIndicators, selectedTimeframe]);
 
@@ -552,6 +554,8 @@ const HomeScreen = () => {
             axisLabelVisible: false,
           });
 
+          let chartCandleData = []; // مخزن بيانات الشموع للمؤشرات
+
           const timeframe = '${selectedTimeframe}';
           const apiUrl = 'https://ict-ai-trader-production.up.railway.app/api/analysis/candles/XAUUSD/' + timeframe + '?count=250';
           
@@ -567,6 +571,7 @@ const HomeScreen = () => {
                   close: parseFloat(c.close)
                 })).sort((a, b) => a.time - b.time);
                 
+                chartCandleData = formattedData.slice(); // حفظ نسخة للمؤشرات
                 candlestickSeries.setData(formattedData);
                 chart.timeScale().fitContent();
                 
@@ -633,6 +638,16 @@ const HomeScreen = () => {
                         
                         // تحديث الشمعة في الرسم
                         candlestickSeries.update(currentCandle);
+                        
+                        // تحديث بيانات الشموع المخزنة للمؤشرات
+                        if (chartCandleData.length > 0) {
+                          var lastIdx = chartCandleData.length - 1;
+                          if (chartCandleData[lastIdx].time === currentCandle.time) {
+                            chartCandleData[lastIdx] = Object.assign({}, currentCandle);
+                          } else if (currentCandle.time > chartCandleData[lastIdx].time) {
+                            chartCandleData.push(Object.assign({}, currentCandle));
+                          }
+                        }
                       }
                     }).catch(() => {});
                 }, 2000);
@@ -769,117 +784,138 @@ const HomeScreen = () => {
           // ===================== Indicator Engine =====================
           let indicatorSeries = {};
           
-          window.__CLEAR_INDICATORS__ = () => {
+          window.__CLEAR_INDICATORS__ = function() {
             try {
-              Object.keys(indicatorSeries).forEach(id => {
-                const series = indicatorSeries[id];
-                if (Array.isArray(series)) {
-                  series.forEach(s => { try { chart.removeSeries(s); } catch(e) {} });
+              var keys = Object.keys(indicatorSeries);
+              for (var i = 0; i < keys.length; i++) {
+                var seriesArr = indicatorSeries[keys[i]];
+                if (Array.isArray(seriesArr)) {
+                  for (var j = 0; j < seriesArr.length; j++) {
+                    try { chart.removeSeries(seriesArr[j]); } catch(e) {}
+                  }
                 }
-                delete indicatorSeries[id];
-              });
+              }
+              indicatorSeries = {};
+              try { candlestickSeries.setMarkers([]); } catch(e) {}
             } catch(e) { console.error('Clear indicators error:', e); }
           };
 
-          window.__APPLY_INDICATORS__ = (indicators) => {
+          window.__APPLY_INDICATORS__ = function(indicators) {
             try {
-              // حذف المؤشرات القديمة أولاً
               window.__CLEAR_INDICATORS__();
 
-              if (!indicators || !Array.isArray(indicators)) return;
-              
-              // الحصول على بيانات الشموع الحالية
-              const currentData = candlestickSeries.data ? candlestickSeries.data() : [];
-              if (!currentData || currentData.length === 0) return;
+              if (!indicators || !Array.isArray(indicators) || indicators.length === 0) return;
+              if (!chartCandleData || chartCandleData.length === 0) {
+                console.warn('No candle data available for indicators');
+                return;
+              }
 
-              const candles = currentData.map(c => ({
-                time: c.time,
-                open: c.open || c.value || 0,
-                high: c.high || c.open || c.value || 0,
-                low: c.low || c.open || c.value || 0,
-                close: c.close || c.value || 0,
-              }));
+              var candles = chartCandleData.slice();
 
-              indicators.forEach(ind => {
+              for (var ii = 0; ii < indicators.length; ii++) {
+                var ind = indicators[ii];
                 try {
-                  // تنفيذ كود المؤشر
-                  const fn = new Function('candles', ind.code.replace(/^function\\s+calculate\\s*\\(candles\\)\\s*\\{/, '').replace(/\\}$/, ''));
-                  let result;
+                  var result = null;
+                  var code = ind.code;
                   
-                  // محاولة تنفيذ الكود كدالة calculate
+                  // محاولة 1: تنفيذ كدالة calculate
                   try {
-                    const calcFn = new Function('candles', 'const calculate = ' + ind.code + '; return calculate(candles);');
+                    var execCode = code + '; return calculate(candles);';
+                    var calcFn = new Function('candles', execCode);
                     result = calcFn(candles);
                   } catch(e1) {
-                    // محاولة ثانية - كود مباشر
+                    // محاولة 2: لف الكود كتعيين دالة
                     try {
-                      const directFn = new Function('candles', ind.code + '\\nreturn calculate(candles);');
-                      result = directFn(candles);
+                      var wrapCode = 'var calculate = ' + code + '; return calculate(candles);';
+                      var wrapFn = new Function('candles', wrapCode);
+                      result = wrapFn(candles);
                     } catch(e2) {
-                      console.error('Indicator code error for ' + ind.name + ':', e2);
-                      return;
+                      // محاولة 3: استخراج جسم الدالة
+                      try {
+                        var bodyMatch = code.match(/function[^{]*\\{([\\s\\S]*)\\}$/);
+                        if (bodyMatch) {
+                          var bodyFn = new Function('candles', bodyMatch[1]);
+                          result = bodyFn(candles);
+                        }
+                      } catch(e3) {
+                        console.error('All attempts failed for ' + ind.name, e1.message, e2.message, e3.message);
+                      }
                     }
                   }
 
-                  if (!result || !result.series) return;
+                  if (!result || !result.series || !Array.isArray(result.series)) {
+                    console.warn('Indicator ' + ind.name + ' returned invalid result:', result);
+                    continue;
+                  }
 
-                  const createdSeries = [];
+                  var createdSeries = [];
 
-                  result.series.forEach((s, idx) => {
-                    let chartSeries;
+                  for (var si = 0; si < result.series.length; si++) {
+                    var s = result.series[si];
+                    var chartSeries = null;
+                    var opts = s.options || {};
+                    var scaleId = result.separate ? ('ind_' + ind.id) : 'right';
 
                     if (s.type === 'line') {
                       chartSeries = chart.addLineSeries({
-                        color: s.options?.color || '#2962FF',
-                        lineWidth: s.options?.lineWidth || 2,
-                        title: s.options?.title || ind.name,
-                        priceScaleId: result.separate ? 'indicator_' + ind.id : 'right',
+                        color: opts.color || '#2962FF',
+                        lineWidth: opts.lineWidth || 2,
+                        title: opts.title || ind.name,
+                        priceScaleId: scaleId,
                         lastValueVisible: false,
                         priceLineVisible: false,
                       });
                     } else if (s.type === 'histogram') {
                       chartSeries = chart.addHistogramSeries({
-                        color: s.options?.color || '#26a69a',
-                        title: s.options?.title || ind.name,
-                        priceScaleId: result.separate ? 'indicator_' + ind.id : 'right',
+                        color: opts.color || '#26a69a',
+                        title: opts.title || ind.name,
+                        priceScaleId: scaleId,
                         lastValueVisible: false,
                         priceLineVisible: false,
                       });
                     } else if (s.type === 'area') {
                       chartSeries = chart.addAreaSeries({
-                        topColor: s.options?.topColor || 'rgba(41, 98, 255, 0.3)',
-                        bottomColor: s.options?.bottomColor || 'rgba(41, 98, 255, 0.0)',
-                        lineColor: s.options?.color || '#2962FF',
-                        lineWidth: s.options?.lineWidth || 1,
-                        title: s.options?.title || ind.name,
-                        priceScaleId: result.separate ? 'indicator_' + ind.id : 'right',
+                        topColor: opts.topColor || 'rgba(41, 98, 255, 0.3)',
+                        bottomColor: opts.bottomColor || 'rgba(41, 98, 255, 0.0)',
+                        lineColor: opts.color || '#2962FF',
+                        lineWidth: opts.lineWidth || 1,
+                        title: opts.title || ind.name,
+                        priceScaleId: scaleId,
                         lastValueVisible: false,
                         priceLineVisible: false,
                       });
+                    } else if (s.type === 'markers' && s.data && s.data.length > 0) {
+                      var markers = [];
+                      for (var mi = 0; mi < s.data.length; mi++) {
+                        var m = s.data[mi];
+                        markers.push({
+                          time: m.time,
+                          position: m.position || 'aboveBar',
+                          color: m.color || '#f68410',
+                          shape: m.shape || 'circle',
+                          text: m.text || '',
+                        });
+                      }
+                      candlestickSeries.setMarkers(markers);
                     }
 
                     if (chartSeries && s.data && s.data.length > 0) {
-                      chartSeries.setData(s.data);
-                      createdSeries.push(chartSeries);
+                      try {
+                        chartSeries.setData(s.data);
+                        createdSeries.push(chartSeries);
+                      } catch(setErr) {
+                        console.error('Set data error for ' + ind.name + ':', setErr);
+                        try { chart.removeSeries(chartSeries); } catch(e) {}
+                      }
                     }
-
-                    // markers
-                    if (s.type === 'markers' && s.data && s.data.length > 0) {
-                      candlestickSeries.setMarkers(s.data.map(m => ({
-                        time: m.time,
-                        position: m.position || 'aboveBar',
-                        color: m.color || '#f68410',
-                        shape: m.shape || 'circle',
-                        text: m.text || '',
-                      })));
-                    }
-                  });
+                  }
 
                   indicatorSeries[ind.id] = createdSeries;
+                  console.log('Indicator applied: ' + ind.name + ' (' + createdSeries.length + ' series)');
                 } catch(e) {
                   console.error('Indicator apply error for ' + ind.name + ':', e);
                 }
-              });
+              }
             } catch(e) {
               console.error('Apply indicators error:', e);
             }
