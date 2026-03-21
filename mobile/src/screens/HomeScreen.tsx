@@ -176,6 +176,8 @@ const HomeScreen = () => {
   };
 
   // ===================== Indicators =====================
+  const [chartReady, setChartReady] = useState(false);
+
   const loadActiveIndicators = async () => {
     try {
       const result = await indicatorService.getActiveList();
@@ -201,6 +203,47 @@ const HomeScreen = () => {
     }
   };
 
+  const injectIndicatorsDirectly = (indicators: any[]) => {
+    if (!chartWebViewRef.current) return;
+
+    if (!indicators || indicators.length === 0) {
+      chartWebViewRef.current.injectJavaScript('window.__CLEAR_INDICATORS__ && window.__CLEAR_INDICATORS__(); true;');
+      return;
+    }
+
+    const indicatorCodes = indicators.map(ind => ({
+      id: ind.id,
+      name: ind.name_ar || ind.name,
+      code: ind.code,
+      type: ind.indicator_type,
+    }));
+
+    const js = `
+      try {
+        if (window.__APPLY_INDICATORS__) {
+          window.__APPLY_INDICATORS__(${JSON.stringify(indicatorCodes)});
+        } else {
+          console.warn('__APPLY_INDICATORS__ not ready');
+        }
+      } catch(e) { console.error('Inject error:', e); }
+      true;
+    `;
+    chartWebViewRef.current.injectJavaScript(js);
+  };
+
+  const refreshAndInjectIndicators = async () => {
+    try {
+      const result = await indicatorService.getActiveList();
+      if (result.success) {
+        const indicators = result.indicators || [];
+        setActiveIndicators(indicators);
+        injectIndicatorsDirectly(indicators);
+      }
+    } catch (error) {
+      console.error('Error refreshing indicators:', error);
+    }
+  };
+
   const handleToggleIndicator = async (id: string) => {
     setTogglingIndicator(id);
     try {
@@ -209,8 +252,7 @@ const HomeScreen = () => {
         setUserIndicators(prev =>
           prev.map(ind => ind.id === id ? { ...ind, is_active: result.isActive } : ind)
         );
-        await loadActiveIndicators();
-        injectIndicatorsToChart();
+        await refreshAndInjectIndicators();
       }
     } catch (error) {
       console.error('Error toggling indicator:', error);
@@ -224,41 +266,24 @@ const HomeScreen = () => {
       const result = await indicatorService.deleteIndicator(id);
       if (result.success) {
         setUserIndicators(prev => prev.filter(ind => ind.id !== id));
-        await loadActiveIndicators();
-        injectIndicatorsToChart();
+        await refreshAndInjectIndicators();
       }
     } catch (error) {
       console.error('Error deleting indicator:', error);
     }
   };
 
-  const injectIndicatorsToChart = useCallback(() => {
-    if (!chartWebViewRef.current || activeIndicators.length === 0) {
-      chartWebViewRef.current?.injectJavaScript('window.__CLEAR_INDICATORS__ && window.__CLEAR_INDICATORS__(); true;');
-      return;
-    }
-
-    const indicatorCodes = activeIndicators.map(ind => ({
-      id: ind.id,
-      name: ind.name_ar || ind.name,
-      code: ind.code,
-      type: ind.indicator_type,
-    }));
-
-    const js = `
-      window.__APPLY_INDICATORS__ && window.__APPLY_INDICATORS__(${JSON.stringify(indicatorCodes)});
-      true;
-    `;
-    chartWebViewRef.current?.injectJavaScript(js);
-  }, [activeIndicators]);
-
+  // عند جاهزية الرسم البياني، حقن المؤشرات النشطة
   useEffect(() => {
-    if (activeIndicators.length >= 0) {
-      // تأخير كافٍ لتحميل بيانات الشموع
-      const timer = setTimeout(() => injectIndicatorsToChart(), 5000);
-      return () => clearTimeout(timer);
+    if (chartReady && activeIndicators.length > 0) {
+      injectIndicatorsDirectly(activeIndicators);
     }
-  }, [activeIndicators, selectedTimeframe]);
+  }, [chartReady]);
+
+  // عند تغيير الفريم الزمني، أعد تعيين جاهزية الشارت
+  useEffect(() => {
+    setChartReady(false);
+  }, [selectedTimeframe]);
 
   const openIndicatorPanel = () => {
     loadAllIndicators();
@@ -585,6 +610,11 @@ const HomeScreen = () => {
                 }
                 
                 document.getElementById('volume-info').textContent = formattedData.length + ' شمعة';
+
+                // إبلاغ التطبيق بجاهزية الشارت
+                if (window.ReactNativeWebView) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CHART_READY' }));
+                }
                 
                 // تحديث عند تمرير المؤشر
                 chart.subscribeCrosshairMove(param => {
@@ -1051,6 +1081,14 @@ const HomeScreen = () => {
               originWhitelist={['*']}
               mixedContentMode="always"
               androidLayerType="hardware"
+              onMessage={(event) => {
+                try {
+                  const data = JSON.parse(event.nativeEvent.data);
+                  if (data.type === 'CHART_READY') {
+                    setChartReady(true);
+                  }
+                } catch {}
+              }}
             />
           </View>
         </View>

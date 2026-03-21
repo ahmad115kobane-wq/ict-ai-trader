@@ -217,11 +217,19 @@ router.get('/trades-history', authMiddleware, async (req: AuthRequest, res: Resp
 
     res.json({
       success: true,
-      trades: trades.map((t: any) => ({
-        ...t,
-        suggestedTrade: t.suggested_trade,
-        isTradeExecuted: t.is_trade_executed === 1
-      }))
+      trades: trades.map((t: any) => {
+        let suggestedTrade = null;
+        try {
+          suggestedTrade = t.suggested_trade
+            ? (typeof t.suggested_trade === 'string' ? JSON.parse(t.suggested_trade) : t.suggested_trade)
+            : null;
+        } catch {}
+        return {
+          ...t,
+          suggestedTrade,
+          isTradeExecuted: t.is_trade_executed === 1
+        };
+      })
     });
 
   } catch (error) {

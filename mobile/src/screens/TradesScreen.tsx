@@ -57,6 +57,15 @@ const TradesScreen = () => {
     };
   }, []);
 
+  const parseSuggestedTrade = (raw: any): SuggestedTrade | undefined => {
+    if (!raw) return undefined;
+    try {
+      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (obj && (obj.entry || obj.sl || obj.tp1)) return obj;
+    } catch {}
+    return undefined;
+  };
+
   const parseServerAnalyses = (analyses: any[]): SignalItem[] => {
     return analyses.map((a: any) => ({
       id: `server-${a.id}`,
@@ -65,7 +74,7 @@ const TradesScreen = () => {
       decision: a.decision,
       price: a.price,
       confidence: a.confidence,
-      suggestedTrade: a.suggestedTrade,
+      suggestedTrade: parseSuggestedTrade(a.suggestedTrade),
       created_at: a.createdAt,
       isServerAnalysis: true,
     }));
@@ -89,7 +98,11 @@ const TradesScreen = () => {
         const existingIds = new Set(allSignals.map(s => s.id));
         const historyItems = historyData.trades
           .filter((t: any) => !existingIds.has(t.id))
-          .map((t: any) => ({ ...t, isServerAnalysis: false }));
+          .map((t: any) => ({
+            ...t,
+            suggestedTrade: parseSuggestedTrade(t.suggestedTrade || t.suggested_trade),
+            isServerAnalysis: false,
+          }));
         allSignals.push(...historyItems);
       }
 
