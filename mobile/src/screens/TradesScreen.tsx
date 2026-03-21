@@ -235,11 +235,16 @@ const TradesScreen = () => {
 
   const renderSignalCard = ({ item }: { item: SignalItem }) => {
     const trade = item.suggestedTrade;
-    const decision = item.decision || trade?.type || '';
-    const isBuy = decision.toUpperCase().includes('BUY');
-    const isSell = decision.toUpperCase().includes('SELL');
+    // trade.type has actual direction (BUY_LIMIT/SELL_LIMIT), decision is just PLACE_PENDING/NO_TRADE
+    const tradeType = trade?.type || item.decision || '';
+    const isBuy = tradeType.toUpperCase().includes('BUY');
+    const isSell = tradeType.toUpperCase().includes('SELL');
     const directionColor = isBuy ? colors.buy : isSell ? colors.sell : colors.textMuted;
-    const directionLabel = isBuy ? 'شراء BUY' : isSell ? 'بيع SELL' : decision || 'انتظار';
+    const directionLabel = isBuy
+      ? (tradeType.includes('LIMIT') ? 'شراء معلق BUY LIMIT' : tradeType.includes('STOP') ? 'شراء ستوب BUY STOP' : 'شراء BUY')
+      : isSell
+      ? (tradeType.includes('LIMIT') ? 'بيع معلق SELL LIMIT' : tradeType.includes('STOP') ? 'بيع ستوب SELL STOP' : 'بيع SELL')
+      : item.decision === 'NO_TRADE' ? 'لا تداول' : 'انتظار';
     const directionIcon = isBuy ? 'trending-up' : isSell ? 'trending-down' : 'remove';
 
     // Extract entry/SL/TP - from suggestedTrade or construct from analysis data

@@ -218,14 +218,16 @@ const HomeScreen = () => {
       type: ind.indicator_type,
     }));
 
+    // Double stringify: outer stringify escapes ALL special chars safely for embedding in JS
+    // WebView does JSON.parse to recover the original array
+    const safeData = JSON.stringify(JSON.stringify(indicatorCodes));
     const js = `
       try {
+        var _d = JSON.parse(${safeData});
         if (window.__APPLY_INDICATORS__) {
-          window.__APPLY_INDICATORS__(${JSON.stringify(indicatorCodes)});
-        } else {
-          console.warn('__APPLY_INDICATORS__ not ready');
+          window.__APPLY_INDICATORS__(_d);
         }
-      } catch(e) { console.error('Inject error:', e); }
+      } catch(e) { console.error('Inject error:', e.message); }
       true;
     `;
     chartWebViewRef.current.injectJavaScript(js);
@@ -611,6 +613,31 @@ const HomeScreen = () => {
                 
                 document.getElementById('volume-info').textContent = formattedData.length + ' شمعة';
 
+                // رسم SMA 50 مدمج تلقائياً على الشارت
+                try {
+                  var sma50Data = [];
+                  var smaPeriod = 50;
+                  for (var si = smaPeriod - 1; si < formattedData.length; si++) {
+                    var smaSum = 0;
+                    for (var sj = si - smaPeriod + 1; sj <= si; sj++) { smaSum += formattedData[sj].close; }
+                    sma50Data.push({ time: formattedData[si].time, value: smaSum / smaPeriod });
+                  }
+                  if (sma50Data.length > 0) {
+                    var sma50Line = chart.addLineSeries({ color: 'rgba(255, 152, 0, 0.7)', lineWidth: 1, title: 'SMA 50', lastValueVisible: false, priceLineVisible: false });
+                    sma50Line.setData(sma50Data);
+                  }
+                  var sma20Data = [];
+                  for (var si2 = 19; si2 < formattedData.length; si2++) {
+                    var sma20Sum = 0;
+                    for (var sj2 = si2 - 19; sj2 <= si2; sj2++) { sma20Sum += formattedData[sj2].close; }
+                    sma20Data.push({ time: formattedData[si2].time, value: sma20Sum / 20 });
+                  }
+                  if (sma20Data.length > 0) {
+                    var sma20Line = chart.addLineSeries({ color: 'rgba(41, 98, 255, 0.7)', lineWidth: 1, title: 'SMA 20', lastValueVisible: false, priceLineVisible: false });
+                    sma20Line.setData(sma20Data);
+                  }
+                } catch(smaErr) { console.error('Built-in SMA error:', smaErr); }
+
                 // إبلاغ التطبيق بجاهزية الشارت
                 if (window.ReactNativeWebView) {
                   window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CHART_READY' }));
@@ -812,143 +839,73 @@ const HomeScreen = () => {
           });
 
           // ===================== Indicator Engine =====================
-          let indicatorSeries = {};
+          var indicatorSeries = {};
           
+          function runIndicatorCode(code, candles) {
+            // eval approach - most reliable for dynamic code execution
+            var fn = null;
+            eval('fn = ' + code);
+            if (typeof fn === 'function') return fn(candles);
+            // fallback: code defines calculate as standalone function
+            eval(code);
+            if (typeof calculate === 'function') return calculate(candles);
+            return null;
+          }
+
+          function addIndicatorSeries(result, ind) {
+            var created = [];
+            if (!result || !result.series) return created;
+            for (var si = 0; si < result.series.length; si++) {
+              var s = result.series[si];
+              var cs = null;
+              var o = s.options || {};
+              var pid = result.separate ? ('ind_' + (ind.id || si)) : 'right';
+              if (s.type === 'line' && s.data && s.data.length > 0) {
+                cs = chart.addLineSeries({ color: o.color || '#2962FF', lineWidth: o.lineWidth || 2, title: o.title || ind.name || '', priceScaleId: pid, lastValueVisible: false, priceLineVisible: false });
+              } else if (s.type === 'histogram' && s.data && s.data.length > 0) {
+                cs = chart.addHistogramSeries({ color: o.color || '#26a69a', title: o.title || ind.name || '', priceScaleId: pid, lastValueVisible: false, priceLineVisible: false });
+              } else if (s.type === 'area' && s.data && s.data.length > 0) {
+                cs = chart.addAreaSeries({ topColor: o.topColor || 'rgba(41,98,255,0.3)', bottomColor: o.bottomColor || 'rgba(41,98,255,0)', lineColor: o.color || '#2962FF', lineWidth: o.lineWidth || 1, title: o.title || ind.name || '', priceScaleId: pid, lastValueVisible: false, priceLineVisible: false });
+              } else if (s.type === 'markers' && s.data && s.data.length > 0) {
+                try { candlestickSeries.setMarkers(s.data); } catch(e) {}
+              }
+              if (cs && s.data) {
+                try { cs.setData(s.data); created.push(cs); } catch(e) { try { chart.removeSeries(cs); } catch(x) {} }
+              }
+            }
+            return created;
+          }
+
           window.__CLEAR_INDICATORS__ = function() {
             try {
               var keys = Object.keys(indicatorSeries);
               for (var i = 0; i < keys.length; i++) {
-                var seriesArr = indicatorSeries[keys[i]];
-                if (Array.isArray(seriesArr)) {
-                  for (var j = 0; j < seriesArr.length; j++) {
-                    try { chart.removeSeries(seriesArr[j]); } catch(e) {}
-                  }
-                }
+                var arr = indicatorSeries[keys[i]];
+                if (Array.isArray(arr)) { for (var j = 0; j < arr.length; j++) { try { chart.removeSeries(arr[j]); } catch(e) {} } }
               }
               indicatorSeries = {};
               try { candlestickSeries.setMarkers([]); } catch(e) {}
-            } catch(e) { console.error('Clear indicators error:', e); }
+            } catch(e) {}
           };
 
           window.__APPLY_INDICATORS__ = function(indicators) {
             try {
               window.__CLEAR_INDICATORS__();
-
-              if (!indicators || !Array.isArray(indicators) || indicators.length === 0) return;
-              if (!chartCandleData || chartCandleData.length === 0) {
-                console.warn('No candle data available for indicators');
-                return;
-              }
-
+              if (!indicators || indicators.length === 0) return;
+              if (!chartCandleData || chartCandleData.length === 0) return;
               var candles = chartCandleData.slice();
-
               for (var ii = 0; ii < indicators.length; ii++) {
                 var ind = indicators[ii];
                 try {
-                  var result = null;
-                  var code = ind.code;
-                  
-                  // محاولة 1: تنفيذ كدالة calculate
-                  try {
-                    var execCode = code + '; return calculate(candles);';
-                    var calcFn = new Function('candles', execCode);
-                    result = calcFn(candles);
-                  } catch(e1) {
-                    // محاولة 2: لف الكود كتعيين دالة
-                    try {
-                      var wrapCode = 'var calculate = ' + code + '; return calculate(candles);';
-                      var wrapFn = new Function('candles', wrapCode);
-                      result = wrapFn(candles);
-                    } catch(e2) {
-                      // محاولة 3: استخراج جسم الدالة
-                      try {
-                        var bodyMatch = code.match(/function[^{]*\\{([\\s\\S]*)\\}$/);
-                        if (bodyMatch) {
-                          var bodyFn = new Function('candles', bodyMatch[1]);
-                          result = bodyFn(candles);
-                        }
-                      } catch(e3) {
-                        console.error('All attempts failed for ' + ind.name, e1.message, e2.message, e3.message);
-                      }
-                    }
+                  var result = runIndicatorCode(ind.code, candles);
+                  if (result && result.series) {
+                    indicatorSeries[ind.id] = addIndicatorSeries(result, ind);
                   }
-
-                  if (!result || !result.series || !Array.isArray(result.series)) {
-                    console.warn('Indicator ' + ind.name + ' returned invalid result:', result);
-                    continue;
-                  }
-
-                  var createdSeries = [];
-
-                  for (var si = 0; si < result.series.length; si++) {
-                    var s = result.series[si];
-                    var chartSeries = null;
-                    var opts = s.options || {};
-                    var scaleId = result.separate ? ('ind_' + ind.id) : 'right';
-
-                    if (s.type === 'line') {
-                      chartSeries = chart.addLineSeries({
-                        color: opts.color || '#2962FF',
-                        lineWidth: opts.lineWidth || 2,
-                        title: opts.title || ind.name,
-                        priceScaleId: scaleId,
-                        lastValueVisible: false,
-                        priceLineVisible: false,
-                      });
-                    } else if (s.type === 'histogram') {
-                      chartSeries = chart.addHistogramSeries({
-                        color: opts.color || '#26a69a',
-                        title: opts.title || ind.name,
-                        priceScaleId: scaleId,
-                        lastValueVisible: false,
-                        priceLineVisible: false,
-                      });
-                    } else if (s.type === 'area') {
-                      chartSeries = chart.addAreaSeries({
-                        topColor: opts.topColor || 'rgba(41, 98, 255, 0.3)',
-                        bottomColor: opts.bottomColor || 'rgba(41, 98, 255, 0.0)',
-                        lineColor: opts.color || '#2962FF',
-                        lineWidth: opts.lineWidth || 1,
-                        title: opts.title || ind.name,
-                        priceScaleId: scaleId,
-                        lastValueVisible: false,
-                        priceLineVisible: false,
-                      });
-                    } else if (s.type === 'markers' && s.data && s.data.length > 0) {
-                      var markers = [];
-                      for (var mi = 0; mi < s.data.length; mi++) {
-                        var m = s.data[mi];
-                        markers.push({
-                          time: m.time,
-                          position: m.position || 'aboveBar',
-                          color: m.color || '#f68410',
-                          shape: m.shape || 'circle',
-                          text: m.text || '',
-                        });
-                      }
-                      candlestickSeries.setMarkers(markers);
-                    }
-
-                    if (chartSeries && s.data && s.data.length > 0) {
-                      try {
-                        chartSeries.setData(s.data);
-                        createdSeries.push(chartSeries);
-                      } catch(setErr) {
-                        console.error('Set data error for ' + ind.name + ':', setErr);
-                        try { chart.removeSeries(chartSeries); } catch(e) {}
-                      }
-                    }
-                  }
-
-                  indicatorSeries[ind.id] = createdSeries;
-                  console.log('Indicator applied: ' + ind.name + ' (' + createdSeries.length + ' series)');
                 } catch(e) {
-                  console.error('Indicator apply error for ' + ind.name + ':', e);
+                  console.error('Indicator error [' + ind.name + ']:', e.message);
                 }
               }
-            } catch(e) {
-              console.error('Apply indicators error:', e);
-            }
+            } catch(e) { console.error('Apply error:', e); }
           };
 
           window.addEventListener('resize', () => {
