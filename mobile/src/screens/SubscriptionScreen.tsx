@@ -10,14 +10,14 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  I18nManager,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../context/AuthContext';
-import { subscriptionService } from '../services/apiService';
+import { subscriptionService, referralService } from '../services/apiService';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { Package } from '../types';
 import Header from '../components/Header';
@@ -31,6 +31,11 @@ const SubscriptionScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [purchasingPackage, setPurchasingPackage] = useState<string | null>(null);
   const hasActiveSubscription = Boolean(user?.subscriptionStatus?.hasActiveSubscription);
+
+  // Referral code state per package
+  const [referralCodes, setReferralCodes] = useState<Record<string, string>>({});
+  const [referralDiscounts, setReferralDiscounts] = useState<Record<string, any>>({});
+  const [validatingCode, setValidatingCode] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -58,27 +63,70 @@ const SubscriptionScreen = () => {
     setRefreshing(false);
   }, []);
 
+  const handleValidateCode = async (packageId: string) => {
+    const code = referralCodes[packageId]?.trim();
+    if (!code) return;
+
+    setValidatingCode(packageId);
+    try {
+      const result = await referralService.validateCode(code, packageId);
+      if (result.success) {
+        setReferralDiscounts(prev => ({
+          ...prev,
+          [packageId]: result.discount,
+        }));
+        showSuccess('كود صالح', result.message || 'تم تطبيق الخصم بنجاح');
+      }
+    } catch (error: any) {
+      const errMsg = error.response?.data?.error || 'كود الدعوة غير صالح';
+      showError('كود غير صالح', errMsg);
+      setReferralDiscounts(prev => {
+        const copy = { ...prev };
+        delete copy[packageId];
+        return copy;
+      });
+    } finally {
+      setValidatingCode(null);
+    }
+  };
+
+  const clearReferralCode = (packageId: string) => {
+    setReferralCodes(prev => ({ ...prev, [packageId]: '' }));
+    setReferralDiscounts(prev => {
+      const copy = { ...prev };
+      delete copy[packageId];
+      return copy;
+    });
+  };
+
   const handlePurchase = async (packageId: string, coinPrice: number) => {
+    const discount = referralDiscounts[packageId];
+    const finalPrice = discount ? Math.round(discount.finalPrice) : coinPrice;
     const userCoins = user?.coins || 0;
+    const code = referralCodes[packageId]?.trim();
     
-    // التحقق من الرصيد قبل الشراء
-    if (userCoins < coinPrice) {
+    if (userCoins < finalPrice) {
       showError(
         'رصيد غير كافٍ',
-        `تحتاج إلى ${coinPrice} عملة لشراء هذه الباقة.\nرصيدك الحالي: ${userCoins} عملة\nينقصك: ${coinPrice - userCoins} عملة`
+        `تحتاج إلى ${finalPrice} عملة لشراء هذه الباقة.\nرصيدك الحالي: ${userCoins} عملة\nينقصك: ${finalPrice - userCoins} عملة`
       );
       return;
     }
+
+    const discountMsg = discount 
+      ? `\n🎫 خصم كود الدعوة: ${discount.amount} عملة`
+      : '';
     
     showConfirm(
       'تأكيد الشراء',
-      `هل تريد شراء هذه الباقة مقابل ${coinPrice} عملة؟\n\nرصيدك الحالي: ${userCoins} عملة\nرصيدك بعد الشراء: ${userCoins - coinPrice} عملة`,
+      `هل تريد شراء هذه الباقة مقابل ${finalPrice} عملة؟${discountMsg}\n\nرصيدك الحالي: ${userCoins} عملة\nرصيدك بعد الشراء: ${userCoins - finalPrice} عملة`,
       async () => {
         setPurchasingPackage(packageId);
         try {
-          const result = await subscriptionService.purchase(packageId);
+          const result = await subscriptionService.purchase(packageId, discount ? code : undefined);
           if (result.success) {
             showSuccess('نجاح', result.message || 'تم شراء الباقة بنجاح');
+            clearReferralCode(packageId);
             await refreshUser();
           }
         } catch (error: any) {
@@ -183,7 +231,10 @@ const SubscriptionScreen = () => {
 
         {/* Packages */}
         {packages.map((pkg, index) => {
-          const coinPrice = Math.round(pkg.price * 1); // 1 دولار = 1 عملة
+          const coinPrice = Math.round(pkg.price * 1);
+          const discount = referralDiscounts[pkg.id];
+          const finalPrice = discount ? Math.round(discount.finalPrice) : coinPrice;
+          const codeValue = referralCodes[pkg.id] || '';
           
           return (
             <View key={pkg.id} style={[styles.packageCard, index === 0 && styles.packageCardFeatured]}>
@@ -205,11 +256,24 @@ const SubscriptionScreen = () => {
                   </Text>
                 </View>
                 <View style={styles.priceContainer}>
-                  <View style={styles.coinPriceRow}>
-                    <Ionicons name="diamond" size={16} color={colors.gold} />
-                    <Text style={styles.packagePrice}>{coinPrice}</Text>
-                  </View>
-                  <Text style={styles.dollarPrice}>(${pkg.price})</Text>
+                  {discount ? (
+                    <>
+                      <Text style={styles.originalPrice}>{coinPrice}</Text>
+                      <View style={styles.coinPriceRow}>
+                        <Ionicons name="diamond" size={16} color={colors.gold} />
+                        <Text style={[styles.packagePrice, { color: colors.success }]}>{finalPrice}</Text>
+                      </View>
+                      <Text style={styles.discountBadgeText}>-{discount.percent}%</Text>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.coinPriceRow}>
+                        <Ionicons name="diamond" size={16} color={colors.gold} />
+                        <Text style={styles.packagePrice}>{coinPrice}</Text>
+                      </View>
+                      <Text style={styles.dollarPrice}>(${pkg.price})</Text>
+                    </>
+                  )}
                 </View>
               </View>
               
@@ -227,6 +291,61 @@ const SubscriptionScreen = () => {
                   <Text style={styles.featureText}>دعم فني على مدار الساعة</Text>
                 </View>
               </View>
+
+              {/* Referral Code Input */}
+              <View style={styles.referralSection}>
+                <View style={styles.referralHeader}>
+                  <Ionicons name="gift-outline" size={16} color={colors.gold} />
+                  <Text style={styles.referralLabel}>كود الدعوة (خصم 15%)</Text>
+                </View>
+                <View style={styles.referralInputRow}>
+                  <TextInput
+                    style={styles.referralInput}
+                    value={codeValue}
+                    onChangeText={(text) => {
+                      setReferralCodes(prev => ({ ...prev, [pkg.id]: text.toUpperCase() }));
+                      if (discount) clearReferralCode(pkg.id);
+                    }}
+                    placeholder="أدخل كود الدعوة هنا"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="characters"
+                    editable={!discount}
+                  />
+                  {discount ? (
+                    <TouchableOpacity
+                      style={styles.referralClearBtn}
+                      onPress={() => clearReferralCode(pkg.id)}
+                    >
+                      <Ionicons name="close-circle" size={20} color={colors.error} />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.referralApplyBtn, !codeValue && styles.referralApplyBtnDisabled]}
+                      onPress={() => handleValidateCode(pkg.id)}
+                      disabled={!codeValue || validatingCode === pkg.id}
+                    >
+                      {validatingCode === pkg.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.referralApplyText}>تطبيق</Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {discount && (
+                  <View style={styles.discountApplied}>
+                    <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                    <Text style={styles.discountAppliedText}>
+                      تم تطبيق خصم {discount.percent}% — وفّرت {discount.amount} عملة!
+                    </Text>
+                  </View>
+                )}
+                {!discount && (
+                  <Text style={styles.referralHint}>
+                    أدخل كود دعوة صديقك واحصل على خصم 15% من سعر الباقة
+                  </Text>
+                )}
+              </View>
               
               <TouchableOpacity
                 style={[styles.purchaseButton, index === 0 && styles.purchaseButtonFeatured]}
@@ -237,7 +356,9 @@ const SubscriptionScreen = () => {
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <>
-                    <Text style={styles.purchaseButtonText}>اشترك الآن</Text>
+                    <Text style={styles.purchaseButtonText}>
+                      {discount ? `اشترك الآن بـ ${finalPrice} عملة` : 'اشترك الآن'}
+                    </Text>
                     <Ionicons name="arrow-back" size={18} color="#fff" />
                   </>
                 )}
@@ -442,6 +563,97 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSizes.md,
     textAlign: 'right',
+  },
+  originalPrice: {
+    color: colors.textMuted,
+    fontSize: fontSizes.md,
+    textDecorationLine: 'line-through',
+    textAlign: 'center',
+  },
+  discountBadgeText: {
+    color: colors.success,
+    fontSize: fontSizes.xs,
+    fontWeight: '700',
+    backgroundColor: colors.success + '18',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  referralSection: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  referralHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  referralLabel: {
+    color: colors.gold,
+    fontSize: fontSizes.sm,
+    fontWeight: '600',
+  },
+  referralInputRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  referralInput: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    color: colors.text,
+    fontSize: fontSizes.md,
+    textAlign: 'right',
+  },
+  referralApplyBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    minWidth: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  referralApplyBtnDisabled: {
+    backgroundColor: colors.border,
+  },
+  referralApplyText: {
+    color: '#fff',
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
+  },
+  referralClearBtn: {
+    padding: spacing.xs,
+  },
+  discountApplied: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  discountAppliedText: {
+    color: colors.success,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+  },
+  referralHint: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+    textAlign: 'right',
+    marginTop: spacing.xs,
   },
   purchaseButton: {
     flexDirection: 'row-reverse',

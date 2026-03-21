@@ -18,9 +18,10 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../context/AuthContext';
-import { profileService } from '../services/apiService';
+import { profileService, referralService } from '../services/apiService';
 import { borderRadius, colors, fontSizes, spacing } from '../theme';
 import { useCustomAlert } from '../hooks/useCustomAlert';
+import * as Clipboard from 'expo-clipboard';
 
 interface ProfileData {
   id: string;
@@ -61,8 +62,14 @@ const ProfileScreen = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Referral
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [referralStats, setReferralStats] = useState<any>(null);
+  const [loadingReferral, setLoadingReferral] = useState(false);
+
   useEffect(() => {
     loadProfile();
+    loadReferralCode();
   }, []);
 
   const loadProfile = async () => {
@@ -78,9 +85,30 @@ const ProfileScreen = () => {
     }
   };
 
+  const loadReferralCode = async () => {
+    setLoadingReferral(true);
+    try {
+      const result = await referralService.getDashboard();
+      if (result.success) {
+        setReferralCode(result.referralCode);
+        setReferralStats(result.stats);
+      }
+    } catch (error) {
+      console.error('Error loading referral code:', error);
+    } finally {
+      setLoadingReferral(false);
+    }
+  };
+
+  const copyReferralCode = async () => {
+    if (!referralCode) return;
+    await Clipboard.setStringAsync(referralCode);
+    showSuccess('تم النسخ', 'تم نسخ كود الدعوة الخاص بك');
+  };
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadProfile();
+    await Promise.all([loadProfile(), loadReferralCode()]);
     setRefreshing(false);
   }, []);
 
@@ -290,6 +318,39 @@ const ProfileScreen = () => {
             </View>
             <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
           </View>
+        </View>
+
+        {/* كود الدعوة */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>كود الدعوة الخاص بك</Text>
+
+          {loadingReferral ? (
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.md }} />
+          ) : referralCode ? (
+            <>
+              <TouchableOpacity style={styles.referralCodeBox} onPress={copyReferralCode} activeOpacity={0.7}>
+                <Text style={styles.referralCodeText}>{referralCode}</Text>
+                <Ionicons name="copy-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
+              <Text style={styles.referralHintText}>
+                شارك هذا الكود مع أصدقائك! سيحصلون على خصم 15% وستحصل أنت على 5 عملات مكافأة.
+              </Text>
+              {referralStats && (
+                <View style={styles.referralStatsRow}>
+                  <View style={styles.referralStatItem}>
+                    <Text style={styles.referralStatValue}>{referralStats.totalReferrals || 0}</Text>
+                    <Text style={styles.referralStatLabel}>الدعوات</Text>
+                  </View>
+                  <View style={styles.referralStatItem}>
+                    <Text style={[styles.referralStatValue, { color: colors.success }]}>${referralStats.totalEarnings || 0}</Text>
+                    <Text style={styles.referralStatLabel}>الأرباح</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          ) : (
+            <Text style={styles.referralHintText}>سيتم إنشاء كود الدعوة الخاص بك تلقائياً</Text>
+          )}
         </View>
 
         {/* أزرار الإجراءات */}
@@ -633,6 +694,53 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: fontSizes.md,
     fontWeight: '700',
+  },
+  referralCodeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  referralCodeText: {
+    color: colors.primary,
+    fontSize: fontSizes.xxl,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  referralHintText: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: spacing.sm,
+  },
+  referralStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  referralStatItem: {
+    alignItems: 'center',
+  },
+  referralStatValue: {
+    color: colors.text,
+    fontSize: fontSizes.xl,
+    fontWeight: '700',
+  },
+  referralStatLabel: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+    marginTop: 2,
   },
 });
 

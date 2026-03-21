@@ -35,6 +35,7 @@ export const ENDPOINTS = {
     price: '/api/analysis/price',
     candles: '/api/analysis/candles',
     chat: '/api/analysis/chat',
+    serverAnalyses: '/api/analysis/server-analyses',
   },
   // الاشتراكات
   subscription: {
@@ -51,6 +52,12 @@ export const ENDPOINTS = {
     markAsRead: '/api/notifications/:id/read',
     markAllAsRead: '/api/notifications/mark-all-read',
     delete: '/api/notifications/:id',
+  },
+  // الإحالة
+  referral: {
+    myCode: '/api/referral/my-code',
+    validate: '/api/referral/validate',
+    dashboard: '/api/referral/dashboard',
   },
   // MT5
   mt5: {

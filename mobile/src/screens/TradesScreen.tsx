@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAuth } from '../context/AuthContext';
 import { analysisService } from '../services/apiService';
@@ -29,15 +30,17 @@ type SignalItem = {
   score: number;
   suggestedTrade?: SuggestedTrade;
   created_at: string;
+  isServerAnalysis?: boolean;
 };
 
 const TradesScreen = () => {
   const { user } = useAuth();
-  const { showSuccess, AlertComponent } = useCustomAlert();
+  const { showSuccess, showError, AlertComponent } = useCustomAlert();
 
   const [signals, setSignals] = useState<SignalItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchingServer, setFetchingServer] = useState(false);
 
   useEffect(() => {
     loadSignals();
@@ -54,6 +57,37 @@ const TradesScreen = () => {
       console.error('Error fetching signals:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchServerAnalyses = async () => {
+    setFetchingServer(true);
+    try {
+      const data = await analysisService.getServerAnalyses(10);
+      if (data.success && Array.isArray(data.analyses) && data.analyses.length > 0) {
+        const serverItems: SignalItem[] = data.analyses.map((a: any) => ({
+          id: `server-${a.id}`,
+          symbol: a.symbol || 'XAUUSD',
+          score: a.score || 0,
+          suggestedTrade: a.suggestedTrade,
+          created_at: a.createdAt,
+          isServerAnalysis: true,
+        }));
+
+        setSignals(prev => {
+          const existingIds = new Set(prev.map(s => s.id));
+          const newItems = serverItems.filter(s => !existingIds.has(s.id));
+          return [...newItems, ...prev];
+        });
+
+        showSuccess('تم الاستلام', `تم جلب ${data.analyses.length} تحليلات من الخادم`);
+      } else {
+        showSuccess('لا توجد تحليلات', 'لا توجد تحليلات جديدة من الخادم حالياً');
+      }
+    } catch (error: any) {
+      showError('خطأ', 'فشل في جلب التحليلات من الخادم');
+    } finally {
+      setFetchingServer(false);
     }
   };
 
@@ -90,12 +124,48 @@ const TradesScreen = () => {
     });
   };
 
+  const renderServerButton = () => (
+    <TouchableOpacity
+      style={styles.serverButton}
+      onPress={fetchServerAnalyses}
+      disabled={fetchingServer}
+      activeOpacity={0.8}
+    >
+      <LinearGradient
+        colors={['#10b981', '#059669']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.serverButtonGradient}
+      >
+        {fetchingServer ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <Ionicons name="cloud-download-outline" size={22} color="#fff" />
+        )}
+        <Text style={styles.serverButtonText}>
+          {fetchingServer ? 'جارٍ الجلب...' : 'استلام التحليلات من الخادم'}
+        </Text>
+        {!fetchingServer && (
+          <View style={styles.serverButtonBadge}>
+            <Ionicons name="sparkles" size={12} color={colors.gold} />
+          </View>
+        )}
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
   const renderSignalCard = ({ item }: { item: SignalItem }) => {
     const trade = item.suggestedTrade;
     const isBuy = trade?.type?.includes('BUY');
 
     return (
-      <View style={styles.signalCard}>
+      <View style={[styles.signalCard, item.isServerAnalysis && styles.serverSignalCard]}>
+        {item.isServerAnalysis && (
+          <View style={styles.serverTag}>
+            <Ionicons name="cloud" size={10} color={colors.primary} />
+            <Text style={styles.serverTagText}>من الخادم</Text>
+          </View>
+        )}
         <View style={styles.signalHeader}>
           <View style={[styles.sideBadge, { backgroundColor: isBuy ? colors.buy + '22' : colors.sell + '22' }]}>
             <Text style={[styles.sideText, { color: isBuy ? colors.buy : colors.sell }]}>{trade?.type || 'N/A'}</Text>
@@ -160,6 +230,7 @@ const TradesScreen = () => {
           keyExtractor={(item) => item.id}
           renderItem={renderSignalCard}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={renderServerButton}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -167,7 +238,7 @@ const TradesScreen = () => {
             <View style={styles.emptyContainer}>
               <Ionicons name="document-text-outline" size={64} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>لا توجد إشارات</Text>
-              <Text style={styles.emptySubtitle}>ستظهر هنا إشارات التحليل عند توفرها</Text>
+              <Text style={styles.emptySubtitle}>اضغط على زر استلام التحليلات أعلاه لجلب الإشارات من الخادم</Text>
             </View>
           }
           showsVerticalScrollIndicator={false}
@@ -193,6 +264,37 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     paddingBottom: 130,
   },
+  serverButton: {
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  serverButtonGradient: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  serverButtonText: {
+    color: '#fff',
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+  },
+  serverButtonBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   signalCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
@@ -200,6 +302,26 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     padding: spacing.md,
     marginBottom: spacing.md,
+  },
+  serverSignalCard: {
+    borderColor: colors.primary + '40',
+    borderWidth: 1,
+  },
+  serverTag: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.xs,
+  },
+  serverTagText: {
+    color: colors.primary,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
   },
   signalHeader: {
     flexDirection: 'row-reverse',

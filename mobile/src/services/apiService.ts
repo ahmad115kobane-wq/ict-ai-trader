@@ -202,6 +202,11 @@ export const analysisService = {
       body: JSON.stringify({ message, analysis, currentPrice }),
     });
   },
+
+  // جلب التحليلات من الخادم
+  getServerAnalyses: async (limit: number = 10) => {
+    return await apiRequest(`${ENDPOINTS.analysis.serverAnalyses}?limit=${limit}`);
+  },
 };
 
 // ================== دوال الاشتراكات ==================
@@ -217,11 +222,11 @@ export const subscriptionService = {
     return await apiRequest(ENDPOINTS.subscription.status);
   },
 
-  // شراء اشتراك
-  purchase: async (packageId: string, paymentMethod?: string) => {
+  // شراء اشتراك (مع دعم كود الدعوة)
+  purchase: async (packageId: string, referralCode?: string) => {
     return await apiRequest(ENDPOINTS.subscription.purchase, {
       method: 'POST',
-      body: JSON.stringify({ packageId, paymentMethod }),
+      body: JSON.stringify({ packageId, referralCode: referralCode || undefined }),
     });
   },
 
@@ -299,12 +304,35 @@ export const mt5Service = {
   },
 };
 
+// ================== دوال الإحالة ==================
+
+export const referralService = {
+  // الحصول على كود الدعوة الخاص بي
+  getMyCode: async () => {
+    return await apiRequest(ENDPOINTS.referral.myCode);
+  },
+
+  // التحقق من كود الدعوة
+  validateCode: async (referralCode: string, packageId: string) => {
+    return await apiRequest(ENDPOINTS.referral.validate, {
+      method: 'POST',
+      body: JSON.stringify({ referralCode, packageId }),
+    });
+  },
+
+  // لوحة إحصائيات الإحالة
+  getDashboard: async () => {
+    return await apiRequest(ENDPOINTS.referral.dashboard);
+  },
+};
+
 export default {
   authService,
   analysisService,
   subscriptionService,
   profileService,
   mt5Service,
+  referralService,
   getToken,
   setToken,
   removeToken,
