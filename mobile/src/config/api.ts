@@ -53,6 +53,16 @@ export const ENDPOINTS = {
     markAllAsRead: '/api/notifications/mark-all-read',
     delete: '/api/notifications/:id',
   },
+  // المؤشرات المخصصة
+  indicators: {
+    list: '/api/indicators/list',
+    get: '/api/indicators',
+    activeList: '/api/indicators/active/list',
+    toggle: '/api/indicators',
+    delete: '/api/indicators',
+    aiCreate: '/api/indicators/ai/create',
+    chat: '/api/indicators',
+  },
   // الإحالة
   referral: {
     myCode: '/api/referral/my-code',

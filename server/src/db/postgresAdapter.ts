@@ -408,6 +408,46 @@ const createTables = async (client: PoolClient): Promise<void> => {
       )
     `);
 
+    // جدول المؤشرات المخصصة
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_indicators (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        name_ar TEXT,
+        description TEXT,
+        indicator_type TEXT DEFAULT 'overlay',
+        code TEXT NOT NULL,
+        config JSONB DEFAULT '{}',
+        is_active BOOLEAN DEFAULT false,
+        version INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // جدول محادثات إنشاء المؤشرات
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS indicator_chat_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        indicator_id TEXT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_indicators_user_id 
+      ON user_indicators(user_id)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_indicator_chat_user_id 
+      ON indicator_chat_history(user_id, indicator_id)
+    `);
+
     // الفهارس
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_backtest_results_created_at 

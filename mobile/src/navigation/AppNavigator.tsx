@@ -22,6 +22,7 @@ import EconomicCalendarScreen from '../screens/EconomicCalendarScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import MT5Screen from '../screens/MT5Screen';
+import IndicatorChatScreen from '../screens/IndicatorChatScreen';
 
 // أنواع المسارات
 export type AuthStackParamList = {
@@ -43,6 +44,7 @@ export type RootStackParamList = {
   Main: undefined;
   FullChart: undefined;
   Notifications: undefined;
+  IndicatorChat: { indicatorId?: string; indicatorName?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -244,6 +246,14 @@ const AppNavigator = () => {
               component={NotificationsScreen}
               options={{
                 animation: 'slide_from_right',
+              }}
+            />
+            <Stack.Screen
+              name="IndicatorChat"
+              component={IndicatorChatScreen}
+              options={{
+                animation: 'slide_from_bottom',
+                presentation: 'modal',
               }}
             />
           </>

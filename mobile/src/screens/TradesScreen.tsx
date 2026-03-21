@@ -28,6 +28,9 @@ type SignalItem = {
   id: string;
   symbol: string;
   score: number;
+  decision?: string;
+  price?: number;
+  confidence?: number;
   suggestedTrade?: SuggestedTrade;
   created_at: string;
   isServerAnalysis?: boolean;
@@ -43,16 +46,56 @@ const TradesScreen = () => {
   const [fetchingServer, setFetchingServer] = useState(false);
 
   useEffect(() => {
-    loadSignals();
+    loadAllData();
   }, []);
 
-  const loadSignals = async () => {
+  const parseServerAnalyses = (analyses: any[]): SignalItem[] => {
+    return analyses.map((a: any) => ({
+      id: `server-${a.id}`,
+      symbol: a.symbol || 'XAUUSD',
+      score: a.score || 0,
+      decision: a.decision,
+      price: a.price,
+      confidence: a.confidence,
+      suggestedTrade: a.suggestedTrade,
+      created_at: a.createdAt,
+      isServerAnalysis: true,
+    }));
+  };
+
+  const loadAllData = async () => {
     setIsLoading(true);
     try {
-      const data = await analysisService.getTradesHistory(50);
-      if (data.success && Array.isArray(data.trades)) {
-        setSignals(data.trades);
+      // جلب التحليلات التلقائية من الخادم (الأساسية) + سجل الصفقات
+      const [serverData, historyData] = await Promise.all([
+        analysisService.getServerAnalyses(20).catch(() => null),
+        analysisService.getTradesHistory(50).catch(() => null),
+      ]);
+
+      const allSignals: SignalItem[] = [];
+
+      // التحليلات التلقائية من الخادم (بيع/شراء)
+      if (serverData?.success && Array.isArray(serverData.analyses)) {
+        allSignals.push(...parseServerAnalyses(serverData.analyses));
       }
+
+      // سجل الصفقات المنفذة
+      if (historyData?.success && Array.isArray(historyData.trades)) {
+        const existingIds = new Set(allSignals.map(s => s.id));
+        const historyItems = historyData.trades
+          .filter((t: any) => !existingIds.has(t.id))
+          .map((t: any) => ({ ...t, isServerAnalysis: false }));
+        allSignals.push(...historyItems);
+      }
+
+      // ترتيب حسب التاريخ (الأحدث أولاً)
+      allSignals.sort((a, b) => {
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA;
+      });
+
+      setSignals(allSignals);
     } catch (error) {
       console.error('Error fetching signals:', error);
     } finally {
@@ -63,24 +106,23 @@ const TradesScreen = () => {
   const fetchServerAnalyses = async () => {
     setFetchingServer(true);
     try {
-      const data = await analysisService.getServerAnalyses(10);
+      const data = await analysisService.getServerAnalyses(20);
       if (data.success && Array.isArray(data.analyses) && data.analyses.length > 0) {
-        const serverItems: SignalItem[] = data.analyses.map((a: any) => ({
-          id: `server-${a.id}`,
-          symbol: a.symbol || 'XAUUSD',
-          score: a.score || 0,
-          suggestedTrade: a.suggestedTrade,
-          created_at: a.createdAt,
-          isServerAnalysis: true,
-        }));
+        const serverItems = parseServerAnalyses(data.analyses);
 
         setSignals(prev => {
-          const existingIds = new Set(prev.map(s => s.id));
-          const newItems = serverItems.filter(s => !existingIds.has(s.id));
-          return [...newItems, ...prev];
+          // حذف التحليلات القديمة من الخادم واستبدالها بالجديدة
+          const nonServer = prev.filter(s => !s.isServerAnalysis);
+          const merged = [...serverItems, ...nonServer];
+          merged.sort((a, b) => {
+            const dateA = new Date(a.created_at || 0).getTime();
+            const dateB = new Date(b.created_at || 0).getTime();
+            return dateB - dateA;
+          });
+          return merged;
         });
 
-        showSuccess('تم الاستلام', `تم جلب ${data.analyses.length} تحليلات من الخادم`);
+        showSuccess('تم التحديث', `تم جلب ${data.analyses.length} تحليلات من الخادم`);
       } else {
         showSuccess('لا توجد تحليلات', 'لا توجد تحليلات جديدة من الخادم حالياً');
       }
@@ -93,7 +135,7 @@ const TradesScreen = () => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadSignals();
+    await loadAllData();
     setRefreshing(false);
   }, []);
 
@@ -156,19 +198,30 @@ const TradesScreen = () => {
 
   const renderSignalCard = ({ item }: { item: SignalItem }) => {
     const trade = item.suggestedTrade;
-    const isBuy = trade?.type?.includes('BUY');
+    const decision = item.decision || trade?.type || '';
+    const isBuy = decision.toUpperCase().includes('BUY');
+    const isSell = decision.toUpperCase().includes('SELL');
+    const directionColor = isBuy ? colors.buy : isSell ? colors.sell : colors.textMuted;
+    const directionLabel = isBuy ? 'شراء BUY' : isSell ? 'بيع SELL' : decision || 'انتظار';
 
     return (
       <View style={[styles.signalCard, item.isServerAnalysis && styles.serverSignalCard]}>
         {item.isServerAnalysis && (
           <View style={styles.serverTag}>
             <Ionicons name="cloud" size={10} color={colors.primary} />
-            <Text style={styles.serverTagText}>من الخادم</Text>
+            <Text style={styles.serverTagText}>تحليل تلقائي</Text>
           </View>
         )}
+
+        {/* القرار + الرمز + النقاط */}
         <View style={styles.signalHeader}>
-          <View style={[styles.sideBadge, { backgroundColor: isBuy ? colors.buy + '22' : colors.sell + '22' }]}>
-            <Text style={[styles.sideText, { color: isBuy ? colors.buy : colors.sell }]}>{trade?.type || 'N/A'}</Text>
+          <View style={[styles.sideBadge, { backgroundColor: directionColor + '22' }]}>
+            <Ionicons
+              name={isBuy ? 'trending-up' : isSell ? 'trending-down' : 'remove'}
+              size={14}
+              color={directionColor}
+            />
+            <Text style={[styles.sideText, { color: directionColor }]}>{directionLabel}</Text>
           </View>
           <Text style={styles.symbolText}>{item.symbol}</Text>
           <View style={styles.scoreContainer}>
@@ -177,6 +230,27 @@ const TradesScreen = () => {
           </View>
         </View>
 
+        {/* السعر والثقة */}
+        {(item.price || item.confidence) && (
+          <View style={styles.priceConfidenceRow}>
+            {item.price ? (
+              <View style={styles.priceBox}>
+                <Text style={styles.priceLabel}>السعر</Text>
+                <Text style={styles.priceValue}>{item.price}</Text>
+              </View>
+            ) : null}
+            {item.confidence ? (
+              <View style={styles.priceBox}>
+                <Text style={styles.priceLabel}>الثقة</Text>
+                <Text style={[styles.priceValue, { color: item.confidence >= 70 ? colors.success : colors.warning }]}>
+                  {item.confidence}%
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {/* تفاصيل الصفقة */}
         {trade && (
           <View style={styles.tradeDetails}>
             <View style={styles.tradeRow}>
@@ -191,24 +265,30 @@ const TradesScreen = () => {
               <Text style={[styles.tradeValue, { color: colors.profit }]}>{trade.tp1}</Text>
               <Text style={styles.tradeLabel}>TP1</Text>
             </View>
-            <View style={styles.tradeRow}>
-              <Text style={[styles.tradeValue, { color: colors.profit }]}>{trade.tp2}</Text>
-              <Text style={styles.tradeLabel}>TP2</Text>
-            </View>
-            <View style={styles.tradeRow}>
-              <Text style={[styles.tradeValue, { color: colors.profit }]}>{trade.tp3}</Text>
-              <Text style={styles.tradeLabel}>TP3</Text>
-            </View>
+            {trade.tp2 && (
+              <View style={styles.tradeRow}>
+                <Text style={[styles.tradeValue, { color: colors.profit }]}>{trade.tp2}</Text>
+                <Text style={styles.tradeLabel}>TP2</Text>
+              </View>
+            )}
+            {trade.tp3 && (
+              <View style={styles.tradeRow}>
+                <Text style={[styles.tradeValue, { color: colors.profit }]}>{trade.tp3}</Text>
+                <Text style={styles.tradeLabel}>TP3</Text>
+              </View>
+            )}
           </View>
         )}
 
-        <TouchableOpacity
-          style={styles.copyButton}
-          onPress={() => copySignal(trade)}
-        >
-          <Ionicons name="copy-outline" size={16} color={colors.text} />
-          <Text style={styles.copyButtonText}>نسخ الإشارة</Text>
-        </TouchableOpacity>
+        {trade && (
+          <TouchableOpacity
+            style={styles.copyButton}
+            onPress={() => copySignal(trade)}
+          >
+            <Ionicons name="copy-outline" size={16} color={colors.text} />
+            <Text style={styles.copyButtonText}>نسخ الإشارة</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
       </View>
@@ -330,6 +410,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sideBadge: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
@@ -337,6 +420,27 @@ const styles = StyleSheet.create({
   sideText: {
     fontWeight: '700',
     fontSize: fontSizes.sm,
+  },
+  priceConfidenceRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-around',
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  priceBox: {
+    alignItems: 'center',
+  },
+  priceLabel: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+    marginBottom: 2,
+  },
+  priceValue: {
+    color: colors.text,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
   },
   symbolText: {
     color: colors.text,

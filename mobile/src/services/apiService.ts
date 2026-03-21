@@ -326,6 +326,52 @@ export const referralService = {
   },
 };
 
+// ================== دوال المؤشرات المخصصة ==================
+
+export const indicatorService = {
+  // جلب جميع المؤشرات
+  getList: async () => {
+    return await apiRequest(ENDPOINTS.indicators.list);
+  },
+
+  // جلب مؤشر واحد مع الكود
+  getById: async (id: string) => {
+    return await apiRequest(`${ENDPOINTS.indicators.get}/${id}`);
+  },
+
+  // جلب المؤشرات النشطة (مع الكود)
+  getActiveList: async () => {
+    return await apiRequest(ENDPOINTS.indicators.activeList);
+  },
+
+  // تفعيل/إلغاء تفعيل مؤشر
+  toggle: async (id: string) => {
+    return await apiRequest(`${ENDPOINTS.indicators.toggle}/${id}/toggle`, {
+      method: 'POST',
+    });
+  },
+
+  // حذف مؤشر
+  deleteIndicator: async (id: string) => {
+    return await apiRequest(`${ENDPOINTS.indicators.delete}/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // إنشاء/تعديل مؤشر بالذكاء الاصطناعي
+  aiCreate: async (message: string, indicatorId?: string) => {
+    return await apiRequest(ENDPOINTS.indicators.aiCreate, {
+      method: 'POST',
+      body: JSON.stringify({ message, indicatorId }),
+    });
+  },
+
+  // جلب سجل محادثة مؤشر
+  getChatHistory: async (id: string) => {
+    return await apiRequest(`${ENDPOINTS.indicators.chat}/${id}/chat`);
+  },
+};
+
 export default {
   authService,
   analysisService,
@@ -333,6 +379,7 @@ export default {
   profileService,
   mt5Service,
   referralService,
+  indicatorService,
   getToken,
   setToken,
   removeToken,

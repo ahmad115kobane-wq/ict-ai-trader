@@ -11,6 +11,9 @@ import {
   Switch,
   RefreshControl,
   Dimensions,
+  Modal,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -21,7 +24,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 import { useAuth } from '../context/AuthContext';
-import { analysisService, subscriptionService, notificationService } from '../services/apiService';
+import { analysisService, subscriptionService, notificationService, indicatorService } from '../services/apiService';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import { Analysis } from '../types';
 import { API_BASE_URL } from '../config/api';
@@ -46,8 +49,16 @@ const HomeScreen = () => {
   const [chartLow, setChartLow] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
+  // Indicators
+  const [showIndicatorPanel, setShowIndicatorPanel] = useState(false);
+  const [userIndicators, setUserIndicators] = useState<any[]>([]);
+  const [activeIndicators, setActiveIndicators] = useState<any[]>([]);
+  const [loadingIndicators, setLoadingIndicators] = useState(false);
+  const [togglingIndicator, setTogglingIndicator] = useState<string | null>(null);
+
   useEffect(() => {
     fetchData();
+    loadActiveIndicators();
     // تحديث السعر كل 3 ثواني
     const priceInterval = setInterval(fetchCurrentPrice, 3000);
     // تحديث البيانات الكاملة كل 30 ثانية
@@ -162,6 +173,94 @@ const HomeScreen = () => {
     chartWebViewRef.current?.injectJavaScript(
       'window.__SCROLL_TO_REALTIME__ && window.__SCROLL_TO_REALTIME__(); true;'
     );
+  };
+
+  // ===================== Indicators =====================
+  const loadActiveIndicators = async () => {
+    try {
+      const result = await indicatorService.getActiveList();
+      if (result.success) {
+        setActiveIndicators(result.indicators || []);
+      }
+    } catch (error) {
+      console.error('Error loading active indicators:', error);
+    }
+  };
+
+  const loadAllIndicators = async () => {
+    setLoadingIndicators(true);
+    try {
+      const result = await indicatorService.getList();
+      if (result.success) {
+        setUserIndicators(result.indicators || []);
+      }
+    } catch (error) {
+      console.error('Error loading indicators:', error);
+    } finally {
+      setLoadingIndicators(false);
+    }
+  };
+
+  const handleToggleIndicator = async (id: string) => {
+    setTogglingIndicator(id);
+    try {
+      const result = await indicatorService.toggle(id);
+      if (result.success) {
+        setUserIndicators(prev =>
+          prev.map(ind => ind.id === id ? { ...ind, is_active: result.isActive } : ind)
+        );
+        await loadActiveIndicators();
+        injectIndicatorsToChart();
+      }
+    } catch (error) {
+      console.error('Error toggling indicator:', error);
+    } finally {
+      setTogglingIndicator(null);
+    }
+  };
+
+  const handleDeleteIndicator = async (id: string) => {
+    try {
+      const result = await indicatorService.deleteIndicator(id);
+      if (result.success) {
+        setUserIndicators(prev => prev.filter(ind => ind.id !== id));
+        await loadActiveIndicators();
+        injectIndicatorsToChart();
+      }
+    } catch (error) {
+      console.error('Error deleting indicator:', error);
+    }
+  };
+
+  const injectIndicatorsToChart = useCallback(() => {
+    if (!chartWebViewRef.current || activeIndicators.length === 0) {
+      chartWebViewRef.current?.injectJavaScript('window.__CLEAR_INDICATORS__ && window.__CLEAR_INDICATORS__(); true;');
+      return;
+    }
+
+    const indicatorCodes = activeIndicators.map(ind => ({
+      id: ind.id,
+      name: ind.name_ar || ind.name,
+      code: ind.code,
+      type: ind.indicator_type,
+    }));
+
+    const js = `
+      window.__APPLY_INDICATORS__ && window.__APPLY_INDICATORS__(${JSON.stringify(indicatorCodes)});
+      true;
+    `;
+    chartWebViewRef.current?.injectJavaScript(js);
+  }, [activeIndicators]);
+
+  useEffect(() => {
+    if (activeIndicators.length >= 0) {
+      setTimeout(() => injectIndicatorsToChart(), 2000);
+    }
+  }, [activeIndicators, selectedTimeframe]);
+
+  const openIndicatorPanel = () => {
+    loadAllIndicators();
+    setShowIndicatorPanel(true);
   };
 
   // HTML للشارت المباشر - تصميم احترافي مثل التطبيقات العالمية
@@ -667,6 +766,125 @@ const HomeScreen = () => {
             }
           });
 
+          // ===================== Indicator Engine =====================
+          let indicatorSeries = {};
+          
+          window.__CLEAR_INDICATORS__ = () => {
+            try {
+              Object.keys(indicatorSeries).forEach(id => {
+                const series = indicatorSeries[id];
+                if (Array.isArray(series)) {
+                  series.forEach(s => { try { chart.removeSeries(s); } catch(e) {} });
+                }
+                delete indicatorSeries[id];
+              });
+            } catch(e) { console.error('Clear indicators error:', e); }
+          };
+
+          window.__APPLY_INDICATORS__ = (indicators) => {
+            try {
+              // حذف المؤشرات القديمة أولاً
+              window.__CLEAR_INDICATORS__();
+
+              if (!indicators || !Array.isArray(indicators)) return;
+              
+              // الحصول على بيانات الشموع الحالية
+              const currentData = candlestickSeries.data ? candlestickSeries.data() : [];
+              if (!currentData || currentData.length === 0) return;
+
+              const candles = currentData.map(c => ({
+                time: c.time,
+                open: c.open || c.value || 0,
+                high: c.high || c.open || c.value || 0,
+                low: c.low || c.open || c.value || 0,
+                close: c.close || c.value || 0,
+              }));
+
+              indicators.forEach(ind => {
+                try {
+                  // تنفيذ كود المؤشر
+                  const fn = new Function('candles', ind.code.replace(/^function\\s+calculate\\s*\\(candles\\)\\s*\\{/, '').replace(/\\}$/, ''));
+                  let result;
+                  
+                  // محاولة تنفيذ الكود كدالة calculate
+                  try {
+                    const calcFn = new Function('candles', 'const calculate = ' + ind.code + '; return calculate(candles);');
+                    result = calcFn(candles);
+                  } catch(e1) {
+                    // محاولة ثانية - كود مباشر
+                    try {
+                      const directFn = new Function('candles', ind.code + '\\nreturn calculate(candles);');
+                      result = directFn(candles);
+                    } catch(e2) {
+                      console.error('Indicator code error for ' + ind.name + ':', e2);
+                      return;
+                    }
+                  }
+
+                  if (!result || !result.series) return;
+
+                  const createdSeries = [];
+
+                  result.series.forEach((s, idx) => {
+                    let chartSeries;
+
+                    if (s.type === 'line') {
+                      chartSeries = chart.addLineSeries({
+                        color: s.options?.color || '#2962FF',
+                        lineWidth: s.options?.lineWidth || 2,
+                        title: s.options?.title || ind.name,
+                        priceScaleId: result.separate ? 'indicator_' + ind.id : 'right',
+                        lastValueVisible: false,
+                        priceLineVisible: false,
+                      });
+                    } else if (s.type === 'histogram') {
+                      chartSeries = chart.addHistogramSeries({
+                        color: s.options?.color || '#26a69a',
+                        title: s.options?.title || ind.name,
+                        priceScaleId: result.separate ? 'indicator_' + ind.id : 'right',
+                        lastValueVisible: false,
+                        priceLineVisible: false,
+                      });
+                    } else if (s.type === 'area') {
+                      chartSeries = chart.addAreaSeries({
+                        topColor: s.options?.topColor || 'rgba(41, 98, 255, 0.3)',
+                        bottomColor: s.options?.bottomColor || 'rgba(41, 98, 255, 0.0)',
+                        lineColor: s.options?.color || '#2962FF',
+                        lineWidth: s.options?.lineWidth || 1,
+                        title: s.options?.title || ind.name,
+                        priceScaleId: result.separate ? 'indicator_' + ind.id : 'right',
+                        lastValueVisible: false,
+                        priceLineVisible: false,
+                      });
+                    }
+
+                    if (chartSeries && s.data && s.data.length > 0) {
+                      chartSeries.setData(s.data);
+                      createdSeries.push(chartSeries);
+                    }
+
+                    // markers
+                    if (s.type === 'markers' && s.data && s.data.length > 0) {
+                      candlestickSeries.setMarkers(s.data.map(m => ({
+                        time: m.time,
+                        position: m.position || 'aboveBar',
+                        color: m.color || '#f68410',
+                        shape: m.shape || 'circle',
+                        text: m.text || '',
+                      })));
+                    }
+                  });
+
+                  indicatorSeries[ind.id] = createdSeries;
+                } catch(e) {
+                  console.error('Indicator apply error for ' + ind.name + ':', e);
+                }
+              });
+            } catch(e) {
+              console.error('Apply indicators error:', e);
+            }
+          };
+
           window.addEventListener('resize', () => {
             chart.resize(chartContainer.clientWidth || window.innerWidth, chartContainer.clientHeight || window.innerHeight);
           });
@@ -755,6 +973,19 @@ const HomeScreen = () => {
             </Text>
           </TouchableOpacity>
 
+          {/* Indicator Button */}
+          <TouchableOpacity style={styles.indicatorButton} onPress={openIndicatorPanel}>
+            <Ionicons name="pulse" size={16} color={activeIndicators.length > 0 ? colors.primary : colors.textMuted} />
+            <Text style={[styles.indicatorButtonText, activeIndicators.length > 0 && { color: colors.primary }]}>
+              المؤشرات
+            </Text>
+            {activeIndicators.length > 0 && (
+              <View style={styles.indicatorCountBadge}>
+                <Text style={styles.indicatorCountText}>{activeIndicators.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
           <View style={styles.aiStatus}>
             <View style={styles.aiDot} />
             <Text style={styles.aiText}>ICT AI</Text>
@@ -806,6 +1037,109 @@ const HomeScreen = () => {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Indicator Panel Modal */}
+      <Modal
+        visible={showIndicatorPanel}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowIndicatorPanel(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.indicatorPanel}>
+            {/* Panel Header */}
+            <View style={styles.indicatorPanelHeader}>
+              <TouchableOpacity onPress={() => setShowIndicatorPanel(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.indicatorPanelTitle}>المؤشرات</Text>
+              <TouchableOpacity
+                style={styles.createIndicatorBtn}
+                onPress={() => {
+                  setShowIndicatorPanel(false);
+                  navigation.navigate('IndicatorChat');
+                }}
+              >
+                <Ionicons name="add-circle" size={18} color={colors.primary} />
+                <Text style={styles.createIndicatorBtnText}>إنشاء بالـ AI</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Indicator List */}
+            {loadingIndicators ? (
+              <View style={styles.indicatorLoading}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
+            ) : userIndicators.length === 0 ? (
+              <View style={styles.indicatorEmpty}>
+                <Ionicons name="pulse-outline" size={48} color={colors.textMuted} />
+                <Text style={styles.indicatorEmptyTitle}>لا توجد مؤشرات</Text>
+                <Text style={styles.indicatorEmptySubtitle}>أنشئ مؤشراً مخصصاً بالذكاء الاصطناعي</Text>
+                <TouchableOpacity
+                  style={styles.indicatorEmptyButton}
+                  onPress={() => {
+                    setShowIndicatorPanel(false);
+                    navigation.navigate('IndicatorChat');
+                  }}
+                >
+                  <Ionicons name="sparkles" size={18} color="#fff" />
+                  <Text style={styles.indicatorEmptyButtonText}>إنشاء مؤشر بالـ AI</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <FlatList
+                data={userIndicators}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <View style={[styles.indicatorItem, item.is_active && styles.indicatorItemActive]}>
+                    <View style={styles.indicatorItemHeader}>
+                      <Switch
+                        value={item.is_active}
+                        onValueChange={() => handleToggleIndicator(item.id)}
+                        trackColor={{ false: colors.border, true: colors.primary }}
+                        thumbColor={colors.text}
+                        disabled={togglingIndicator === item.id}
+                      />
+                      <View style={styles.indicatorItemInfo}>
+                        <Text style={styles.indicatorItemName}>{item.name_ar || item.name}</Text>
+                        {item.description ? (
+                          <Text style={styles.indicatorItemDesc} numberOfLines={1}>{item.description}</Text>
+                        ) : null}
+                      </View>
+                      <View style={[styles.indicatorTypeBadge, { backgroundColor: item.indicator_type === 'overlay' ? colors.primary + '20' : colors.warning + '20' }]}>
+                        <Text style={[styles.indicatorTypeText, { color: item.indicator_type === 'overlay' ? colors.primary : colors.warning }]}>
+                          {item.indicator_type === 'overlay' ? 'على الشارت' : 'منفصل'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.indicatorItemActions}>
+                      <TouchableOpacity
+                        style={styles.indicatorActionBtn}
+                        onPress={() => {
+                          setShowIndicatorPanel(false);
+                          navigation.navigate('IndicatorChat', { indicatorId: item.id, indicatorName: item.name_ar || item.name });
+                        }}
+                      >
+                        <Ionicons name="create-outline" size={16} color={colors.primary} />
+                        <Text style={styles.indicatorActionText}>تعديل</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.indicatorActionBtn, { borderColor: colors.error + '30' }]}
+                        onPress={() => handleDeleteIndicator(item.id)}
+                      >
+                        <Ionicons name="trash-outline" size={16} color={colors.error} />
+                        <Text style={[styles.indicatorActionText, { color: colors.error }]}>حذف</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+                contentContainerStyle={{ padding: spacing.md }}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <AlertComponent />
     </SafeAreaView>
@@ -1057,6 +1391,182 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 90,
+  },
+  // ===================== Indicator Styles =====================
+  indicatorButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(55, 65, 81, 0.3)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  indicatorButtonText: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+  },
+  indicatorCountBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  indicatorCountText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  indicatorPanel: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '75%',
+    minHeight: 300,
+  },
+  indicatorPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  indicatorPanelTitle: {
+    color: colors.text,
+    fontSize: fontSizes.xl,
+    fontWeight: '700',
+  },
+  createIndicatorBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  createIndicatorBtnText: {
+    color: colors.primary,
+    fontSize: fontSizes.sm,
+    fontWeight: '600',
+  },
+  indicatorLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  indicatorEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+  },
+  indicatorEmptyTitle: {
+    color: colors.text,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+    marginTop: spacing.md,
+  },
+  indicatorEmptySubtitle: {
+    color: colors.textMuted,
+    fontSize: fontSizes.sm,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  indicatorEmptyButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.lg,
+  },
+  indicatorEmptyButtonText: {
+    color: '#fff',
+    fontSize: fontSizes.md,
+    fontWeight: '700',
+  },
+  indicatorItem: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  indicatorItemActive: {
+    borderColor: colors.primary + '50',
+  },
+  indicatorItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  indicatorItemInfo: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  indicatorItemName: {
+    color: colors.text,
+    fontSize: fontSizes.md,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  indicatorItemDesc: {
+    color: colors.textMuted,
+    fontSize: fontSizes.xs,
+    textAlign: 'right',
+    marginTop: 2,
+  },
+  indicatorTypeBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  indicatorTypeText: {
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+  },
+  indicatorItemActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  indicatorActionBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  indicatorActionText: {
+    color: colors.primary,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
   },
 });
 
