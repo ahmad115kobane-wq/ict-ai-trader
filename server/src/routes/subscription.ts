@@ -95,10 +95,10 @@ router.get('/packages/:packageId', async (req, res) => {
 
 // ===================== Protected Routes (تحتاج تسجيل دخول) =====================
 
-// شراء اشتراك جديد (بالعملات) - مع منع الشراء المتكرر والسماح بالترقية
+// شراء اشتراك جديد (بالعملات) - مع دعم كود الدعوة للخصم
 router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { packageId } = req.body;
+    const { packageId, referralCode } = req.body;
     const userId = req.userId!;
     const user = req.user;
 
@@ -129,7 +129,6 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
 
       console.log(`📊 Current subscription: ${currentDuration} days, New package: ${newDuration} days`);
 
-      // السماح بالترقية فقط من شهري إلى سنوي
       const isUpgrade = currentDuration === 30 && newDuration === 365;
 
       if (!isUpgrade) {
@@ -148,10 +147,38 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
     }
 
     // حساب سعر الباقة بالعملات (1 دولار = 1 عملة)
-    const coinPrice = Math.round(packageDetails.price * 1);
+    let coinPrice = Math.round(packageDetails.price * 1);
+    let discountAmount = 0;
+    let referralData: any = null;
+
+    // معالجة كود الدعوة إذا تم تقديمه
+    if (referralCode && referralCode.trim()) {
+      const { validateAndCalculateDiscount } = await import('../services/referralService');
+      const discountResult = await validateAndCalculateDiscount(
+        referralCode.toUpperCase().trim(),
+        userId,
+        packageId
+      );
+
+      if (discountResult.valid) {
+        discountAmount = discountResult.discountAmount || 0;
+        coinPrice = Math.round(discountResult.finalPrice || coinPrice);
+        referralData = {
+          code: referralCode.toUpperCase().trim(),
+          referrerId: discountResult.referrerId,
+          discountPercent: discountResult.discountPercent,
+          discountAmount,
+          originalPrice: discountResult.originalPrice,
+          finalPrice: discountResult.finalPrice,
+        };
+        console.log(`🎫 Referral code applied: ${referralCode}, discount: ${discountAmount} coins`);
+      } else {
+        console.log(`⚠️ Referral code invalid: ${discountResult.message}`);
+      }
+    }
 
     console.log(`💰 User ${userId} attempting to purchase package ${packageId}`);
-    console.log(`💵 Package price: $${packageDetails.price} = ${coinPrice} coins`);
+    console.log(`💵 Package price: ${coinPrice} coins (discount: ${discountAmount})`);
     console.log(`🪙 User current balance: ${user?.coins || 0} coins`);
 
     // التحقق من رصيد المستخدم
@@ -167,7 +194,7 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
 
     // خصم العملات من المستخدم
     const newBalance = (user.coins || 0) - coinPrice;
-    const deductSuccess = addCoinsToUser(userId, -coinPrice, `شراء باقة ${packageDetails.nameAr}`);
+    const deductSuccess = addCoinsToUser(userId, -coinPrice, `شراء باقة ${packageDetails.nameAr}${discountAmount > 0 ? ` (خصم ${discountAmount})` : ''}`);
 
     if (!deductSuccess) {
       return res.status(500).json({
@@ -187,12 +214,31 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
     });
 
     if (!result.success) {
-      // إرجاع العملات في حالة الفشل
       addCoinsToUser(userId, coinPrice, `إرجاع عملات - فشل شراء باقة ${packageDetails.nameAr}`);
       return res.status(400).json({
         success: false,
         error: result.message
       });
+    }
+
+    // معالجة مكافأة الإحالة بعد نجاح الشراء
+    if (referralData) {
+      try {
+        const { processReferralOnPurchase } = await import('../services/referralService');
+        await processReferralOnPurchase(
+          referralData.code,
+          referralData.referrerId,
+          userId,
+          packageId,
+          packageDetails.nameAr,
+          referralData.originalPrice,
+          referralData.discountAmount,
+          referralData.finalPrice
+        );
+        console.log(`✅ Referral reward processed for code: ${referralData.code}`);
+      } catch (refError) {
+        console.error('Failed to process referral reward:', refError);
+      }
     }
 
     // الحصول على حالة الاشتراك الجديدة
@@ -205,12 +251,15 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
       await notifySubscriptionPurchased(userId, packageDetails.nameAr, expiryDate);
     } catch (notifError) {
       console.error('Failed to send subscription purchase notification:', notifError);
-      // لا نوقف العملية إذا فشل الإشعار
     }
+
+    const responseMessage = discountAmount > 0
+      ? `تم شراء باقة ${packageDetails.nameAr} بنجاح! حصلت على خصم ${discountAmount} عملة بكود الدعوة. تم خصم ${coinPrice} عملة من رصيدك.`
+      : `تم شراء باقة ${packageDetails.nameAr} بنجاح! تم خصم ${coinPrice} عملة من رصيدك.`;
 
     res.json({
       success: true,
-      message: `تم شراء باقة ${packageDetails.nameAr} بنجاح! تم خصم ${coinPrice} عملة من رصيدك.`,
+      message: responseMessage,
       subscription: {
         id: result.subscriptionId,
         packageName: packageDetails.nameAr,
@@ -223,7 +272,13 @@ router.post('/purchase', authMiddleware, async (req: AuthRequest, res: Response)
         method: 'coins',
         amount: coinPrice,
         previousBalance: user.coins,
-        newBalance: newBalance
+        newBalance: newBalance,
+        discount: discountAmount > 0 ? {
+          referralCode: referralData?.code,
+          discountPercent: referralData?.discountPercent,
+          discountAmount: discountAmount,
+          originalPrice: referralData?.originalPrice,
+        } : null
       },
       subscriptionStatus: newSubscriptionStatus
     });

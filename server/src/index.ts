@@ -36,6 +36,7 @@ import backtestingRoutes from './routes/backtesting';
 import adminRoutes from './routes/admin';
 import profileRoutes from './routes/profile';
 import mt5Routes from './routes/mt5';
+import referralRoutes from './routes/referral';
 import { mt5Manager } from './services/mt5Manager';
 
 import {
@@ -86,6 +87,7 @@ app.use('/api/backtesting', backtestingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/mt5', mt5Routes);
+app.use('/api/referral', referralRoutes);
 
 // صفحات HTML
 app.get('/setup-telegram', (req, res) => {

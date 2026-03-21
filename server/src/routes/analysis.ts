@@ -403,6 +403,72 @@ router.get('/latest-auto', authMiddleware, async (req: AuthRequest, res: Respons
   }
 });
 
+// جلب آخر التحليلات التلقائية من الخادم (لزر استلام التحليلات في صفحة السجلات)
+router.get('/server-analyses', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
+    
+    let analyses: any[] = [];
+    
+    if (isProduction) {
+      const { query } = await import('../db/postgresAdapter');
+      const result = await query(
+        `SELECT * FROM auto_analysis ORDER BY created_at DESC LIMIT $1`,
+        [limit]
+      );
+      analyses = result.rows || [];
+    } else {
+      // في التطوير، جلب آخر تحليل فقط
+      const { getLatestAutoAnalysis } = await import('../db/index');
+      const latest = await getLatestAutoAnalysis('XAUUSD');
+      if (latest) analyses = [latest];
+    }
+    
+    if (analyses.length === 0) {
+      return res.json({
+        success: true,
+        analyses: [],
+        message: 'لا توجد تحليلات حالياً'
+      });
+    }
+
+    // تنسيق البيانات
+    const formatted = analyses.map((a: any) => {
+      let suggestedTrade = null;
+      try {
+        suggestedTrade = a.suggested_trade 
+          ? (typeof a.suggested_trade === 'string' ? JSON.parse(a.suggested_trade) : a.suggested_trade) 
+          : null;
+      } catch {}
+      
+      return {
+        id: a.id,
+        symbol: a.symbol || 'XAUUSD',
+        decision: a.decision,
+        score: a.score,
+        confidence: a.confidence,
+        price: a.current_price || a.price,
+        suggestedTrade,
+        createdAt: a.created_at,
+      };
+    });
+
+    res.json({
+      success: true,
+      analyses: formatted,
+      count: formatted.length,
+      message: `تم جلب ${formatted.length} تحليلات من الخادم`
+    });
+  } catch (error) {
+    console.error('Server analyses error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'فشل في جلب التحليلات من الخادم'
+    });
+  }
+});
+
 // تفعيل/إلغاء تفعيل التحليل التلقائي للمستخدم
 router.post('/toggle-auto', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

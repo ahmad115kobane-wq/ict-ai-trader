@@ -977,3 +977,172 @@ export const getPositionById = async (positionId: string): Promise<any> => {
     client.release();
   }
 };
+
+// ===================== Referral System Operations =====================
+
+// تعيين كود دعوة للمستخدم
+export const setUserReferralCode = async (userId: string, code: string): Promise<boolean> => {
+  try {
+    await query(
+      'UPDATE users SET referral_code = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [code, userId]
+    );
+    return true;
+  } catch (error) {
+    console.error('Error setting referral code:', error);
+    return false;
+  }
+};
+
+// الحصول على كود دعوة المستخدم
+export const getUserReferralCode = async (userId: string): Promise<string | null> => {
+  try {
+    const result = await query('SELECT referral_code FROM users WHERE id = $1', [userId]);
+    return result.rows[0]?.referral_code || null;
+  } catch (error) {
+    console.error('Error getting referral code:', error);
+    return null;
+  }
+};
+
+// البحث عن مستخدم بكود الدعوة
+export const getUserByReferralCode = async (code: string): Promise<any> => {
+  try {
+    const result = await query('SELECT * FROM users WHERE referral_code = $1', [code]);
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error finding user by referral code:', error);
+    return null;
+  }
+};
+
+// تسجيل استخدام كود دعوة
+export const createReferralUsage = async (
+  id: string,
+  referralCode: string,
+  referrerId: string,
+  referredId: string,
+  packageId: string,
+  packageName: string,
+  originalPrice: number,
+  discountPercent: number,
+  discountAmount: number,
+  finalPrice: number,
+  rewardAmount: number
+): Promise<void> => {
+  await query(
+    `INSERT INTO referral_usage (id, referral_code, referrer_id, referred_id, package_id, package_name, original_price, discount_percent, discount_amount, final_price, reward_amount, reward_paid)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE)`,
+    [id, referralCode, referrerId, referredId, packageId, packageName, originalPrice, discountPercent, discountAmount, finalPrice, rewardAmount]
+  );
+};
+
+// إضافة مكافأة الإحالة لصاحب الكود
+export const addReferralReward = async (userId: string, amount: number): Promise<boolean> => {
+  try {
+    await query(
+      `UPDATE users SET 
+        coins = coins + $1, 
+        referral_balance = COALESCE(referral_balance, 0) + $1, 
+        total_referral_earnings = COALESCE(total_referral_earnings, 0) + $1,
+        updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $2`,
+      [amount, userId]
+    );
+    return true;
+  } catch (error) {
+    console.error('Error adding referral reward:', error);
+    return false;
+  }
+};
+
+// الحصول على إحصائيات الإحالة للمستخدم
+export const getUserReferralStats = async (userId: string): Promise<any> => {
+  try {
+    const userResult = await query(
+      'SELECT referral_code, referral_balance, total_referral_earnings FROM users WHERE id = $1',
+      [userId]
+    );
+    const user = userResult.rows[0];
+
+    const usageResult = await query(
+      `SELECT COUNT(*) as total_referrals, SUM(reward_amount) as total_earned
+       FROM referral_usage WHERE referrer_id = $1`,
+      [userId]
+    );
+    const stats = usageResult.rows[0];
+
+    const recentResult = await query(
+      `SELECT ru.*, u.email as referred_email
+       FROM referral_usage ru
+       LEFT JOIN users u ON ru.referred_id = u.id
+       WHERE ru.referrer_id = $1
+       ORDER BY ru.created_at DESC LIMIT 10`,
+      [userId]
+    );
+
+    return {
+      referralCode: user?.referral_code,
+      referralBalance: user?.referral_balance || 0,
+      totalEarnings: user?.total_referral_earnings || 0,
+      totalReferrals: parseInt(stats?.total_referrals || '0'),
+      recentReferrals: recentResult.rows
+    };
+  } catch (error) {
+    console.error('Error getting referral stats:', error);
+    return null;
+  }
+};
+
+// التحقق من أن المستخدم لم يستخدم كود دعوة من قبل لنفس الباقة
+export const hasUsedReferralForPackage = async (userId: string, packageId: string): Promise<boolean> => {
+  try {
+    const result = await query(
+      'SELECT COUNT(*) as count FROM referral_usage WHERE referred_id = $1 AND package_id = $2',
+      [userId, packageId]
+    );
+    return parseInt(result.rows[0]?.count || '0') > 0;
+  } catch (error) {
+    console.error('Error checking referral usage:', error);
+    return false;
+  }
+};
+
+// الحصول على سجل إحالات المستخدم
+export const getUserReferralHistory = async (userId: string, limit: number = 20): Promise<any[]> => {
+  try {
+    const result = await query(
+      `SELECT ru.*, u.email as referred_email
+       FROM referral_usage ru
+       LEFT JOIN users u ON ru.referred_id = u.id
+       WHERE ru.referrer_id = $1
+       ORDER BY ru.created_at DESC LIMIT $2`,
+      [userId, limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting referral history:', error);
+    return [];
+  }
+};
+
+// التحقق من صلاحية كود الدعوة
+export const validateReferralCode = async (code: string, userId: string): Promise<{ valid: boolean; message: string; referrer?: any }> => {
+  try {
+    // البحث عن صاحب الكود
+    const referrer = await getUserByReferralCode(code);
+    if (!referrer) {
+      return { valid: false, message: 'كود الدعوة غير صالح' };
+    }
+
+    // لا يمكن استخدام كودك الخاص
+    if (referrer.id === userId) {
+      return { valid: false, message: 'لا يمكنك استخدام كود الدعوة الخاص بك' };
+    }
+
+    return { valid: true, message: 'كود الدعوة صالح', referrer };
+  } catch (error) {
+    console.error('Error validating referral code:', error);
+    return { valid: false, message: 'خطأ في التحقق من كود الدعوة' };
+  }
+};

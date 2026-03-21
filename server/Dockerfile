@@ -68,19 +68,34 @@ RUN dpkg --add-architecture i386 && \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# 3) Copy MT5 base files + Wine prefix from stage 1
+# 3) Copy MT5 base files from stage 1 (NOT the wine prefix - it must match stage 2 Wine)
 COPY --from=mt5-installer /opt/mt5/base /opt/mt5/base
-COPY --from=mt5-installer /opt/mt5/wineprefix /opt/mt5/wineprefix
-RUN mkdir -p /opt/mt5/instances
+RUN mkdir -p /opt/mt5/instances /opt/mt5/wineprefix
 
 # MT5 + Wine environment
 ENV WINEPREFIX=/opt/mt5/wineprefix
+ENV WINEARCH=win64
 ENV WINEDEBUG=-all
 ENV DISPLAY=:99
 ENV MT5_BASE_DIR=/opt/mt5/base
 ENV MT5_INSTANCES_DIR=/opt/mt5/instances
 ENV MT5_MAX_INSTANCES=20
 ENV MT5_IDLE_TIMEOUT=3600000
+
+# 3b) Initialize Wine prefix at build time + verify X11 works
+RUN echo "=== Initializing Wine prefix ===" && \
+    Xvfb :99 -screen 0 1024x768x24 -ac &  \
+    sleep 2 && \
+    WINEDEBUG=-all wineboot --init 2>/dev/null || true && \
+    sleep 5 && \
+    echo "=== Verifying Wine X11 ===" && \
+    WINEDEBUG=+err wine cmd /c "echo Wine_X11_OK" 2>&1 | tail -5 && \
+    echo "=== Wine X11 driver check ===" && \
+    find /usr -name "winex11*" -type f 2>/dev/null | head -5 && \
+    echo "=== Wine prefix files ===" && \
+    ls -la /opt/mt5/wineprefix/*.reg 2>/dev/null | head -5 && \
+    pkill -f Xvfb 2>/dev/null || true && \
+    echo "=== Wine prefix initialized ==="
 
 # Set Puppeteer to use Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true

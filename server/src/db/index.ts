@@ -84,6 +84,17 @@ export const getUserClosedPositions = isProduction ? postgresDb.getUserClosedPos
 export const updatePositionSlTp = isProduction ? postgresDb.updatePositionSlTp : wrapSync(sqliteDb.updatePositionSlTp);
 export const getPositionById = isProduction ? postgresDb.getPositionById : wrapSync(sqliteDb.getPositionById);
 
+// Referral system operations
+export const setUserReferralCode = postgresDb.setUserReferralCode;
+export const getUserReferralCode = postgresDb.getUserReferralCode;
+export const getUserByReferralCode = postgresDb.getUserByReferralCode;
+export const createReferralUsage = postgresDb.createReferralUsage;
+export const addReferralReward = postgresDb.addReferralReward;
+export const getUserReferralStats = postgresDb.getUserReferralStats;
+export const hasUsedReferralForPackage = postgresDb.hasUsedReferralForPackage;
+export const getUserReferralHistory = postgresDb.getUserReferralHistory;
+export const validateReferralCode = postgresDb.validateReferralCode;
+
 // Profile management operations
 export const updateUserProfile = wrapSync(sqliteDb.updateUserProfile);
 export const updateUserPassword = wrapSync(sqliteDb.updateUserPassword);

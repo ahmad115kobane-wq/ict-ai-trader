@@ -173,6 +173,56 @@ const createTables = async (client: PoolClient): Promise<void> => {
       )
     `);
 
+    // إضافة حقل كود الدعوة للمستخدمين
+    await client.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='referral_code') THEN
+          ALTER TABLE users ADD COLUMN referral_code TEXT UNIQUE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='referral_balance') THEN
+          ALTER TABLE users ADD COLUMN referral_balance REAL DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='total_referral_earnings') THEN
+          ALTER TABLE users ADD COLUMN total_referral_earnings REAL DEFAULT 0;
+        END IF;
+      END $$;
+    `);
+
+    // جدول استخدام أكواد الدعوة
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS referral_usage (
+        id TEXT PRIMARY KEY,
+        referral_code TEXT NOT NULL,
+        referrer_id TEXT NOT NULL,
+        referred_id TEXT NOT NULL,
+        package_id TEXT NOT NULL,
+        package_name TEXT,
+        original_price REAL NOT NULL,
+        discount_percent REAL DEFAULT 15,
+        discount_amount REAL NOT NULL,
+        final_price REAL NOT NULL,
+        reward_amount REAL DEFAULT 5,
+        reward_paid BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_referral_usage_referrer 
+      ON referral_usage(referrer_id)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_referral_usage_referred 
+      ON referral_usage(referred_id)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_referral_usage_code 
+      ON referral_usage(referral_code)
+    `);
+
     // جدول التحليل التلقائي
     await client.query(`
       CREATE TABLE IF NOT EXISTS auto_analysis (
