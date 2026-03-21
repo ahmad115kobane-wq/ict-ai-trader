@@ -231,10 +231,80 @@ export const subscriptionService = {
   },
 };
 
+// ================== دوال الملف الشخصي ==================
+
+export const profileService = {
+  // الحصول على الملف الشخصي
+  getProfile: async () => {
+    return await apiRequest(ENDPOINTS.profile.get);
+  },
+
+  // تحديث الملف الشخصي
+  updateProfile: async (data: {
+    fullName?: string;
+    phone?: string;
+    country?: string;
+    bio?: string;
+    dateOfBirth?: string;
+    preferredLanguage?: string;
+    tradingExperience?: string;
+  }) => {
+    return await apiRequest(ENDPOINTS.profile.update, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // تغيير كلمة المرور
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    return await apiRequest(ENDPOINTS.profile.changePassword, {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+
+  // إحصائيات التداول
+  getTradingStats: async () => {
+    return await apiRequest(ENDPOINTS.profile.tradingStats);
+  },
+};
+
+// ================== دوال MT5 ==================
+
+export const mt5Service = {
+  // الاتصال بحساب MT5
+  connect: async (data: { brokerServer: string; accountLogin: string; accountPassword: string }) => {
+    return await apiRequest(ENDPOINTS.mt5.connect, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // قطع الاتصال
+  disconnect: async (accountLogin: string) => {
+    return await apiRequest(ENDPOINTS.mt5.disconnect, {
+      method: 'POST',
+      body: JSON.stringify({ accountLogin }),
+    });
+  },
+
+  // حالة الاتصال
+  getStatus: async (accountLogin: string) => {
+    return await apiRequest(`${ENDPOINTS.mt5.status}/${accountLogin}`);
+  },
+
+  // جميع الحسابات
+  getAccounts: async () => {
+    return await apiRequest(ENDPOINTS.mt5.accounts);
+  },
+};
+
 export default {
   authService,
   analysisService,
   subscriptionService,
+  profileService,
+  mt5Service,
   getToken,
   setToken,
   removeToken,

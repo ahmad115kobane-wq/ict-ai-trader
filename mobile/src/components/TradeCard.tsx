@@ -151,7 +151,7 @@ TP3: ${trade.tp3}
 
         <TouchableOpacity 
           style={[styles.actionBtn, styles.chatBtn]} 
-          onPress={() => showAlert('قريباً', 'ميزة الدردشة ستكون متاحة قريباً')}
+          onPress={() => showAlert({ title: 'قريباً', message: 'ميزة الدردشة ستكون متاحة قريباً' })}
         >
           <Ionicons name="chatbubble-outline" size={18} color={colors.text} />
           <Text style={styles.actionText}>دردشة</Text>
@@ -159,7 +159,7 @@ TP3: ${trade.tp3}
 
         <TouchableOpacity 
           style={[styles.actionBtn, styles.followBtn]} 
-          onPress={() => showAlert('قريباً', 'ميزة المتابعة ستكون متاحة قريباً')}
+          onPress={() => showAlert({ title: 'قريباً', message: 'ميزة المتابعة ستكون متاحة قريباً' })}
         >
           <Ionicons name="eye-outline" size={18} color={colors.text} />
           <Text style={styles.actionText}>متابعة</Text>

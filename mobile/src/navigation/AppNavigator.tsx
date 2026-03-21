@@ -20,6 +20,8 @@ import SubscriptionScreen from '../screens/SubscriptionScreen';
 import FullChartScreen from '../screens/FullChartScreen';
 import EconomicCalendarScreen from '../screens/EconomicCalendarScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import MT5Screen from '../screens/MT5Screen';
 
 // أنواع المسارات
 export type AuthStackParamList = {
@@ -30,8 +32,10 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Trades: undefined;
+  MT5: undefined;
   EconomicCalendar: undefined;
   Subscription: undefined;
+  Profile: undefined;
 };
 
 export type RootStackParamList = {
@@ -154,10 +158,14 @@ const MainTabNavigator = () => (
           iconName = focused ? 'home' : 'home-outline';
         } else if (route.name === 'Trades') {
           iconName = focused ? 'analytics' : 'analytics-outline';
+        } else if (route.name === 'MT5') {
+          iconName = focused ? 'desktop' : 'desktop-outline';
         } else if (route.name === 'EconomicCalendar') {
           iconName = focused ? 'calendar' : 'calendar-outline';
         } else if (route.name === 'Subscription') {
           iconName = focused ? 'diamond' : 'diamond-outline';
+        } else if (route.name === 'Profile') {
+          iconName = focused ? 'person' : 'person-outline';
         } else {
           iconName = 'help-outline';
         }
@@ -178,7 +186,12 @@ const MainTabNavigator = () => (
     <Tab.Screen
       name="Trades"
       component={TradesScreen}
-      options={{ tabBarLabel: 'السجلات' }}
+      options={{ tabBarLabel: 'الإشارات' }}
+    />
+    <Tab.Screen
+      name="MT5"
+      component={MT5Screen}
+      options={{ tabBarLabel: 'MT5' }}
     />
     <Tab.Screen
       name="EconomicCalendar"
@@ -189,6 +202,11 @@ const MainTabNavigator = () => (
       name="Subscription"
       component={SubscriptionScreen}
       options={{ tabBarLabel: 'الاشتراكات' }}
+    />
+    <Tab.Screen
+      name="Profile"
+      component={ProfileScreen}
+      options={{ tabBarLabel: 'حسابي' }}
     />
   </Tab.Navigator>
 );

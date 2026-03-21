@@ -27,8 +27,8 @@ import {
 // مكون تسجيل الإشعارات المحسّن
 const NotificationHandler = () => {
   const { isAuthenticated, user } = useAuth();
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<Notifications.Subscription>(undefined);
+  const responseListener = useRef<Notifications.Subscription>(undefined);
   const appState = useRef(AppState.currentState);
   const [lastNotification, setLastNotification] = useState<Notifications.Notification | null>(null);
   const hasSetupNotifications = useRef(false); // منع التكرار
@@ -95,7 +95,7 @@ const NotificationHandler = () => {
 
     // إظهار تنبيه داخل التطبيق للإشعارات المهمة
     if (data?.type === 'trade_opportunity') {
-      const trade = data;
+      const trade = data as any;
       const emoji = trade.tradeType?.includes('BUY') ? '🟢' : '🔴';
       const direction = trade.tradeType?.includes('BUY') ? 'شراء' : 'بيع';
 

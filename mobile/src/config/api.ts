@@ -52,4 +52,18 @@ export const ENDPOINTS = {
     markAllAsRead: '/api/notifications/mark-all-read',
     delete: '/api/notifications/:id',
   },
+  // MT5
+  mt5: {
+    connect: '/api/mt5/connect',
+    disconnect: '/api/mt5/disconnect',
+    status: '/api/mt5/status', // + /:accountLogin
+    accounts: '/api/mt5/accounts',
+  },
+  // الملف الشخصي
+  profile: {
+    get: '/api/profile',
+    update: '/api/profile/update',
+    changePassword: '/api/profile/change-password',
+    tradingStats: '/api/profile/trading-stats',
+  },
 };

@@ -35,17 +35,17 @@ const RegisterScreen = () => {
 
   const handleRegister = async () => {
     if (!email.trim() || !password.trim()) {
-      showAlert('تنبيه', 'يرجى إدخال جميع البيانات المطلوبة');
+      showAlert({ title: 'تنبيه', message: 'يرجى إدخال جميع البيانات المطلوبة' });
       return;
     }
 
     if (password !== confirmPassword) {
-      showAlert('تنبيه', 'كلمات المرور غير متطابقة');
+      showAlert({ title: 'تنبيه', message: 'كلمات المرور غير متطابقة' });
       return;
     }
 
     if (password.length < 6) {
-      showAlert('تنبيه', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      showAlert({ title: 'تنبيه', message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
       return;
     }
 

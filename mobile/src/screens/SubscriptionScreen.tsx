@@ -130,7 +130,7 @@ const SubscriptionScreen = () => {
       <Header 
         coins={user?.coins || 0} 
         onLogout={() => {
-          Alert.alert(
+          showConfirm(
             'تسجيل الخروج',
             'هل أنت متأكد من تسجيل الخروج؟',
             logout

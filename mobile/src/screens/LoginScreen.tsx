@@ -34,7 +34,7 @@ const LoginScreen = () => {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      showAlert('تنبيه', 'يرجى إدخال البريد الإلكتروني وكلمة المرور');
+      showAlert({ title: 'تنبيه', message: 'يرجى إدخال البريد الإلكتروني وكلمة المرور' });
       return;
     }
 

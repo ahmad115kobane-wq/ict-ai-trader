@@ -232,8 +232,9 @@ MaxBars=5000
         env: {
           ...process.env,
           WINEPREFIX: WINE_PREFIX,
+          WINEARCH: 'win64',
           DISPLAY: DISPLAY,
-          WINEDEBUG: '+err,+fixme', // تفعيل مخرجات الأخطاء للتشخيص
+          WINEDEBUG: '+err,+fixme',
         },
         cwd: instancePath,
         stdio: ['ignore', 'pipe', 'pipe'],
