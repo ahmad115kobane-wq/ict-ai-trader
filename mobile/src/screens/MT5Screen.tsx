@@ -1,7 +1,7 @@
 // src/screens/MT5Screen.tsx
 // شاشة إدارة حسابات MT5 - اتصال، حالة، قطع
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,11 +18,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 
+import * as SecureStore from 'expo-secure-store';
+import { useFocusEffect } from '@react-navigation/native';
+
 import { useAuth } from '../context/AuthContext';
 import { mt5Service } from '../services/apiService';
 import { colors, spacing, borderRadius, fontSizes } from '../theme';
 import Header from '../components/Header';
 import { useCustomAlert } from '../hooks/useCustomAlert';
+
+const MT5_STORAGE_KEY = 'mt5_account';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'stopped';
 
@@ -45,6 +50,54 @@ const MT5Screen = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [connectedAccount, setConnectedAccount] = useState<MT5Account | null>(null);
+  const [isLoadingAccount, setIsLoadingAccount] = useState(true);
+
+  // تحميل حالة الحساب عند فتح الشاشة
+  const loadSavedAccount = useCallback(async () => {
+    setIsLoadingAccount(true);
+    try {
+      // 1) جلب من السيرفر أولاً
+      const serverResult = await mt5Service.getAccounts();
+      if (serverResult.success && Array.isArray(serverResult.data) && serverResult.data.length > 0) {
+        const activeAccount = serverResult.data.find((a: any) => a.status === 'connected' || a.status === 'connecting') || serverResult.data[0];
+        setConnectedAccount(activeAccount);
+        setBrokerServer(activeAccount.brokerServer || '');
+        setAccountLogin(activeAccount.accountLogin || '');
+        // حفظ محلياً
+        await SecureStore.setItemAsync(MT5_STORAGE_KEY, JSON.stringify(activeAccount));
+        return;
+      }
+      // 2) إذا لم يكن في السيرفر، جلب من التخزين المحلي
+      const saved = await SecureStore.getItemAsync(MT5_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // عرض البيانات المحفوظة كحساب بحالة 'stopped' (السيرفر أعيد تشغيله)
+        setConnectedAccount({ ...parsed, status: 'stopped', uptime: null });
+        setBrokerServer(parsed.brokerServer || '');
+        setAccountLogin(parsed.accountLogin || '');
+      }
+    } catch (err) {
+      // حاول التخزين المحلي كاحتياط
+      try {
+        const saved = await SecureStore.getItemAsync(MT5_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setConnectedAccount({ ...parsed, status: 'stopped', uptime: null });
+          setBrokerServer(parsed.brokerServer || '');
+          setAccountLogin(parsed.accountLogin || '');
+        }
+      } catch {}
+    } finally {
+      setIsLoadingAccount(false);
+    }
+  }, []);
+
+  // تحميل عند كل دخول للشاشة
+  useFocusEffect(
+    useCallback(() => {
+      loadSavedAccount();
+    }, [loadSavedAccount])
+  );
 
   const handleConnect = async () => {
     if (!brokerServer.trim()) {
@@ -70,6 +123,8 @@ const MT5Screen = () => {
 
       if (result.success) {
         setConnectedAccount(result.data);
+        // حفظ محلياً للاستمرارية
+        try { await SecureStore.setItemAsync(MT5_STORAGE_KEY, JSON.stringify(result.data)); } catch {}
         showSuccess('تم الاتصال', result.message || 'تم الاتصال بالحساب بنجاح');
         setAccountPassword('');
       } else {
@@ -95,6 +150,7 @@ const MT5Screen = () => {
         try {
           await mt5Service.disconnect(connectedAccount.accountLogin);
           setConnectedAccount(null);
+          try { await SecureStore.deleteItemAsync(MT5_STORAGE_KEY); } catch {}
           showSuccess('تم', 'تم قطع الاتصال بنجاح');
         } catch (error: any) {
           showError('خطأ', error.message);
@@ -185,11 +241,20 @@ const MT5Screen = () => {
           )}
         </View>
 
-        {connectedAccount.status === 'connected' && (
-          <TouchableOpacity style={styles.disconnectBtn} onPress={handleDisconnect}>
-            <Ionicons name="power" size={18} color="#ef4444" />
-            <Text style={styles.disconnectBtnText}>قطع الاتصال</Text>
-          </TouchableOpacity>
+        {(connectedAccount.status === 'connected' || connectedAccount.status === 'stopped') && (
+          <View style={{ gap: 8, marginTop: spacing.md }}>
+            {connectedAccount.status === 'stopped' && (
+              <Text style={{ color: colors.textMuted, textAlign: 'center', fontSize: fontSizes.xs, marginBottom: 4 }}>
+                الحساب محفوظ - أعد الاتصال بإدخال كلمة المرور أدناه أو احذف الحساب
+              </Text>
+            )}
+            <TouchableOpacity style={styles.disconnectBtn} onPress={handleDisconnect}>
+              <Ionicons name={connectedAccount.status === 'connected' ? 'power' : 'trash'} size={18} color="#ef4444" />
+              <Text style={styles.disconnectBtnText}>
+                {connectedAccount.status === 'connected' ? 'قطع الاتصال' : 'حذف الحساب المحفوظ'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     );
@@ -224,7 +289,12 @@ const MT5Screen = () => {
           </View>
 
           {/* بطاقة الحالة */}
-          {renderStatusCard()}
+          {isLoadingAccount ? (
+            <View style={{ alignItems: 'center', padding: spacing.lg }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ color: colors.textMuted, marginTop: 8, fontSize: fontSizes.sm }}>جاري تحميل حالة الحساب...</Text>
+            </View>
+          ) : renderStatusCard()}
 
           {/* نموذج الاتصال */}
           {(!connectedAccount || connectedAccount.status === 'error' || connectedAccount.status === 'disconnected' || connectedAccount.status === 'stopped') && (

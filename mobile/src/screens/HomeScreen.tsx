@@ -300,7 +300,10 @@ const HomeScreen = () => {
     code: ind.code,
     type: ind.indicator_type,
   }));
-  const embeddedIndicatorsJson = JSON.stringify(embeddedIndicatorCodes);
+  // تأمين JSON للتضمين في template literal - هروب backticks و ${
+  const embeddedIndicatorsJson = JSON.stringify(embeddedIndicatorCodes)
+    .replace(/`/g, '\\`')
+    .replace(/\$\{/g, '\\${');
 
   // مفتاح WebView - يتغير عند تغيير الفريم أو المؤشرات لإعادة تحميل الشارت
   const webViewKey = selectedTimeframe + '_' + activeIndicators.map(i => i.id).sort().join('_');
