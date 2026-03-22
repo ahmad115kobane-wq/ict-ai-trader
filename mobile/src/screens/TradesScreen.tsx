@@ -67,17 +67,31 @@ const TradesScreen = () => {
   };
 
   const parseServerAnalyses = (analyses: any[]): SignalItem[] => {
-    return analyses.map((a: any) => ({
-      id: `server-${a.id}`,
-      symbol: a.symbol || 'XAUUSD',
-      score: a.score || 0,
-      decision: a.decision,
-      price: a.price,
-      confidence: a.confidence,
-      suggestedTrade: parseSuggestedTrade(a.suggestedTrade),
-      created_at: a.createdAt,
-      isServerAnalysis: true,
-    }));
+    return analyses.map((a: any) => {
+      // محاولة استخراج suggestedTrade من الحقل المباشر أو بنائه من الحقول المنفصلة
+      let trade = parseSuggestedTrade(a.suggestedTrade);
+      if (!trade && (a.tradeType || a.entry || a.sl)) {
+        trade = {
+          type: a.tradeType || a.decision,
+          entry: a.entry || a.price || 0,
+          sl: a.sl || 0,
+          tp1: a.tp1 || 0,
+          tp2: a.tp2 || 0,
+          tp3: a.tp3 || 0,
+        } as SuggestedTrade;
+      }
+      return {
+        id: `server-${a.id}`,
+        symbol: a.symbol || 'XAUUSD',
+        score: a.score || 0,
+        decision: a.decision,
+        price: a.price || a.entry,
+        confidence: a.confidence,
+        suggestedTrade: trade,
+        created_at: a.createdAt,
+        isServerAnalysis: true,
+      };
+    });
   };
 
   const loadAllData = async () => {

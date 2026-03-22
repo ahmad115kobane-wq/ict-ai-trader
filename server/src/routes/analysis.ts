@@ -458,6 +458,14 @@ router.get('/server-analyses', authMiddleware, async (req: AuthRequest, res: Res
         confidence: a.confidence,
         price: a.current_price || a.price,
         suggestedTrade,
+        // حقول مباشرة للتوافق مع التطبيق
+        tradeType: suggestedTrade?.type || null,
+        entry: suggestedTrade?.entry || a.current_price || a.price || null,
+        sl: suggestedTrade?.sl || null,
+        tp1: suggestedTrade?.tp1 || null,
+        tp2: suggestedTrade?.tp2 || null,
+        tp3: suggestedTrade?.tp3 || null,
+        reasoning: a.reasoning || null,
         createdAt: a.created_at,
       };
     });

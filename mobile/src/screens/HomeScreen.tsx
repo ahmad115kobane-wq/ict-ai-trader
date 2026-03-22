@@ -254,7 +254,8 @@ const HomeScreen = () => {
         setUserIndicators(prev =>
           prev.map(ind => ind.id === id ? { ...ind, is_active: result.isActive } : ind)
         );
-        await refreshAndInjectIndicators();
+        // تحديث المؤشرات النشطة - سيغير webViewKey ويعيد تحميل الشارت مع المؤشرات المضمنة
+        await loadActiveIndicators();
       }
     } catch (error) {
       console.error('Error toggling indicator:', error);
@@ -268,7 +269,7 @@ const HomeScreen = () => {
       const result = await indicatorService.deleteIndicator(id);
       if (result.success) {
         setUserIndicators(prev => prev.filter(ind => ind.id !== id));
-        await refreshAndInjectIndicators();
+        await loadActiveIndicators();
       }
     } catch (error) {
       console.error('Error deleting indicator:', error);
@@ -291,6 +292,18 @@ const HomeScreen = () => {
     loadAllIndicators();
     setShowIndicatorPanel(true);
   };
+
+  // تجهيز أكواد المؤشرات النشطة لتضمينها في HTML مباشرة
+  const embeddedIndicatorCodes = activeIndicators.map(ind => ({
+    id: ind.id,
+    name: ind.name_ar || ind.name,
+    code: ind.code,
+    type: ind.indicator_type,
+  }));
+  const embeddedIndicatorsJson = JSON.stringify(embeddedIndicatorCodes);
+
+  // مفتاح WebView - يتغير عند تغيير الفريم أو المؤشرات لإعادة تحميل الشارت
+  const webViewKey = selectedTimeframe + '_' + activeIndicators.map(i => i.id).sort().join('_');
 
   // HTML للشارت المباشر - تصميم احترافي مثل التطبيقات العالمية
   const chartHtml = `
@@ -613,14 +626,14 @@ const HomeScreen = () => {
                 
                 document.getElementById('volume-info').textContent = formattedData.length + ' شمعة';
 
-                // رسم SMA 50 مدمج تلقائياً على الشارت
+                // ==================== مشغل المؤشرات الموحد ====================
+                // 1) SMA مدمج
                 try {
                   var sma50Data = [];
-                  var smaPeriod = 50;
-                  for (var si = smaPeriod - 1; si < formattedData.length; si++) {
-                    var smaSum = 0;
-                    for (var sj = si - smaPeriod + 1; sj <= si; sj++) { smaSum += formattedData[sj].close; }
-                    sma50Data.push({ time: formattedData[si].time, value: smaSum / smaPeriod });
+                  for (var si = 49; si < formattedData.length; si++) {
+                    var s50 = 0;
+                    for (var sj = si - 49; sj <= si; sj++) { s50 += formattedData[sj].close; }
+                    sma50Data.push({ time: formattedData[si].time, value: s50 / 50 });
                   }
                   if (sma50Data.length > 0) {
                     var sma50Line = chart.addLineSeries({ color: 'rgba(255, 152, 0, 0.7)', lineWidth: 1, title: 'SMA 50', lastValueVisible: false, priceLineVisible: false });
@@ -628,15 +641,51 @@ const HomeScreen = () => {
                   }
                   var sma20Data = [];
                   for (var si2 = 19; si2 < formattedData.length; si2++) {
-                    var sma20Sum = 0;
-                    for (var sj2 = si2 - 19; sj2 <= si2; sj2++) { sma20Sum += formattedData[sj2].close; }
-                    sma20Data.push({ time: formattedData[si2].time, value: sma20Sum / 20 });
+                    var s20 = 0;
+                    for (var sj2 = si2 - 19; sj2 <= si2; sj2++) { s20 += formattedData[sj2].close; }
+                    sma20Data.push({ time: formattedData[si2].time, value: s20 / 20 });
                   }
                   if (sma20Data.length > 0) {
                     var sma20Line = chart.addLineSeries({ color: 'rgba(41, 98, 255, 0.7)', lineWidth: 1, title: 'SMA 20', lastValueVisible: false, priceLineVisible: false });
                     sma20Line.setData(sma20Data);
                   }
-                } catch(smaErr) { console.error('Built-in SMA error:', smaErr); }
+                } catch(smaErr) {}
+
+                // 2) تشغيل المؤشرات المضمنة من AI - نفس طريقة SMA بالضبط
+                try {
+                  var embeddedIndicators = ${embeddedIndicatorsJson};
+                  var candles = chartCandleData.slice();
+                  for (var ei = 0; ei < embeddedIndicators.length; ei++) {
+                    var eInd = embeddedIndicators[ei];
+                    try {
+                      // تنفيذ كود المؤشر - نفس طريقة SMA
+                      var eFn = null;
+                      eval('eFn = ' + eInd.code);
+                      var eResult = null;
+                      if (typeof eFn === 'function') {
+                        eResult = eFn(candles);
+                      }
+                      if (eResult && eResult.series && Array.isArray(eResult.series)) {
+                        for (var es = 0; es < eResult.series.length; es++) {
+                          var eSer = eResult.series[es];
+                          var eOpts = eSer.options || {};
+                          var ePid = eResult.separate ? ('ind_' + eInd.id) : 'right';
+                          if (eSer.type === 'line' && eSer.data && eSer.data.length > 0) {
+                            var eLine = chart.addLineSeries({ color: eOpts.color || '#FF5722', lineWidth: eOpts.lineWidth || 2, title: eOpts.title || eInd.name, priceScaleId: ePid, lastValueVisible: false, priceLineVisible: false });
+                            eLine.setData(eSer.data);
+                          } else if (eSer.type === 'histogram' && eSer.data && eSer.data.length > 0) {
+                            var eHist = chart.addHistogramSeries({ color: eOpts.color || '#26a69a', title: eOpts.title || eInd.name, priceScaleId: ePid, lastValueVisible: false, priceLineVisible: false });
+                            eHist.setData(eSer.data);
+                          } else if (eSer.type === 'markers' && eSer.data && eSer.data.length > 0) {
+                            candlestickSeries.setMarkers(eSer.data);
+                          }
+                        }
+                      }
+                    } catch(eErr) {
+                      console.error('Indicator [' + eInd.name + '] error:', eErr.message);
+                    }
+                  }
+                } catch(allErr) { console.error('Embedded indicators error:', allErr); }
 
                 // إبلاغ التطبيق بجاهزية الشارت
                 if (window.ReactNativeWebView) {
@@ -1024,7 +1073,7 @@ const HomeScreen = () => {
         >
           <View style={styles.chartWrapper}>
             <WebView
-              key={selectedTimeframe}
+              key={webViewKey}
               source={{ html: chartHtml }}
               style={styles.chart}
               ref={chartWebViewRef}
